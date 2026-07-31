@@ -667,18 +667,18 @@ function obtenerDetalleCajaDashboard() {
     const cortesOrdenados = (localDB.cortes || [])
       .filter(c => c.estado === "CERRADO" && c.fechaCierre)
       .sort((a, b) => new Date(b.fechaCierre) - new Date(a.fechaCierre));
-      
+
     let baseCash = 0;
     let fechaInicioIso = new Date(0).toISOString();
     let label = "Sin cortes cerrados";
-    
+
     if (cortesOrdenados.length > 0) {
       const ultimoCorte = cortesOrdenados[0];
       baseCash = parseNumber(ultimoCorte.cajaContada, 0);
       fechaInicioIso = ultimoCorte.fechaCierre;
       label = `Último cierre: ${formatMoney(baseCash)}`;
     }
-    
+
     const resumen = obtenerResumenFinancieroEnRango(fechaInicioIso, new Date().toISOString());
     const cajaEstimada = roundTo(baseCash + resumen.pagosEfectivo - resumen.totalGastos, 2);
     return {
@@ -1164,7 +1164,7 @@ async function agregarProductoVentaPorCodigo(codigo, cantidad = 1) {
 
 function reproducirSonidoAgregarCarrito() {
   sonidoAgregarCarrito.currentTime = 0;
-  sonidoAgregarCarrito.play().catch(() => {});
+  sonidoAgregarCarrito.play().catch(() => { });
 }
 
 function quitarItemVenta(codigo) {
@@ -1500,9 +1500,9 @@ function renderVentasRecientes() {
   ultimas.forEach((venta) => {
     const itemsCount = Array.isArray(venta.items)
       ? venta.items.reduce(
-          (acc, item) => acc + parseNumber(item.cantidad, 0),
-          0,
-        )
+        (acc, item) => acc + parseNumber(item.cantidad, 0),
+        0,
+      )
       : 0;
     html += `
           <tr>
@@ -1739,7 +1739,7 @@ function cargarCarritoPendiente(pendienteId) {
     precioVariable: parseBoolean(item.precioVariable),
     subtotal: roundTo(
       Math.max(1, parseInt(item.cantidad, 10) || 1) *
-        roundTo(parseNumber(item.precioUnitario, 0), 4),
+      roundTo(parseNumber(item.precioUnitario, 0), 4),
       4,
     ),
   }));
@@ -1820,8 +1820,8 @@ function renderCarritosPendientes() {
 
   const pendientes = Array.isArray(localDB.carritosPendientes)
     ? [...localDB.carritosPendientes].sort(
-        (a, b) => new Date(b.fecha) - new Date(a.fecha),
-      )
+      (a, b) => new Date(b.fecha) - new Date(a.fecha),
+    )
     : [];
 
   if (!pendientes.length) {
@@ -1852,9 +1852,9 @@ function renderCarritosPendientes() {
   pendientes.forEach((pendiente) => {
     const itemsCount = Array.isArray(pendiente.items)
       ? pendiente.items.reduce(
-          (acc, item) => acc + Math.max(1, parseInt(item.cantidad, 10) || 1),
-          0,
-        )
+        (acc, item) => acc + Math.max(1, parseInt(item.cantidad, 10) || 1),
+        0,
+      )
       : 0;
     const total = roundTo(parseNumber(pendiente.total, 0), 2);
     const adelanto = roundTo(parseNumber(pendiente.adelanto, 0), 2);
@@ -1862,8 +1862,8 @@ function renderCarritosPendientes() {
       parseNumber(
         pendiente.totalPagado,
         parseNumber(pendiente.pagos && pendiente.pagos.efectivo, 0) +
-          parseNumber(pendiente.pagos && pendiente.pagos.tarjeta, 0) +
-          parseNumber(pendiente.pagos && pendiente.pagos.transferencia, 0),
+        parseNumber(pendiente.pagos && pendiente.pagos.tarjeta, 0) +
+        parseNumber(pendiente.pagos && pendiente.pagos.transferencia, 0),
       ),
       2,
     );
@@ -2501,7 +2501,6 @@ function registrarProducto(event) {
     codigo: document.getElementById("codigoProd").value.trim().toUpperCase(),
     nombre: document.getElementById("nombreProd").value.trim(),
     stockMin: parseInt(document.getElementById("stockMinProd").value, 10) || 0,
-    margen: parseFloat(document.getElementById("margenProd").value) || 0,
     precioVenta:
       parseFloat(document.getElementById("precioVentaProd").value) || 0,
     precioVariable,
@@ -2514,7 +2513,6 @@ function registrarProducto(event) {
   if (ok) {
     document.getElementById("formProducto").reset();
     document.getElementById("stockMinProd").value = "0";
-    document.getElementById("margenProd").value = "30";
     document.getElementById("precioVentaProd").value = "";
     actualizarPrecioVariableProducto();
     loadDashboard();
@@ -2534,9 +2532,9 @@ function registrarMovimiento(event) {
       : "PIEZA",
     piezasPorPresentacion: document.getElementById("piezasPorPresentacionMov")
       ? parseInt(
-          document.getElementById("piezasPorPresentacionMov").value,
-          10,
-        ) || 1
+        document.getElementById("piezasPorPresentacionMov").value,
+        10,
+      ) || 1
       : 1,
     costoCompra: document.getElementById("costoCompraMov")
       ? parseFloat(document.getElementById("costoCompraMov").value) || 0
@@ -3339,10 +3337,10 @@ function actualizarResumenCorteActual() {
 
   const cajaEsperada = roundTo(
     parseNumber(corteActivo.cajaInicial, 0) +
-      resumen.pagosEfectivo -
-      resumen.totalGastos -
-      retiros +
-      ingresosCaja,
+    resumen.pagosEfectivo -
+    resumen.totalGastos -
+    retiros +
+    ingresosCaja,
     2,
   );
   const diferencia = roundTo(cajaContada - cajaEsperada, 2);
@@ -3538,10 +3536,10 @@ function cerrarCorteCaja() {
   );
   const cajaEsperada = roundTo(
     parseNumber(corteActivo.cajaInicial, 0) +
-      resumen.pagosEfectivo -
-      resumen.totalGastos -
-      retiros +
-      ingresosCaja,
+    resumen.pagosEfectivo -
+    resumen.totalGastos -
+    retiros +
+    ingresosCaja,
     2,
   );
   const diferencia = roundTo(cajaContada - cajaEsperada, 2);
@@ -3550,8 +3548,8 @@ function cerrarCorteCaja() {
     id: `CC-${Date.now()}`,
     periodicidad:
       periodicidad === "SEMANAL" ||
-      periodicidad === "QUINCENAL" ||
-      periodicidad === "MENSUAL"
+        periodicidad === "QUINCENAL" ||
+        periodicidad === "MENSUAL"
         ? periodicidad
         : "DIARIO",
     fechaApertura: corteActivo.fechaApertura,
@@ -3660,7 +3658,7 @@ function displayReporteCortesTable(data) {
           </thead>
           <tbody>
       `;
- 
+
   data.forEach((corte) => {
     html += `
           <tr>
@@ -3926,7 +3924,6 @@ function importarDatosJSON() {
 function limpiarFormProducto() {
   document.getElementById("formProducto").reset();
   document.getElementById("stockMinProd").value = "0";
-  document.getElementById("margenProd").value = "30";
   document.getElementById("precioVentaProd").value = "";
   actualizarPrecioVariableProducto();
   document.getElementById("msgProd").innerHTML = "";
