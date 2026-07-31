@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de ventas y control de inventario</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="assets/favicon.ico" />
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- Menu de navegación (SIDEBAR) -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h1>Sistema de ventas y control de inventario</h1>
+      </div>
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a class="nav-link active" onclick="showTab('dashboard')">
+            <span class="nav-icon">📊</span>
+            Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('ventas')">
+            <span class="nav-icon">💳</span>
+            Ventas
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('productos')">
+            <span class="nav-icon">📦</span>
+            Agregar nuevo producto
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('movimientos')">
+            <span class="nav-icon">📋</span>
+            Agregar movimientos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('gastos')">
+            <span class="nav-icon">💸</span>
+            Gastos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('buscar')">
+            <span class="nav-icon">🔍</span>
+            Buscar productos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('inventario')">
+            <span class="nav-icon">📊</span>
+            Inventario
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('reportes')">
+            <span class="nav-icon">📈</span>
+            Reportes
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('cortes')">
+            <span class="nav-icon">🧾</span>
+            Corte de caja
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" onclick="showTab('configuracion')">
+            <span class="nav-icon">⚙️</span>
+            Configuración
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="main-content">
+
+      <!-- Dashboard General -->
+      <div id="dashboard" class="tab-content active">
+        <div class="content-header">
+          <h2>Dashboard General</h2>
+        </div>
+        <div class="content-body">
+          <div class="stats-grid" id="statsGrid"></div>
+          <div class="card">
+            <div class="card-header">Alertas de Stock</div>
+            <div class="card-body">
+              <div class="actions">
+                <button class="btn btn-primary" onclick="loadDashboard()">
+                  Actualizar Dashboard
+                </button>
+                <button class="btn btn-warning" onclick="showStockAlerts()">
+                  Ver Alertas de Stock
+                </button>
+              </div>
+              <div id="alertsContainer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gestión de Productos -->
+      <div id="productos" class="tab-content">
+        <div class="content-header">
+          <h2>Gestión de Productos</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Registrar Nuevo Producto</div>
+            <div class="card-body">
+              <form id="formProducto" onsubmit="registrarProducto(event)">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="codigoProd">Código *</label>
+                    <input id="codigoProd" type="text" placeholder="Código único del producto" required>
+                    <div class="product-code-tools">
+                      <button type="button" class="btn btn-info btn-sm"
+                        onclick="generarCodigoSugeridoProducto()">Sugerir código de barras</button>
+                      <button type="button" class="btn btn-secondary btn-sm"
+                        onclick="imprimirCodigoProducto(document.getElementById('codigoProd').value, document.getElementById('nombreProd').value)">Guardar
+                        código de barras como imagen</button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="nombreProd">Nombre *</label>
+                    <input id="nombreProd" type="text" placeholder="Nombre del producto" required
+                      onblur="sugerirCodigoProductoSiHaceFalta()">
+                  </div>
+                  <div class="form-group">
+                    <label for="stockMinProd">Stock Mínimo</label>
+                    <input id="stockMinProd" type="number" min="0" value="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="margenProd">Margen de Ganancia (%)</label>
+                    <input id="margenProd" type="number" min="0" step="0.01" value="80" placeholder="Ej: 30">
+                  </div>
+                  <div class="form-group">
+                    <label for="precioVentaProd">Precio real / de venta *</label>
+                    <input id="precioVentaProd" type="number" min="0.01" step="0.01"
+                      placeholder="Precio real que se usará en ventas" required>
+                  </div>
+                  <div class="form-group">
+                    <label>
+                      <input id="precioVariableProd" type="checkbox" onchange="actualizarPrecioVariableProducto()">
+                      Precio variable en venta
+                    </label>
+                    <small class="config-note">Activa esta opción si el precio se capturará manualmente al
+                      vender.</small>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button type="submit" class="btn btn-success">
+                    Registrar Producto
+                  </button>
+                  <button type="button" class="btn btn-secondary" onclick="limpiarFormProducto()">
+                    Limpiar
+                  </button>
+                </div>
+              </form>
+              <div id="msgProd"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Registro de Movimientos -->
+      <div id="movimientos" class="tab-content">
+        <div class="content-header">
+          <h2>Registro de Movimientos</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Nuevo Movimiento</div>
+            <div class="card-body">
+              <form id="formMovimiento" onsubmit="registrarMovimiento(event)">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="codigoMov">Código del Producto *</label>
+                    <div class="autocomplete-container">
+                      <input id="codigoMov" type="text" placeholder="Código del producto" required
+                        onkeyup="buscarProductoAutocompletado()" onblur="ocultarAutocompletado()"
+                        onfocus="mostrarAutocompletado()">
+                      <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="fechaMov">Fecha *</label>
+                    <input id="fechaMov" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="tipoMov">Tipo de Movimiento *</label>
+                    <select id="tipoMov" required onchange="handleTipoChange()">
+                      <option value="INGRESO">Ingreso</option>
+                      <option value="SALIDA">Salida</option>
+                      <option value="AJUSTE_POSITIVO">Ajuste Positivo</option>
+                      <option value="AJUSTE_NEGATIVO">Ajuste Negativo</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="cantMov">Cantidad *</label>
+                    <input id="cantMov" type="number" min="0.01" step="0.01" placeholder="Cantidad" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="obsMov">Observaciones</label>
+                    <textarea id="obsMov" placeholder="Observaciones opcionales" rows="3"></textarea>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button type="submit" class="btn btn-success">
+                    Guardar Movimiento
+                  </button>
+                  <button type="button" class="btn btn-secondary" onclick="limpiarFormMovimiento()">
+                    Limpiar
+                  </button>
+                </div>
+              </form>
+              <div id="msgMov"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Registro de Gastos -->
+      <div id="gastos" class="tab-content">
+        <div class="content-header">
+          <h2>Registro de Gastos</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Nuevo Gasto</div>
+            <div class="card-body">
+              <form id="formGasto" onsubmit="registrarGasto(event)">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="fechaGasto">Fecha *</label>
+                    <input id="fechaGasto" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="categoriaGasto">Categoría *</label>
+                    <select id="categoriaGasto" required>
+                      <option value="Servicios">Servicios</option>
+                      <option value="Insumos">Insumos</option>
+                      <option value="Transporte">Transporte</option>
+                      <option value="Mantenimiento">Mantenimiento</option>
+                      <option value="Pago de personal">Pago de personal</option>
+                      <option value="Otros">Otros</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="conceptoGasto">Concepto *</label>
+                    <input id="conceptoGasto" type="text" placeholder="Ej: Luz, gasolina, caja chica" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="montoGasto">Monto *</label>
+                    <input id="montoGasto" type="number" min="0.01" step="0.01" placeholder="Monto del gasto" required>
+                  </div>
+                  <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="obsGasto">Observaciones</label>
+                    <textarea id="obsGasto" placeholder="Notas opcionales" rows="3"></textarea>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button type="submit" class="btn btn-success">Registrar gasto</button>
+                  <button type="button" class="btn btn-secondary" onclick="limpiarFormGasto()">Limpiar</button>
+                </div>
+              </form>
+              <div id="msgGasto"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Historial de Gastos</div>
+            <div class="card-body">
+              <div class="actions">
+                <button class="btn btn-primary" onclick="renderGastosRecientes()">Actualizar Gastos</button>
+              </div>
+              <div class="table-container">
+                <div id="gastosRecientes"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sistema de ventas -->
+      <div id="ventas" class="tab-content">
+        <div class="content-header">
+          <h2>Sistema de Ventas</h2>
+        </div>
+        <div class="content-body ventas-layout">
+          <div class="card venta-card venta-card--carrito">
+            <div class="card-header">Punto de Venta</div>
+            <div class="card-body">
+              <p class="ventas-section-note">Escanea productos, arma el carrito y confirma la venta.</p>
+              <form id="formVentaScan" onsubmit="agregarProductoVenta(event)">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="codigoVenta">Escanear código de barras *</label>
+                    <div class="autocomplete-container">
+                      <input id="codigoVenta" type="text" placeholder="Escanea o escribe el código" autocomplete="off"
+                        required onkeyup="buscarProductoAutocompletadoVenta()" onblur="ocultarAutocompletadoVenta()"
+                        onfocus="buscarProductoAutocompletadoVenta()">
+                      <div id="autocompleteDropdownVenta" class="autocomplete-dropdown"></div>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="cantidadVenta">Cantidad</label>
+                    <input id="cantidadVenta" type="number" min="1" step="1" value="1" required>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button type="submit" class="btn btn-success">Agregar al carrito</button>
+                  <button type="button" class="btn btn-secondary" onclick="limpiarVentaActual()">Limpiar
+                    carrito</button>
+                </div>
+              </form>
+
+              <div class="table-container venta-table-container">
+                <div id="ventaCarrito"></div>
+              </div>
+
+              <div class="venta-summary-grid">
+                <div class="form-group">
+                  <label for="totalVenta">Total a pagar</label>
+                  <input id="totalVenta" type="text" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="pagoEfectivo">Pago en efectivo</label>
+                  <input id="pagoEfectivo" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="pagoTarjeta">Pago con tarjeta</label>
+                  <input id="pagoTarjeta" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="pagoTransferencia">Pago por transferencia</label>
+                  <input id="pagoTransferencia" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="totalPagadoVenta">Total pagado</label>
+                  <input id="totalPagadoVenta" type="text" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="cambioVenta">Cambio a devolver</label>
+                  <input id="cambioVenta" type="text" readonly>
+                </div>
+              </div>
+
+              <div class="actions">
+                <button type="button" class="btn btn-primary" onclick="confirmarVenta()">Confirmar venta</button>
+                <button type="button" class="btn btn-info" onclick="imprimirUltimaVenta()">Imprimir ultimo
+                  ticket</button>
+              </div>
+
+              <div class="venta-print-options">
+                <label>
+                  <input id="autoImprimirVenta" type="checkbox" checked>
+                  Imprimir ticket automaticamente al confirmar
+                </label>
+              </div>
+
+              <div id="msgVenta"></div>
+            </div>
+          </div>
+
+          <div class="card venta-card venta-card--guardados">
+            <div class="card-header">Carritos Guardados (Cotizacion / Apartado)</div>
+            <div class="card-body">
+              <p class="ventas-section-note">Guarda carritos para retomarlos mas tarde por cliente o referencia.</p>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="pendienteReferenciaVenta">Cliente o referencia *</label>
+                  <input id="pendienteReferenciaVenta" type="text" placeholder="Ej: Juan Perez, Empresa ABC"
+                    maxlength="80">
+                </div>
+                <div class="form-group">
+                  <label for="pendienteTipoVenta">Tipo de pendiente</label>
+                  <select id="pendienteTipoVenta" onchange="actualizarCampoAdelantoPendiente()">
+                    <option value="COTIZACION">Cotizacion</option>
+                    <option value="APARTADO">Apartado</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="pendienteAdelantoVenta">Adelanto</label>
+                  <input id="pendienteAdelantoVenta" type="number" min="0" step="0.01" value="0"
+                    placeholder="Monto de adelanto para apartado" disabled>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="pendienteNotasVenta">Notas</label>
+                  <textarea id="pendienteNotasVenta" rows="2" placeholder="Notas opcionales del pendiente"></textarea>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn btn-warning" onclick="guardarCarritoPendiente()">Guardar carrito
+                  pendiente</button>
+              </div>
+              <div class="table-container">
+                <div id="carritosPendientesVenta"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card venta-card venta-card--historial">
+            <div class="card-header">Ultimas Ventas</div>
+            <div class="card-body">
+              <p class="ventas-section-note">Consulta rapidamente las ventas recientes y reimprime tickets.</p>
+              <div id="ventasRecientes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Control de Inventario -->
+      <div id="inventario" class="tab-content">
+        <div class="content-header">
+          <h2>Control de Inventario</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Stock Actual</div>
+            <div class="card-body">
+              <div class="actions">
+                <button class="btn btn-primary" onclick="mostrarStock()">
+                  Actualizar Stock
+                </button>
+                <button class="btn btn-success" onclick="exportarStock()">
+                  Exportar CSV
+                </button>
+                <button class="btn btn-warning" onclick="mostrarAlertas()">
+                  Solo Alertas
+                </button>
+              </div>
+              <div id="loading" class="loading">Cargando inventario...</div>
+              <div class="table-container">
+                <div id="stockTable"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reportes y Análisis -->
+      <div id="reportes" class="tab-content">
+        <div class="content-header">
+          <h2>Reportes y Análisis</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Historial de Movimientos</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="fechaDesde">Fecha Desde</label>
+                  <input id="fechaDesde" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="fechaHasta">Fecha Hasta</label>
+                  <input id="fechaHasta" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="filtroTipo">Filtrar por Tipo</label>
+                  <select id="filtroTipo">
+                    <option value="">Todos los movimientos</option>
+                    <option value="INGRESO">Solo Ingresos</option>
+                    <option value="SALIDA">Solo Salidas</option>
+                    <option value="AJUSTE_POSITIVO">Solo Ajustes Positivos</option>
+                    <option value="AJUSTE_NEGATIVO">Solo Ajustes Negativos</option>
+                  </select>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" onclick="mostrarHistorial()">
+                  Generar Reporte
+                </button>
+                <button class="btn btn-success" onclick="exportarReporte()">
+                  Exportar Reporte
+                </button>
+              </div>
+              <div class="table-container">
+                <div id="historialTable"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Reporte de Ventas</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="fechaDesdeVentas">Fecha Desde</label>
+                  <input id="fechaDesdeVentas" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="fechaHastaVentas">Fecha Hasta</label>
+                  <input id="fechaHastaVentas" type="date" required>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" onclick="mostrarReporteVentas()">
+                  Generar Reporte de Ventas
+                </button>
+                <button class="btn btn-success" onclick="exportarReporteVentas()">
+                  Exportar Ventas
+                </button>
+              </div>
+              <div class="table-container">
+                <div id="reporteVentasTable"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Reporte de Gastos</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="fechaDesdeGastos">Fecha Desde</label>
+                  <input id="fechaDesdeGastos" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="fechaHastaGastos">Fecha Hasta</label>
+                  <input id="fechaHastaGastos" type="date" required>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" onclick="mostrarReporteGastos()">
+                  Generar Reporte de Gastos
+                </button>
+                <button class="btn btn-success" onclick="exportarReporteGastos()">
+                  Exportar Gastos
+                </button>
+              </div>
+              <div class="table-container">
+                <div id="reporteGastosTable"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Búsqueda de Productos -->
+      <div id="buscar" class="tab-content">
+        <div class="content-header">
+          <h2>Búsqueda de Productos</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Buscar Productos</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="buscarTexto">Buscar por código o nombre</label>
+                  <input id="buscarTexto" type="text" placeholder="Escriba para buscar..."
+                    onkeyup="buscarEnTiempoReal()">
+                </div>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" onclick="buscarProducto()">
+                  Buscar
+                </button>
+                <button class="btn btn-secondary" onclick="limpiarBusqueda()">
+                  Limpiar
+                </button>
+              </div>
+              <div class="table-container">
+                <div id="resultadosBusqueda"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corte de Caja -->
+      <div id="cortes" class="tab-content">
+        <div class="content-header">
+          <h2>Corte de Caja</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Apertura y Cierre</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="estadoCorteActual">Estado actual</label>
+                  <input id="estadoCorteActual" type="text" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="fechaAperturaCorteActual">Fecha de apertura</label>
+                  <input id="fechaAperturaCorteActual" type="text" readonly>
+                </div>
+                <div class="form-group">
+                  <label for="periodicidadCorte">Periodicidad del corte</label>
+                  <select id="periodicidadCorte">
+                    <option value="DIARIO">Diario</option>
+                    <option value="SEMANAL">Semanal</option>
+                    <option value="QUINCENAL">Quincenal</option>
+                    <option value="MENSUAL">Mensual</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="cajaInicialCorte">Caja inicial *</label>
+                  <input id="cajaInicialCorte" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="retirosCorte">Retiros de caja</label>
+                  <input id="retirosCorte" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="ingresosCajaCorte">Ingresos a caja (ajustes)</label>
+                  <input id="ingresosCajaCorte" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="cajaContadaCorte">Caja contada al cierre *</label>
+                  <input id="cajaContadaCorte" type="number" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="observacionesAperturaCorte">Observaciones de apertura</label>
+                  <textarea id="observacionesAperturaCorte" rows="2" placeholder="Notas al abrir el corte"></textarea>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="observacionesCierreCorte">Observaciones de cierre</label>
+                  <textarea id="observacionesCierreCorte" rows="2" placeholder="Notas al cerrar el corte"></textarea>
+                </div>
+              </div>
+              <div class="actions">
+                <button id="btnAbrirCorte" type="button" class="btn btn-success" onclick="abrirCorteCaja()">Abrir
+                  corte</button>
+                <button id="btnCerrarCorte" type="button" class="btn btn-primary" onclick="cerrarCorteCaja()">Cerrar
+                  corte</button>
+                <button type="button" class="btn btn-secondary" onclick="cargarModuloCortes()">Actualizar vista</button>
+              </div>
+              <div id="msgCorte"></div>
+              <div id="resumenCorteActual" class="corte-resumen"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Historial de Cortes</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="fechaDesdeCorte">Fecha Desde</label>
+                  <input id="fechaDesdeCorte" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="fechaHastaCorte">Fecha Hasta</label>
+                  <input id="fechaHastaCorte" type="date" required>
+                </div>
+                <div class="form-group">
+                  <label for="tipoCorteFiltro">Periodicidad</label>
+                  <select id="tipoCorteFiltro">
+                    <option value="">Todos</option>
+                    <option value="DIARIO">Diario</option>
+                    <option value="SEMANAL">Semanal</option>
+                    <option value="QUINCENAL">Quincenal</option>
+                    <option value="MENSUAL">Mensual</option>
+                  </select>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn btn-primary" onclick="mostrarReporteCortes()">Generar Reporte</button>
+                <button type="button" class="btn btn-success" onclick="exportarReporteCortes()">Exportar Cortes</button>
+              </div>
+              <div class="table-container">
+                <div id="cortesTable"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configuración del Sistema -->
+      <div id="configuracion" class="tab-content">
+        <div class="content-header">
+          <h2>Configuración del Sistema</h2>
+        </div>
+        <div class="content-body">
+          <div class="card">
+            <div class="card-header">Datos del Negocio</div>
+            <div class="card-body">
+              <form id="formConfigNegocio" onsubmit="guardarConfiguracionSistema(event)">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="businessNameConfig">Nombre del negocio *</label>
+                    <input id="businessNameConfig" type="text" placeholder="Nombre que aparecerá en el ticket" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="businessPhoneConfig">Teléfono</label>
+                    <input id="businessPhoneConfig" type="text" placeholder="Teléfono de contacto">
+                  </div>
+                  <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="fiscalLegendConfig">Leyenda fiscal</label>
+                    <textarea id="fiscalLegendConfig" rows="3"
+                      placeholder="Leyenda o aviso fiscal del ticket"></textarea>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button class="btn btn-success" type="submit">Guardar configuración</button>
+                  <button class="btn btn-secondary" type="button" onclick="restaurarConfiguracionSistema()">Restaurar
+                    valores por defecto</button>
+                </div>
+              </form>
+              <div id="msgConfigNegocio"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Herramientas de Administración</div>
+            <div class="card-body">
+              <div class="actions">
+                <button class="btn btn-info" onclick="validarIntegridad()">
+                  Validar Integridad
+                </button>
+                <button class="btn btn-danger" onclick="confirmarReset()">
+                  Reset Sistema
+                </button>
+              </div>
+              <div id="configResults"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Editar Producto -->
+  <div id="modalEditarProducto" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalEditarTitulo">
+      <div class="modal-header">
+        <h3 id="modalEditarTitulo">Editar Producto</h3>
+        <button type="button" class="modal-close" id="cerrarModalEditarBtn" aria-label="Cerrar">&times;</button>
+      </div>
+      <form id="formEditarProducto" class="modal-body">
+        <div class="form-group">
+          <label for="editCodigoProd">Codigo</label>
+          <input id="editCodigoProd" type="text" readonly>
+        </div>
+        <div class="form-group">
+          <label for="editNombreProd">Nombre *</label>
+          <input id="editNombreProd" type="text" required>
+        </div>
+        <div class="form-group">
+          <label for="editStockMinProd">Stock Minimo</label>
+          <input id="editStockMinProd" type="number" min="0" step="1" required>
+        </div>
+        <div class="form-group">
+          <label for="editPrecioVentaProd">Precio real / de venta *</label>
+          <input id="editPrecioVentaProd" type="number" min="0.01" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>
+            <input id="editPrecioVariableProd" type="checkbox" onchange="actualizarPrecioVariableProductoEdicion()">
+            Precio variable en venta
+          </label>
+          <small class="config-note">Activa esta opción si el precio se capturará manualmente al vender.</small>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelarModalEditarBtn">Cancelar</button>
+          <button type="submit" class="btn btn-success">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Precio Variable Venta -->
+  <div id="modalPrecioVariableVenta" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalPrecioVariableVentaTitulo">
+      <div class="modal-header">
+        <h3 id="modalPrecioVariableVentaTitulo">Precio variable de venta</h3>
+        <button type="button" class="modal-close" id="cerrarModalPrecioVariableVentaBtn"
+          aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalPrecioVariableVentaTexto" class="config-note"></div>
+        <div class="form-group">
+          <label for="precioVariableVentaInput">Precio de venta *</label>
+          <input id="precioVariableVentaInput" type="number" min="0.01" step="0.01"
+            placeholder="Ingrese el precio de venta">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelarModalPrecioVariableVentaBtn">Cancelar</button>
+          <button type="button" class="btn btn-success" id="confirmarModalPrecioVariableVentaBtn">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
