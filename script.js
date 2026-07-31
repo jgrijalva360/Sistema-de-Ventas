@@ -292,16 +292,7 @@ function construirCode39Data(codigo) {
   };
 }
 
-function construirSvgCode39(codigo) {
-  const { texto, body, widthTotal } = construirCode39Data(codigo);
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${widthTotal}" height="140" viewBox="0 0 ${widthTotal} 140">
-      <rect width="100%" height="100%" fill="#fff" />
-      ${body}
-      <text x="${widthTotal / 2}" y="126" text-anchor="middle" font-family="Arial, sans-serif" font-size="25px" fill="#111">${texto}</text>
-    </svg>
-  `;
-}
+
 
 function imprimirCodigoProducto(codigo, nombre = "") {
   const codigoFinal = sanitizarCodigoParaBarcode(
@@ -2118,12 +2109,7 @@ function buscarProductoLocal(texto) {
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
-function obtenerListas() {
-  return {
-    unidades: [...localDB.listas.unidades].sort(),
-    grupos: [...localDB.listas.grupos].sort(),
-  };
-}
+
 
 function validarIntegridadLocal() {
   const errores = [];
@@ -2590,9 +2576,7 @@ function handleTipoChange() {
     cantField.placeholder = "Cantidad a disminuir";
 }
 
-function actualizarVistaCostoPorPieza() {
-  return;
-}
+
 
 function buscarProducto() {
   const texto = document.getElementById("buscarTexto").value.trim();
@@ -4113,13 +4097,6 @@ window.addEventListener("load", () => {
   }
 
   handleTipoChange();
-  ["cantMov", "tipoMov"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener("input", actualizarVistaCostoPorPieza);
-      el.addEventListener("change", actualizarVistaCostoPorPieza);
-    }
-  });
 
   ["pagoEfectivo", "pagoTarjeta", "pagoTransferencia"].forEach((id) => {
     const input = document.getElementById(id);
