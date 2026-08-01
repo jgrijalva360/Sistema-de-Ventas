@@ -21,6 +21,7 @@ const localDB = {
   cortes: [],
   corteActivo: null,
   carritosPendientes: [],
+  pedidosPersonalizados: [],
   config: { ...DEFAULT_CONFIG },
   listas: {
     unidades: ["Unidades", "Pieza", "Caja", "Paquetes", "Docenas"],
@@ -100,6 +101,9 @@ function cargarEstadoLocal() {
     localDB.carritosPendientes = Array.isArray(data.carritosPendientes)
       ? data.carritosPendientes
       : [];
+    localDB.pedidosPersonalizados = Array.isArray(data.pedidosPersonalizados)
+      ? data.pedidosPersonalizados
+      : [];
     localDB.config = {
       ...DEFAULT_CONFIG,
       ...(data.config && typeof data.config === "object" ? data.config : {}),
@@ -125,6 +129,8 @@ function validarEstructuraEstado(data) {
   if (data.cortes && !Array.isArray(data.cortes)) return false;
   if (data.corteActivo && typeof data.corteActivo !== "object") return false;
   if (data.carritosPendientes && !Array.isArray(data.carritosPendientes))
+    return false;
+  if (data.pedidosPersonalizados && !Array.isArray(data.pedidosPersonalizados))
     return false;
   if (data.config && typeof data.config !== "object") return false;
   if (!data.listas || typeof data.listas !== "object") return false;
@@ -519,6 +525,9 @@ function showTab(tabName, clickedElement = null) {
   }
   if (tabName === "cortes") {
     cargarModuloCortes();
+  }
+  if (tabName === "pedidos") {
+    renderizarModuloPedidos();
   }
 }
 
@@ -3965,6 +3974,7 @@ function confirmarReset() {
       localDB.cortes = [];
       localDB.corteActivo = null;
       localDB.carritosPendientes = [];
+      localDB.pedidosPersonalizados = [];
       localDB.config = { ...DEFAULT_CONFIG };
       guardarEstadoLocal();
       loadDashboard();
@@ -4021,6 +4031,1048 @@ function exportarReporte() {
   showMessage("historialTable", "Reporte exportado exitosamente", "success");
 }
 
+/* ==========================================================================
+   MÓDULO: PEDIDOS PERSONALIZADOS (RF1 - RF6)
+   ========================================================================== */
+
+function renderizarModuloPedidos() {
+  if (!localDB.pedidosPersonalizados) {
+    localDB.pedidosPersonalizados = [];
+  }
+
+  const pedidos = localDB.pedidosPersonalizados;
+  const totalCount = pedidos.length;
+  const pendientes = pedidos.filter((p) => p.estado === "PENDIENTE").length;
+  const proceso = pedidos.filter((p) => p.estado === "EN_PROCESO").length;
+  const terminados = pedidos.filter((p) => p.estado === "TERMINADO").length;
+  const entregados = pedidos.filter((p) => p.estado === "ENTREGADO").length;
+
+  const statTotal = document.getElementById("statTotalPedidos");
+  const statPendientes = document.getElementById("statPendientesPedidos");
+  const statProceso = document.getElementById("statProcesoPedidos");
+  const statTerminados = document.getElementById("statTerminadosPedidos");
+  const statEntregados = document.getElementById("statEntregadosPedidos");
+
+  if (statTotal) statTotal.textContent = totalCount;
+  if (statPendientes) statPendientes.textContent = pendientes;
+  if (statProceso) statProceso.textContent = proceso;
+  if (statTerminados) statTerminados.textContent = terminados;
+  if (statEntregados) statEntregados.textContent = entregados;
+
+  filtrarPedidosPersonalizados();
+}
+
+function filtrarPedidosPersonalizados() {
+  if (!localDB.pedidosPersonalizados) return;
+
+  const busqueda = normalizeCode(
+    document.getElementById("filtroBusquedaPedido")
+      ? document.getElementById("filtroBusquedaPedido").value
+      : "",
+  );
+  const estadoFiltro = document.getElementById("filtroEstadoPedido")
+    ? document.getElementById("filtroEstadoPedido").value
+    : "TODOS";
+  const fechaInicioStr = document.getElementById("filtroFechaInicioPedido")
+    ? document.getElementById("filtroFechaInicioPedido").value
+    : "";
+  const fechaFinStr = document.getElementById("filtroFechaFinPedido")
+    ? document.getElementById("filtroFechaFinPedido").value
+    : "";
+
+  let lista = [...localDB.pedidosPersonalizados];
+
+  if (estadoFiltro && estadoFiltro !== "TODOS") {
+    lista = lista.filter((p) => p.estado === estadoFiltro);
+  }
+
+  if (busqueda) {
+    lista = lista.filter(
+      (p) =>
+        normalizeCode(p.folio).includes(busqueda) ||
+        normalizeCode(p.cliente && p.cliente.nombre).includes(busqueda) ||
+        normalizeCode(p.cliente && p.cliente.telefono).includes(busqueda) ||
+        normalizeCode(p.especificaciones).includes(busqueda),
+    );
+  }
+
+  if (fechaInicioStr) {
+    const fInicio = new Date(fechaInicioStr + "T00:00:00");
+    lista = lista.filter((p) => new Date(p.fechaCreacion) >= fInicio);
+  }
+
+  if (fechaFinStr) {
+    const fFin = new Date(fechaFinStr + "T23:59:59");
+    lista = lista.filter((p) => new Date(p.fechaCreacion) <= fFin);
+  }
+
+  // Ordenar por fecha más reciente
+  lista.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
+
+  const tbody = document.getElementById("tbodyPedidosPersonalizados");
+  if (!tbody) return;
+
+  if (lista.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" style="text-align: center; color: #64748b; padding: 20px;">
+          No se encontraron pedidos personalizados registrados con los filtros seleccionados.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = lista
+    .map((p) => {
+      const totalPagado = (p.pagos || []).reduce(
+        (acc, pago) => acc + parseNumber(pago.monto, 0),
+        0,
+      );
+      const saldo = Math.max(0, parseNumber(p.precioTotal, 0) - totalPagado);
+
+      let badgeClass = "badge-pedido-pendiente";
+      let estadoTexto = "Pendiente";
+      if (p.estado === "EN_PROCESO") {
+        badgeClass = "badge-pedido-proceso";
+        estadoTexto = "En Proceso";
+      } else if (p.estado === "TERMINADO") {
+        badgeClass = "badge-pedido-terminado";
+        estadoTexto = "Terminado";
+      } else if (p.estado === "ENTREGADO") {
+        badgeClass = "badge-pedido-entregado";
+        estadoTexto = "Entregado";
+      }
+
+      return `
+      <tr>
+        <td><strong>${escapeXml(p.folio)}</strong></td>
+        <td>${formatDate(p.fechaCreacion)}</td>
+        <td>${escapeXml(p.cliente ? p.cliente.nombre : "Sin Nombre")}</td>
+        <td>${escapeXml(p.cliente ? p.cliente.telefono || "-" : "-")}</td>
+        <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeXml(p.especificaciones)}">
+          ${escapeXml(p.especificaciones)}
+        </td>
+        <td><strong>${formatMoney(p.precioTotal)}</strong></td>
+        <td style="color:#047857;">${formatMoney(totalPagado)}</td>
+        <td style="color:${saldo > 0 ? "#dc2626" : "#16a34a"}; font-weight:700;">
+          ${formatMoney(saldo)}
+        </td>
+        <td>
+          <span class="badge ${badgeClass}">${estadoTexto}</span>
+        </td>
+        <td style="white-space: nowrap;">
+          <div style="display: inline-flex; gap: 4px; align-items: center;">
+            <button class="btn btn-info btn-sm" onclick="verDetallePedido('${p.id}')">
+              👁️ Ver / Timeline
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="imprimirTicketPedidoPersonalizado('${p.id}')" title="Imprimir Nota / Ticket">
+              🖨️ Ticket
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="eliminarPedidoPersonalizado('${p.id}')" title="Eliminar Pedido">
+              🗑️
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function generarHTMLTicketPedidoPersonalizado(pedido) {
+  const config = localDB.config || DEFAULT_CONFIG;
+  const totalPagado = (pedido.pagos || []).reduce(
+    (acc, pago) => acc + parseNumber(pago.monto, 0),
+    0,
+  );
+  const saldoPendiente = Math.max(0, parseNumber(pedido.precioTotal, 0) - totalPagado);
+  const fecha = formatDate(pedido.fechaCreacion);
+
+  let materiasPrimasFilas = "";
+  if (pedido.materiasPrimas && pedido.materiasPrimas.length > 0) {
+    materiasPrimasFilas = pedido.materiasPrimas
+      .map(
+        (m) =>
+          `<tr>
+            <td class="c-cant">${m.cantidad}</td>
+            <td class="c-prod">${escapeXml(m.nombre)}</td>
+            <td class="c-sub">-</td>
+          </tr>`,
+      )
+      .join("");
+  } else {
+    materiasPrimasFilas = `<tr><td colspan="3" class="center muted">Sin insumos especificados</td></tr>`;
+  }
+
+  let historialPagosFilas = "";
+  if (pedido.pagos && pedido.pagos.length > 0) {
+    historialPagosFilas = pedido.pagos
+      .map(
+        (pago) =>
+          `<div class="totals-row">
+            <span>${escapeXml(pago.concepto)} (${escapeXml(pago.metodo || "EFECTIVO")}):</span>
+            <span>${formatMoney(pago.monto)}</span>
+          </div>`,
+      )
+      .join("");
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Ticket de Pedido - ${escapeXml(pedido.folio)}</title>
+      <style>
+        html, body {
+          width: 80mm;
+          margin: 0;
+          padding: 0;
+          color: #111;
+          font-family: "Courier New", monospace;
+          font-size: 11px;
+          line-height: 1.2;
+        }
+        h1, h2, h3, p { margin: 0; }
+        .ticket {
+          width: 72mm;
+          margin: 0 auto;
+          padding: 3mm 0;
+        }
+        .center { text-align: center; }
+        .space { margin-top: 4px; }
+        .muted { color: #444; font-size: 10px; }
+        .line {
+          border-top: 1px dashed #000;
+          margin: 4px 0;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 4px;
+          table-layout: fixed;
+        }
+        th, td {
+          padding: 2px 0;
+          vertical-align: top;
+          word-wrap: break-word;
+        }
+        th { text-align: left; font-weight: 700; }
+        .c-cant { width: 10mm; text-align: left; }
+        .c-prod { width: 42mm; }
+        .c-sub { width: 20mm; text-align: right; }
+        .totals { margin-top: 4px; font-size: 11px; }
+        .totals-row { display: flex; justify-content: space-between; margin: 2px 0; }
+        .total-final { font-size: 12px; font-weight: 700; }
+        .strong { font-weight: 700; }
+        .box-spec {
+          border: 1px solid #666;
+          padding: 4px;
+          margin: 4px 0;
+          font-size: 10px;
+        }
+
+        @media print {
+          html, body {
+            width: 80mm;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="ticket">
+        <div class="center">
+          <h3>${escapeXml(config.businessName || DEFAULT_CONFIG.businessName)}</h3>
+          <p class="muted">NOTA DE PEDIDO PERSONALIZADO</p>
+          ${config.businessPhone ? `<p class="muted">TEL: ${escapeXml(config.businessPhone)}</p>` : ""}
+        </div>
+
+        <div class="line"></div>
+
+        <div class="space">
+          <p><span class="strong">FOLIO:</span> ${escapeXml(pedido.folio)}</p>
+          <p><span class="strong">FECHA REGISTRO:</span> ${fecha}</p>
+          <p><span class="strong">CLIENTE:</span> ${escapeXml(pedido.cliente ? pedido.cliente.nombre : "Sin Nombre")}</p>
+          ${pedido.cliente && pedido.cliente.telefono ? `<p><span class="strong">TELÉFONO:</span> ${escapeXml(pedido.cliente.telefono)}</p>` : ""}
+          ${pedido.fechaEntregaEstimada ? `<p><span class="strong">FECHA ENTREGA:</span> ${formatDate(pedido.fechaEntregaEstimada)}</p>` : ""}
+          <p><span class="strong">ESTADO:</span> ${pedido.estado.replace("_", " ")}</p>
+        </div>
+
+        <div class="line"></div>
+        <p class="strong">ESPECIFICACIONES / DISEÑO:</p>
+        <div class="box-spec">
+          ${escapeXml(pedido.especificaciones)}
+        </div>
+
+        <div class="line"></div>
+        <p class="strong">INSUMOS Y MATERIA PRIMA:</p>
+        <table>
+          <thead>
+            <tr>
+              <th class="c-cant">CANT</th>
+              <th class="c-prod">DESCRIPCIÓN</th>
+              <th class="c-sub"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${materiasPrimasFilas}
+          </tbody>
+        </table>
+
+        <div class="line"></div>
+
+        <div class="totals">
+          <div class="totals-row total-final"><span>PRECIO TOTAL:</span><span>${formatMoney(pedido.precioTotal)}</span></div>
+          <div class="line"></div>
+          <p class="strong muted">DESGLOSE DE PAGOS Y ABONOS:</p>
+          ${historialPagosFilas}
+          <div class="line"></div>
+          <div class="totals-row total-final" style="color: #000;">
+            <span>TOTAL PAGADO:</span>
+            <span>${formatMoney(totalPagado)}</span>
+          </div>
+          <div class="totals-row total-final" style="margin-top: 4px; font-size: 13px;">
+            <span>SALDO PENDIENTE:</span>
+            <span>${formatMoney(saldoPendiente)}</span>
+          </div>
+        </div>
+
+        <div class="line"></div>
+        <p class="center muted">¡GRACIAS POR SU PREFERENCIA!</p>
+        ${config.fiscalLegend ? `<p class="center muted">${escapeXml(config.fiscalLegend)}</p>` : ""}
+        <p class="center muted space">------ CONSERVE SU TICKET ------</p>
+      </div>
+      <script>window.onload = function(){ window.print(); };</script>
+    </body>
+    </html>
+  `;
+}
+
+function imprimirTicketPedidoPersonalizado(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) {
+    alert("No se encontró el pedido personalizado para imprimir.");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=400,height=600");
+  if (!printWindow) {
+    alert("Por favor permita las ventanas emergentes para imprimir la nota del pedido.");
+    return;
+  }
+
+  const ticketHTML = generarHTMLTicketPedidoPersonalizado(pedido);
+  printWindow.document.open();
+  printWindow.document.write(ticketHTML);
+  printWindow.document.close();
+}
+
+function abrirModalNuevoPedido() {
+  const form = document.getElementById("formNuevoPedido");
+  if (form) form.reset();
+
+  const cont = document.getElementById("contenedorMateriaPrimaPedido");
+  if (cont) {
+    cont.innerHTML = "";
+    agregarFilaMateriaPrimaPedido(); // Fila inicial
+  }
+
+  calcularSaldoPendienteModalNuevo();
+
+  const modal = document.getElementById("modalNuevoPedido");
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function cerrarModalNuevoPedido() {
+  const modal = document.getElementById("modalNuevoPedido");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function agregarFilaMateriaPrimaPedido(codigoDef = "", cantidadDef = 1) {
+  const cont = document.getElementById("contenedorMateriaPrimaPedido");
+  if (!cont) return;
+
+  const div = document.createElement("div");
+  div.className = "materia-prima-row";
+
+  const productosOps = localDB.productos
+    .map((p) => {
+      const stock = calcularStock(p.codigo);
+      const sel = p.codigo === codigoDef ? "selected" : "";
+      return `<option value="${escapeXml(p.codigo)}" ${sel}>[${escapeXml(p.codigo)}] ${escapeXml(p.nombre)} (Stock: ${stock})</option>`;
+    })
+    .join("");
+
+  div.innerHTML = `
+    <select class="mat-prod-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+      <option value="">-- Seleccionar Materia Prima / Insumo --</option>
+      ${productosOps}
+    </select>
+    <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantidadDef}" placeholder="Cant." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100px;">
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 4px 8px;">✕</button>
+  `;
+
+  cont.appendChild(div);
+}
+
+function calcularSaldoPendienteModalNuevo() {
+  const total = parseNumber(
+    document.getElementById("pedidoPrecioTotal")
+      ? document.getElementById("pedidoPrecioTotal").value
+      : 0,
+    0,
+  );
+  const anticipo = parseNumber(
+    document.getElementById("pedidoAnticipo")
+      ? document.getElementById("pedidoAnticipo").value
+      : 0,
+    0,
+  );
+
+  const saldo = Math.max(0, total - anticipo);
+  const lbl = document.getElementById("lblSaldoPendienteModalNuevo");
+  if (lbl) {
+    lbl.textContent = formatMoney(saldo);
+  }
+}
+
+function guardarNuevoPedidoPersonalizado(event) {
+  event.preventDefault();
+
+  const clienteNombre = document.getElementById("pedidoClienteNombre").value.trim();
+  const clienteTelefono = document.getElementById("pedidoClienteTelefono").value.trim();
+  const fechaEntrega = document.getElementById("pedidoFechaEntrega").value;
+  const especificaciones = document.getElementById("pedidoEspecificaciones").value.trim();
+
+  const total = parseNumber(document.getElementById("pedidoPrecioTotal").value, 0);
+  const anticipo = parseNumber(document.getElementById("pedidoAnticipo").value, 0);
+  const metodoPago = document.getElementById("pedidoMetodoPago").value;
+
+  if (!clienteNombre) {
+    alert("Por favor ingrese el nombre del cliente.");
+    return;
+  }
+
+  if (total <= 0) {
+    alert("El monto total acordado debe ser mayor a $0.00.");
+    return;
+  }
+
+  if (anticipo > total) {
+    alert("El anticipo no puede ser mayor al precio total acordado.");
+    return;
+  }
+
+  // Recolectar materias primas
+  const materiasPrimas = [];
+  const filasMat = document.querySelectorAll("#contenedorMateriaPrimaPedido .materia-prima-row");
+  filasMat.forEach((row) => {
+    const select = row.querySelector(".mat-prod-select");
+    const inputCant = row.querySelector(".mat-prod-cant");
+    if (select && select.value && inputCant) {
+      const cant = parseNumber(inputCant.value, 0);
+      if (cant > 0) {
+        const prod = localDB.productos.find((p) => p.codigo === select.value);
+        materiasPrimas.push({
+          codigo: select.value,
+          nombre: prod ? prod.nombre : select.value,
+          cantidad: cant,
+        });
+      }
+    }
+  });
+
+  const numPedido = (localDB.pedidosPersonalizados ? localDB.pedidosPersonalizados.length : 0) + 1;
+  const folio = `PED-${String(numPedido).padStart(4, "0")}`;
+
+  const fechaAhora = new Date().toISOString();
+  const pagos = [];
+  if (anticipo > 0) {
+    pagos.push({
+      fecha: fechaAhora,
+      concepto: "Anticipo Inicial",
+      monto: anticipo,
+      metodo: metodoPago,
+    });
+  }
+
+  const pedido = {
+    id: `PED-${Date.now()}`,
+    folio,
+    fechaCreacion: fechaAhora,
+    fechaEntregaEstimada: fechaEntrega || "",
+    cliente: {
+      nombre: clienteNombre,
+      telefono: clienteTelefono,
+    },
+    especificaciones,
+    materiasPrimas,
+    descontadoInventario: false,
+    precioTotal: total,
+    anticipoInicial: anticipo,
+    pagos,
+    estado: "PENDIENTE",
+    historialEstados: [
+      {
+        estado: "PENDIENTE",
+        fecha: fechaAhora,
+        nota: "Pedido registrado con anticipo de " + formatMoney(anticipo),
+      },
+    ],
+    ventaId: null,
+  };
+
+  if (!localDB.pedidosPersonalizados) {
+    localDB.pedidosPersonalizados = [];
+  }
+
+  localDB.pedidosPersonalizados.push(pedido);
+  guardarEstadoLocal();
+  cerrarModalNuevoPedido();
+  renderizarModuloPedidos();
+
+  alert(`¡Pedido personalizado ${folio} registrado con éxito!`);
+}
+
+function verDetallePedido(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) return;
+
+  const body = document.getElementById("bodyDetallePedido");
+  if (!body) return;
+
+  const totalPagado = (pedido.pagos || []).reduce(
+    (acc, pago) => acc + parseNumber(pago.monto, 0),
+    0,
+  );
+  const saldoPendiente = Math.max(0, parseNumber(pedido.precioTotal, 0) - totalPagado);
+
+  // Determinar posición en la línea de tiempo (Timeline)
+  const estadosOrder = ["PENDIENTE", "EN_PROCESO", "TERMINADO", "ENTREGADO"];
+  const currentIdx = estadosOrder.indexOf(pedido.estado);
+  const progressPercent = (currentIdx / 3) * 100;
+
+  // Generar HTML de la Línea de Tiempo
+  const timelineHTML = `
+    <div class="timeline-wrapper" style="overflow: hidden; width: 100%;">
+      <h4 style="margin:0 0 15px 0; color:#1e293b; font-size:1rem;">📌 Estado Actual del Pedido: <span style="text-transform:uppercase; font-weight:800; color:#2563eb;">${pedido.estado.replace("_", " ")}</span></h4>
+      <div class="timeline" style="overflow: hidden; width: 100%; position: relative; box-sizing: border-box;">
+        <div class="timeline-progress-bar" style="width: ${progressPercent}%;"></div>
+
+        <div class="timeline-step ${currentIdx >= 0 ? (currentIdx === 0 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'PENDIENTE')">
+          <div class="step-icon">📋</div>
+          <div class="step-label">Pendiente</div>
+        </div>
+
+        <div class="timeline-step ${currentIdx >= 1 ? (currentIdx === 1 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'EN_PROCESO')">
+          <div class="step-icon">⚙️</div>
+          <div class="step-label">En Proceso</div>
+        </div>
+
+        <div class="timeline-step ${currentIdx >= 2 ? (currentIdx === 2 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'TERMINADO')">
+          <div class="step-icon">📦</div>
+          <div class="step-label">Terminado</div>
+        </div>
+
+        <div class="timeline-step ${currentIdx >= 3 ? (currentIdx === 3 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'ENTREGADO')">
+          <div class="step-icon">✅</div>
+          <div class="step-label">Entregado</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Filas de Materia Prima
+  const materiaPrimaHTML = (pedido.materiasPrimas || []).length > 0
+    ? pedido.materiasPrimas
+        .map(
+          (m) => `
+        <li style="display:flex; justify-content:space-between; padding: 4px 0; border-bottom:1px dashed #e2e8f0;">
+          <span><strong>[${escapeXml(m.codigo)}]</strong> ${escapeXml(m.nombre)}</span>
+          <span class="badge" style="background:#e2e8f0; color:#1e293b;">${m.cantidad} unidades</span>
+        </li>`,
+        )
+        .join("")
+    : "<p style='color:#94a3b8; font-style:italic;'>No se especificaron materias primas registradas.</p>";
+
+  // Historial de Pagos
+  const pagosHTML = (pedido.pagos || [])
+    .map(
+      (pago) => `
+      <tr>
+        <td>${formatDate(pago.fecha)}</td>
+        <td>${escapeXml(pago.concepto)}</td>
+        <td><span class="badge" style="background:#e0f2fe; color:#0369a1;">${escapeXml(pago.metodo || "EFECTIVO")}</span></td>
+        <td style="font-weight:700; color:#059669;">${formatMoney(pago.monto)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  body.innerHTML = `
+    <!-- Header del Pedido -->
+    <div class="pedido-detail-card" style="background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 14px; padding: 14px 18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <h2 style="margin:0; color:#0f172a; font-size:1.4rem; font-weight:800;">${escapeXml(pedido.folio)}</h2>
+            <span class="badge badge-pedido-${pedido.estado.toLowerCase().replace('_', '')}" style="font-size:0.88rem; padding: 5px 14px; text-transform:uppercase;">
+              ${pedido.estado.replace('_', ' ')}
+            </span>
+          </div>
+          <small style="color:#64748b; font-size:0.82rem;">Registrado el ${formatDate(pedido.fechaCreacion)}</small>
+        </div>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="imprimirTicketPedidoPersonalizado('${pedido.id}')" style="box-shadow:0 2px 6px rgba(14,165,233,0.25); padding: 8px 16px;">
+            🖨️ Imprimir Ticket / Nota
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección 1: Línea de Tiempo (Ancho Completo) -->
+    <div class="pedido-detail-card" style="margin-bottom: 14px; padding: 16px 18px; overflow: hidden; width: 100%; box-sizing: border-box;">
+      <div class="timeline-wrapper" style="margin: 0; padding: 0; background: transparent; border: none; overflow: hidden; width: 100%;">
+        <h4 style="margin:0 0 15px 0; color:#1e293b; font-size:1rem;">📌 Estado Actual del Pedido: <span style="text-transform:uppercase; font-weight:800; color:#2563eb;">${pedido.estado.replace("_", " ")}</span></h4>
+        <div class="timeline" style="width: 100%; box-sizing: border-box;">
+          <div class="timeline-progress-bar" style="width: ${progressPercent}%;"></div>
+
+          <div class="timeline-step ${currentIdx >= 0 ? (currentIdx === 0 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'PENDIENTE')">
+            <div class="step-icon">📋</div>
+            <div class="step-label">Pendiente</div>
+          </div>
+
+          <div class="timeline-step ${currentIdx >= 1 ? (currentIdx === 1 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'EN_PROCESO')">
+            <div class="step-icon">⚙️</div>
+            <div class="step-label">En Proceso</div>
+          </div>
+
+          <div class="timeline-step ${currentIdx >= 2 ? (currentIdx === 2 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'TERMINADO')">
+            <div class="step-icon">📦</div>
+            <div class="step-label">Terminado</div>
+          </div>
+
+          <div class="timeline-step ${currentIdx >= 3 ? (currentIdx === 3 ? "step-active" : "step-completed") : ""}" onclick="cambiarEstadoPedido('${pedido.id}', 'ENTREGADO')">
+            <div class="step-icon">✅</div>
+            <div class="step-label">Entregado</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenedor Secuencial de Ancho Completo (Full Width) -->
+    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 14px; width: 100%;">
+
+      <!-- Sección 2: Control de Avance de Producción -->
+      <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px; background: #fdfdfd; border-left: 4px solid #3b82f6;">
+        <div class="pedido-detail-header" style="font-size: 0.95rem; border-bottom-color: #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; color: #1e293b;">
+          <span>⚡ Acciones de Avance de Producción</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+          ${pedido.estado !== "PENDIENTE" ? `<button class="btn btn-secondary btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'PENDIENTE')">⏪ Regresar a PENDIENTE</button>` : ""}
+          ${pedido.estado !== "EN_PROCESO" ? `<button class="btn btn-info btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'EN_PROCESO')">⚙️ Pasar a EN PROCESO</button>` : ""}
+          ${pedido.estado !== "TERMINADO" ? `<button class="btn btn-warning btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'TERMINADO')">📦 Marcar TERMINADO</button>` : ""}
+          ${pedido.estado !== "ENTREGADO" ? `<button class="btn btn-success btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'ENTREGADO')">✅ Marcar ENTREGADO y Liquidar</button>` : ""}
+        </div>
+      </div>
+
+      <!-- Sección 3: Datos del Cliente y Trabajo -->
+      <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px;">
+        <div class="pedido-detail-header" style="font-size: 0.95rem; border-bottom-color: #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">
+          <span>👤 Información del Cliente y Especificaciones</span>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; font-size: 0.88rem; margin-bottom: 12px; background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div>
+            <span style="color: #64748b; font-size: 0.75rem; font-weight: 700; display: block;">CLIENTE</span>
+            <strong style="color: #1e293b; font-size: 0.95rem;">${escapeXml(pedido.cliente ? pedido.cliente.nombre : "Sin Nombre")}</strong>
+          </div>
+          <div>
+            <span style="color: #64748b; font-size: 0.75rem; font-weight: 700; display: block;">TELÉFONO</span>
+            <strong style="color: #1e293b; font-size: 0.95rem;">${escapeXml(pedido.cliente ? pedido.cliente.telefono || "No registrado" : "-")}</strong>
+          </div>
+          <div>
+            <span style="color: #64748b; font-size: 0.75rem; font-weight: 700; display: block;">ENTREGA ESTIMADA</span>
+            <strong style="color: #2563eb; font-size: 0.95rem;">📅 ${pedido.fechaEntregaEstimada ? formatDate(pedido.fechaEntregaEstimada) : "Sin fecha límite"}</strong>
+          </div>
+        </div>
+
+        <span style="color: #475569; font-size: 0.8rem; font-weight: 700; display: block; margin-bottom: 6px;">📝 ESPECIFICACIONES / DETALLES DEL DISEÑO:</span>
+        <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.88rem; color: #334155; max-height: 120px; overflow-y: auto; white-space: pre-wrap;">${escapeXml(pedido.especificaciones)}</div>
+      </div>
+
+      <!-- Sección 4: Materias Primas e Insumos (Ancho Completo) -->
+      <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px;">
+        <div class="pedido-detail-header" style="font-size: 0.95rem; border-bottom-color: #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">
+          <span>📦 Materias Primas e Insumos Registrados</span>
+          <span class="badge ${pedido.descontadoInventario ? "badge-success" : "badge-warning"}" style="font-size: 0.76rem;">
+            ${pedido.descontadoInventario ? "✔️ Inventario Descontado" : "⏳ Pendiente de Descontar"}
+          </span>
+        </div>
+        <ul style="list-style: none; padding: 0; margin: 0; max-height: 160px; overflow-y: auto;">
+          ${materiaPrimaHTML}
+        </ul>
+      </div>
+
+      <!-- Sección 5: Estado Financiero y Control de Abonos (Ancho Completo) -->
+      <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px;">
+        <div class="pedido-detail-header" style="font-size: 0.95rem; border-bottom-color: #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">
+          <span>💳 Estado Financiero y Historial de Pagos</span>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px;">
+          <div style="background: #f1f5f9; padding: 10px 12px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0;">
+            <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">MONTO TOTAL</span>
+            <h3 style="margin: 4px 0 0 0; color: #0f172a; font-size: 1.15rem;">${formatMoney(pedido.precioTotal)}</h3>
+          </div>
+          <div style="background: #dcfce7; padding: 10px 12px; border-radius: 8px; text-align: center; border: 1px solid #bbf7d0;">
+            <span style="font-size: 0.75rem; color: #15803d; font-weight: 700; text-transform: uppercase;">TOTAL PAGADO</span>
+            <h3 style="margin: 4px 0 0 0; color: #16a34a; font-size: 1.15rem;">${formatMoney(totalPagado)}</h3>
+          </div>
+          <div style="background: #fee2e2; padding: 10px 12px; border-radius: 8px; text-align: center; border: 1px solid #fca5a5;">
+            <span style="font-size: 0.75rem; color: #991b1b; font-weight: 700; text-transform: uppercase;">SALDO PENDIENTE</span>
+            <h3 style="margin: 4px 0 0 0; color: #dc2626; font-size: 1.15rem;">${formatMoney(saldoPendiente)}</h3>
+          </div>
+        </div>
+
+        <span style="color: #475569; font-size: 0.8rem; font-weight: 700; display: block; margin-bottom: 6px;">HISTORIAL DE ABONOS RECIBIDOS:</span>
+        <div style="max-height: 130px; overflow-y: auto; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <table class="table" style="font-size: 0.85rem; width: 100%; margin: 0;">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th>Método de Pago</th>
+                <th>Monto Abonado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pagosHTML || '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:10px;">No hay abonos registrados aún.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        ${
+          saldoPendiente > 0 && pedido.estado !== "ENTREGADO"
+            ? `
+        <div style="background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-top: 8px;">
+          <span style="font-size: 0.82rem; font-weight: 700; color: #1e293b; display: block; margin-bottom: 8px;">+ REGISTRAR NUEVO ABONO:</span>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="number" id="montoAbonoInput" min="0.01" max="${saldoPendiente}" step="0.01" placeholder="Monto a abonar ($)" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; flex: 1; min-width: 130px; font-size: 0.88rem;">
+            <select id="metodoAbonoSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;">
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TARJETA">Tarjeta</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
+            <button class="btn btn-success" onclick="registrarAbonoPedido('${pedido.id}')" style="white-space: nowrap; padding: 8px 16px; font-size: 0.88rem;">💰 Agregar Abono</button>
+          </div>
+        </div>`
+            : ""
+        }
+      </div>
+
+    </div>
+
+    </div>
+  `;
+
+  const modal = document.getElementById("modalDetallePedido");
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function cerrarModalDetallePedido() {
+  const modal = document.getElementById("modalDetallePedido");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function cambiarEstadoPedido(pedidoId, nuevoEstado) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) return;
+
+  const estadoAnterior = pedido.estado;
+  if (estadoAnterior === nuevoEstado) return;
+
+  // Si pasa a EN_PROCESO o TERMINADO y aún no se ha descontado el inventario de materia prima
+  if ((nuevoEstado === "EN_PROCESO" || nuevoEstado === "TERMINADO" || nuevoEstado === "ENTREGADO") && !pedido.descontadoInventario) {
+    descontarMateriaPrimaPedido(pedido);
+  }
+
+  // Si cambia a ENTREGADO, liquidar la venta final e integrarlo con localDB.ventas
+  if (nuevoEstado === "ENTREGADO") {
+    const totalPagado = (pedido.pagos || []).reduce(
+      (acc, p) => acc + parseNumber(p.monto, 0),
+      0,
+    );
+    const saldoPendiente = Math.max(0, parseNumber(pedido.precioTotal, 0) - totalPagado);
+
+    let metodoPagoFinal = "EFECTIVO";
+    if (saldoPendiente > 0) {
+      const respMetodo = prompt(
+        `El pedido tiene un saldo pendiente de ${formatMoney(saldoPendiente)}.\nIngrese el método de pago para liquidar el saldo (EFECTIVO, TARJETA, TRANSFERENCIA):`,
+        "EFECTIVO",
+      );
+      if (!respMetodo) {
+        return; // Cancelar si el usuario no especifica
+      }
+      metodoPagoFinal = respMetodo.trim().toUpperCase();
+      if (!["EFECTIVO", "TARJETA", "TRANSFERENCIA"].includes(metodoPagoFinal)) {
+        metodoPagoFinal = "EFECTIVO";
+      }
+
+      // Registrar pago de liquidación
+      pedido.pagos.push({
+        fecha: new Date().toISOString(),
+        concepto: "Liquidación Final de Entrega",
+        monto: saldoPendiente,
+        metodo: metodoPagoFinal,
+      });
+    }
+
+    // Registrar la VENTA en localDB.ventas para integración con finanzas y cortes de caja
+    registrarVentaFinalPedidoPersonalizado(pedido, metodoPagoFinal);
+  }
+
+  pedido.estado = nuevoEstado;
+  pedido.historialEstados.push({
+    estado: nuevoEstado,
+    fecha: new Date().toISOString(),
+    nota: `Estado cambiado de ${estadoAnterior} a ${nuevoEstado}`,
+  });
+
+  guardarEstadoLocal();
+  renderizarModuloPedidos();
+  verDetallePedido(pedidoId);
+}
+
+function descontarMateriaPrimaPedido(pedido) {
+  if (!pedido || pedido.descontadoInventario || !pedido.materiasPrimas || pedido.materiasPrimas.length === 0) {
+    return;
+  }
+
+  pedido.materiasPrimas.forEach((m) => {
+    const prod = localDB.productos.find((p) => p.codigo === m.codigo);
+    if (prod) {
+      // Registrar movimiento de SALIDA de materia prima
+      const movimiento = {
+        id: `MOV-PED-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        fecha: new Date().toISOString(),
+        codigo: m.codigo,
+        producto: prod.nombre,
+        tipo: TIPOS_MOVIMIENTO.SALIDA,
+        cantidad: parseNumber(m.cantidad, 0),
+        observaciones: `Uso en Pedido Personalizado ${pedido.folio} (${pedido.cliente ? pedido.cliente.nombre : ""})`,
+      };
+      localDB.movimientos.push(movimiento);
+    }
+  });
+
+  pedido.descontadoInventario = true;
+}
+
+function registrarAbonoPedido(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) return;
+
+  const montoInput = document.getElementById("montoAbonoInput");
+  const metodoInput = document.getElementById("metodoAbonoInput");
+
+  const monto = parseNumber(montoInput ? montoInput.value : 0, 0);
+  const metodo = metodoInput ? metodoInput.value : "EFECTIVO";
+
+  const totalPagado = (pedido.pagos || []).reduce(
+    (acc, p) => acc + parseNumber(p.monto, 0),
+    0,
+  );
+  const saldoPendiente = Math.max(0, parseNumber(pedido.precioTotal, 0) - totalPagado);
+
+  if (monto <= 0) {
+    alert("Por favor ingrese un monto de abono mayor a $0.00.");
+    return;
+  }
+
+  if (monto > saldoPendiente + 0.01) {
+    alert(`El abono ($${monto.toFixed(2)}) no puede exceder el saldo pendiente ($${saldoPendiente.toFixed(2)}).`);
+    return;
+  }
+
+  pedido.pagos.push({
+    fecha: new Date().toISOString(),
+    concepto: "Abono Parcial",
+    monto,
+    metodo,
+  });
+
+  guardarEstadoLocal();
+  renderizarModuloPedidos();
+  verDetallePedido(pedidoId);
+  alert(`¡Abono de ${formatMoney(monto)} registrado correctamente!`);
+}
+
+function registrarVentaFinalPedidoPersonalizado(pedido, metodoPagoUltimo) {
+  if (pedido.ventaId) return; // Ya registrada previamente
+
+  const ventaId = `VTA-PED-${Date.now()}`;
+  const total = parseNumber(pedido.precioTotal, 0);
+
+  // Calcular desglose de métodos de pago desde los abonos y liquidación
+  let ef = 0, tar = 0, trans = 0;
+  (pedido.pagos || []).forEach((p) => {
+    const m = parseNumber(p.monto, 0);
+    if (p.metodo === "TARJETA") tar += m;
+    else if (p.metodo === "TRANSFERENCIA") trans += m;
+    else ef += m;
+  });
+
+  const nuevaVenta = {
+    id: ventaId,
+    fecha: new Date().toISOString(),
+    items: [
+      {
+        codigo: pedido.folio,
+        nombre: `Pedido Personalizado: ${pedido.especificaciones.slice(0, 50)}...`,
+        cantidad: 1,
+        precioUnitario: total,
+        total,
+      },
+    ],
+    total,
+    pagos: {
+      efectivo: roundTo(ef, 2),
+      tarjeta: roundTo(tar, 2),
+      transferencia: roundTo(trans, 2),
+    },
+    tipo: "VENTA_PEDIDO_PERSONALIZADO",
+    cliente: pedido.cliente ? pedido.cliente.nombre : "",
+    folioPedido: pedido.folio,
+  };
+
+  if (!localDB.ventas) localDB.ventas = [];
+  localDB.ventas.push(nuevaVenta);
+  pedido.ventaId = ventaId;
+}
+
+function eliminarPedidoPersonalizado(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) return;
+
+  if (
+    confirm(
+      `¿Está seguro de eliminar el pedido personalizado ${pedido.folio}?\nEsta acción no se puede deshacer.`,
+    )
+  ) {
+    localDB.pedidosPersonalizados = localDB.pedidosPersonalizados.filter(
+      (p) => p.id !== pedidoId,
+    );
+    guardarEstadoLocal();
+    renderizarModuloPedidos();
+  }
+}
+
+function generarReportePedidosPersonalizados() {
+  const container = document.getElementById("reportePedidosContainer");
+  const body = document.getElementById("reportePedidosBody");
+  if (!container || !body) return;
+
+  const busqueda = normalizeCode(
+    document.getElementById("filtroBusquedaPedido")
+      ? document.getElementById("filtroBusquedaPedido").value
+      : "",
+  );
+  const estadoFiltro = document.getElementById("filtroEstadoPedido")
+    ? document.getElementById("filtroEstadoPedido").value
+    : "TODOS";
+  const fechaInicioStr = document.getElementById("filtroFechaInicioPedido")
+    ? document.getElementById("filtroFechaInicioPedido").value
+    : "";
+  const fechaFinStr = document.getElementById("filtroFechaFinPedido")
+    ? document.getElementById("filtroFechaFinPedido").value
+    : "";
+
+  let lista = [...(localDB.pedidosPersonalizados || [])];
+
+  if (estadoFiltro && estadoFiltro !== "TODOS") {
+    lista = lista.filter((p) => p.estado === estadoFiltro);
+  }
+  if (busqueda) {
+    lista = lista.filter(
+      (p) =>
+        normalizeCode(p.folio).includes(busqueda) ||
+        normalizeCode(p.cliente && p.cliente.nombre).includes(busqueda) ||
+        normalizeCode(p.especificaciones).includes(busqueda),
+    );
+  }
+  if (fechaInicioStr) {
+    const fInicio = new Date(fechaInicioStr + "T00:00:00");
+    lista = lista.filter((p) => new Date(p.fechaCreacion) >= fInicio);
+  }
+  if (fechaFinStr) {
+    const fFin = new Date(fechaFinStr + "T23:59:59");
+    lista = lista.filter((p) => new Date(p.fechaCreacion) <= fFin);
+  }
+
+  let totalCotizado = 0;
+  let totalAnticiposAbonos = 0;
+  let totalSaldosPendientes = 0;
+  let totalVentasEntregadas = 0;
+
+  lista.forEach((p) => {
+    const precio = parseNumber(p.precioTotal, 0);
+    const pagado = (p.pagos || []).reduce(
+      (acc, pago) => acc + parseNumber(pago.monto, 0),
+      0,
+    );
+    const saldo = Math.max(0, precio - pagado);
+
+    totalCotizado += precio;
+    totalAnticiposAbonos += pagado;
+    totalSaldosPendientes += saldo;
+    if (p.estado === "ENTREGADO") {
+      totalVentasEntregadas += precio;
+    }
+  });
+
+  body.innerHTML = `
+    <div style="margin-bottom:15px;">
+      <h4>Reporte Consolidado de Pedidos Personalizados</h4>
+      <p style="color:#64748b; margin-top: -5px;">Periodo: ${fechaInicioStr || "Inicio"} a ${fechaFinStr || "Hoy"} | Filtro Estado: ${estadoFiltro}</p>
+    </div>
+    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:20px;">
+      <div style="background:#e0f2fe; padding:12px; border-radius:8px;">
+        <span style="font-size:0.85rem; color:#0369a1;">Total Pedidos Filtrados</span>
+        <h2 style="margin:5px 0; color:#0284c7;">${lista.length}</h2>
+      </div>
+      <div style="background:#fef3c7; padding:12px; border-radius:8px;">
+        <span style="font-size:0.85rem; color:#b45309;">Total Cotizado ($)</span>
+        <h2 style="margin:5px 0; color:#d97706;">${formatMoney(totalCotizado)}</h2>
+      </div>
+      <div style="background:#dcfce7; padding:12px; border-radius:8px;">
+        <span style="font-size:0.85rem; color:#15803d;">Anticipos y Abonos Recibidos ($)</span>
+        <h2 style="margin:5px 0; color:#16a34a;">${formatMoney(totalAnticiposAbonos)}</h2>
+      </div>
+      <div style="background:#fee2e2; padding:12px; border-radius:8px;">
+        <span style="font-size:0.85rem; color:#991b1b;">Saldos por Cobrar ($)</span>
+        <h2 style="margin:5px 0; color:#dc2626;">${formatMoney(totalSaldosPendientes)}</h2>
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <button class="btn btn-secondary btn-sm" onclick="this.parentElement.parentElement.parentElement.style.display='none'">Cerrar Reporte</button>
+    </div>
+  `;
+
+  container.style.display = "block";
+}
+
 document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") {
     const modalEditar = document.getElementById("modalEditarProducto");
@@ -4033,6 +5085,16 @@ document.addEventListener("keydown", function (event) {
     );
     if (modalPrecioVariable && modalPrecioVariable.classList.contains("open")) {
       cancelarModalPrecioVariableVenta();
+      return;
+    }
+    const modalNuevoPed = document.getElementById("modalNuevoPedido");
+    if (modalNuevoPed && modalNuevoPed.classList.contains("open")) {
+      cerrarModalNuevoPedido();
+      return;
+    }
+    const modalDetallePed = document.getElementById("modalDetallePedido");
+    if (modalDetallePed && modalDetallePed.classList.contains("open")) {
+      cerrarModalDetallePedido();
       return;
     }
   }

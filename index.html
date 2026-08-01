@@ -32,6 +32,12 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link" onclick="showTab('pedidos')">
+            <span class="nav-icon">🎨</span>
+            Pedidos Personalizados
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link" onclick="showTab('productos')">
             <span class="nav-icon">📦</span>
             Agregar nuevo producto
@@ -725,6 +731,127 @@
           </div>
         </div>
       </div>
+
+      <!-- Módulo de Pedidos Personalizados -->
+      <div id="pedidos" class="tab-content">
+        <div class="content-header">
+          <h2>Gestión de Pedidos Personalizados</h2>
+          <button class="btn btn-success" onclick="abrirModalNuevoPedido()">
+            ➕ Nuevo Pedido Personalizado
+          </button>
+        </div>
+        <div class="content-body">
+          <!-- Estadísticas de Pedidos -->
+          <div class="stats-grid" id="statsGridPedidos">
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#e0f2fe; color:#0284c7;">📋</div>
+              <div class="stat-content">
+                <span class="stat-label">Total Pedidos</span>
+                <span class="stat-value" id="statTotalPedidos">0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#fef3c7; color:#d97706;">⏳</div>
+              <div class="stat-content">
+                <span class="stat-label">Pendientes</span>
+                <span class="stat-value" id="statPendientesPedidos">0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#e0e7ff; color:#4f46e5;">⚙️</div>
+              <div class="stat-content">
+                <span class="stat-label">En Proceso</span>
+                <span class="stat-value" id="statProcesoPedidos">0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#f3e8ff; color:#9333ea;">📦</div>
+              <div class="stat-content">
+                <span class="stat-label">Terminados</span>
+                <span class="stat-value" id="statTerminadosPedidos">0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#dcfce7; color:#16a34a;">✅</div>
+              <div class="stat-content">
+                <span class="stat-label">Entregados</span>
+                <span class="stat-value" id="statEntregadosPedidos">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtros y Búsqueda -->
+          <div class="card">
+            <div class="card-header">Filtros de Pedidos y Reportes</div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="filtroBusquedaPedido">Buscar por Cliente / Folio / Detalle</label>
+                  <input id="filtroBusquedaPedido" type="text" placeholder="Escriba para buscar..." oninput="filtrarPedidosPersonalizados()">
+                </div>
+                <div class="form-group">
+                  <label for="filtroEstadoPedido">Estado del Pedido</label>
+                  <select id="filtroEstadoPedido" onchange="filtrarPedidosPersonalizados()">
+                    <option value="TODOS">Todos los estados</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="EN_PROCESO">En Proceso</option>
+                    <option value="TERMINADO">Terminado (Pendiente de Entrega)</option>
+                    <option value="ENTREGADO">Entregado</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="filtroFechaInicioPedido">Desde</label>
+                  <input id="filtroFechaInicioPedido" type="date" onchange="filtrarPedidosPersonalizados()">
+                </div>
+                <div class="form-group">
+                  <label for="filtroFechaFinPedido">Hasta</label>
+                  <input id="filtroFechaFinPedido" type="date" onchange="filtrarPedidosPersonalizados()">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de Pedidos -->
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>Listado de Pedidos Personalizados</span>
+              <button class="btn btn-secondary btn-sm" onclick="generarReportePedidosPersonalizados()">
+                📊 Generar Reporte Completo
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table" id="tablaPedidosPersonalizados">
+                  <thead>
+                    <tr>
+                      <th>Folio</th>
+                      <th>Fecha</th>
+                      <th>Cliente</th>
+                      <th>Teléfono</th>
+                      <th>Especificaciones</th>
+                      <th>Monto Total</th>
+                      <th>Anticipo / Abonos</th>
+                      <th>Saldo Pendiente</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbodyPedidosPersonalizados">
+                    <!-- Se llena dinámicamente -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reporte Financiero de Pedidos -->
+          <div id="reportePedidosContainer" style="display:none;" class="card">
+            <div class="card-header">Resumen de Reporte de Pedidos Personalizados</div>
+            <div class="card-body" id="reportePedidosBody"></div>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 
@@ -786,6 +913,96 @@
           <button type="button" class="btn btn-secondary" id="cancelarModalPrecioVariableVentaBtn">Cancelar</button>
           <button type="button" class="btn btn-success" id="confirmarModalPrecioVariableVentaBtn">Aceptar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Nuevo Pedido Personalizado -->
+  <div id="modalNuevoPedido" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card modal-lg" role="dialog" aria-modal="true" aria-labelledby="modalNuevoPedidoTitulo">
+      <div class="modal-header">
+        <h3 id="modalNuevoPedidoTitulo">🎨 Registrar Nuevo Pedido Personalizado</h3>
+        <button type="button" class="modal-close" onclick="cerrarModalNuevoPedido()">&times;</button>
+      </div>
+      <form id="formNuevoPedido" class="modal-body modal-grid" onsubmit="guardarNuevoPedidoPersonalizado(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="pedidoClienteNombre">Nombre del Cliente *</label>
+            <input id="pedidoClienteNombre" type="text" placeholder="Nombre completo del cliente" required>
+          </div>
+          <div class="form-group">
+            <label for="pedidoClienteTelefono">Teléfono / Contacto</label>
+            <input id="pedidoClienteTelefono" type="text" placeholder="Teléfono o WhatsApp">
+          </div>
+          <div class="form-group">
+            <label for="pedidoFechaEntrega">Fecha Estimada de Entrega</label>
+            <input id="pedidoFechaEntrega" type="date">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pedidoEspecificaciones">Especificaciones y Detalle del Diseño *</label>
+          <textarea id="pedidoEspecificaciones" rows="3" placeholder="Describa el diseño, medidas, colores, textos y detalles acordados..." required></textarea>
+        </div>
+
+        <!-- Selección de Materia Prima -->
+        <div class="card" style="margin-top: 15px; margin-bottom: 15px;">
+          <div class="card-header d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
+            <span>📦 Materia Prima e Insumos a Utilizar</span>
+            <button type="button" class="btn btn-info btn-sm" onclick="agregarFilaMateriaPrimaPedido()">+ Agregar Insumo</button>
+          </div>
+          <div class="card-body" style="padding: 10px 15px;">
+            <div id="contenedorMateriaPrimaPedido">
+              <!-- Se agregan filas dinámicas -->
+            </div>
+            <div class="config-note">
+              💡 <strong>Nota:</strong> El inventario de los insumos agregados se descontará automáticamente cuando el pedido cambie a estado <strong>En Proceso</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Aspectos Financieros -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="pedidoPrecioTotal">Monto Total Acordado ($) *</label>
+            <input id="pedidoPrecioTotal" type="number" min="0.01" step="0.01" placeholder="0.00" required oninput="calcularSaldoPendienteModalNuevo()">
+          </div>
+          <div class="form-group">
+            <label for="pedidoAnticipo">Anticipo Inicial ($) *</label>
+            <input id="pedidoAnticipo" type="number" min="0" step="0.01" value="0.00" required oninput="calcularSaldoPendienteModalNuevo()">
+          </div>
+          <div class="form-group">
+            <label for="pedidoMetodoPago">Método de Pago del Anticipo</label>
+            <select id="pedidoMetodoPago">
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TARJETA">Tarjeta</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Saldo Pendiente Estimado:</label>
+          <h4 id="lblSaldoPendienteModalNuevo" style="color: #dc2626; margin: 5px 0;">$0.00</h4>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalNuevoPedido()">Cancelar</button>
+          <button type="submit" class="btn btn-success">Guardar Pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Detalle y Línea de Tiempo del Pedido -->
+  <div id="modalDetallePedido" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card modal-lg" role="dialog" aria-modal="true" aria-labelledby="modalDetallePedidoTitulo">
+      <div class="modal-header">
+        <h3 id="modalDetallePedidoTitulo">🎨 Detalle de Pedido</h3>
+        <button type="button" class="modal-close" onclick="cerrarModalDetallePedido()">&times;</button>
+      </div>
+      <div class="modal-body" id="bodyDetallePedido">
+        <!-- Se renderiza dinámicamente con la línea de tiempo, insumos, cliente y abonos -->
       </div>
     </div>
   </div>
