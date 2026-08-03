@@ -51,8 +51,20 @@ let carritoPendienteActivoId = "";
 // const sonidoAgregarCarrito = new Audio("assets/timer_beep.mp3");
 const sonidoAgregarCarrito = new Audio("assets/ball-origin-beep.mp3");
 
-function initializeApp() {
-  cargarEstadoLocal();
+// ── Almacenamiento en Red Local (JSON Server) ─────────────────────────────
+// El servidor corre en el mismo origen que sirve el HTML.
+// Endpoint: GET /api/db  →  carga toda la BD
+//           PUT /api/db  →  guarda toda la BD
+// Fallback: si el servidor no responde, usa localStorage.
+
+const API_DB = "/api/db";
+let _saveDebounceTimer = null;
+
+// ── initializeApp ─────────────────────────────────────────────
+async function initializeApp() {
+  mostrarCargando(true);
+  await cargarEstadoLocal();
+  mostrarCargando(false);
   setDefaultDates();
   loadListas();
   cargarConfiguracionSistema();
@@ -60,63 +72,146 @@ function initializeApp() {
   showTab("dashboard");
 }
 
-function guardarEstadoLocal() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(localDB));
-  } catch (error) {
-    console.error("No se pudo guardar en localStorage:", error);
+function mostrarCargando(visible) {
+  let overlay = document.getElementById("_cargando-overlay");
+  if (visible) {
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "_cargando-overlay";
+      overlay.style.cssText = [
+        "position:fixed", "inset:0", "z-index:99999",
+        "background:rgba(10,10,20,0.82)",
+        "display:flex", "flex-direction:column",
+        "align-items:center", "justify-content:center",
+        "gap:16px", "color:#fff", "font-family:sans-serif"
+      ].join(";");
+      overlay.innerHTML = `
+        <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.2);
+          border-top-color:#6c63ff;border-radius:50%;
+          animation:_spin 0.8s linear infinite;"></div>
+        <p style="margin:0;font-size:1rem;opacity:.85;">Conectando con el servidor...</p>
+        <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
+      document.body.appendChild(overlay);
+    }
+    overlay.style.display = "flex";
+  } else {
+    if (overlay) overlay.style.display = "none";
   }
 }
 
-function cargarEstadoLocal() {
+// ── guardarEstadoLocal (con debounce 400ms) ───────────────────
+function guardarEstadoLocal() {
+  clearTimeout(_saveDebounceTimer);
+  _saveDebounceTimer = setTimeout(_persistirEnServidor, 400);
+}
+
+async function _persistirEnServidor() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    const data = JSON.parse(raw);
-    if (!validarEstructuraEstado(data)) return;
-
-    localDB.productos = Array.isArray(data.productos) ? data.productos : [];
-    localDB.movimientos = Array.isArray(data.movimientos)
-      ? data.movimientos
-      : [];
-    localDB.ventas = Array.isArray(data.ventas) ? data.ventas : [];
-    localDB.gastos = Array.isArray(data.gastos) ? data.gastos : [];
-    let migrado = false;
-    localDB.cortes = (Array.isArray(data.cortes) ? data.cortes : []).map((corte, idx) => {
-      if (!corte.id) {
-        const timestamp = new Date(corte.fechaCierre || corte.fechaApertura || Date.now()).getTime() || Date.now();
-        corte.id = `CC-MIG-${idx}-${timestamp}`;
-        migrado = true;
-      }
-      return corte;
+    const res = await fetch(API_DB, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(localDB),
     });
-    if (migrado) {
-      guardarEstadoLocal();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Sincronización exitosa — limpiar posible copia de emergencia
+    localStorage.removeItem(STORAGE_KEY + "_backup");
+  } catch (err) {
+    console.warn("Servidor no disponible, guardando en localStorage como respaldo:", err.message);
+    try {
+      localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
+    } catch (e) {
+      console.error("No se pudo guardar respaldo en localStorage:", e);
     }
-    localDB.corteActivo =
-      data.corteActivo && typeof data.corteActivo === "object"
-        ? data.corteActivo
-        : null;
-    localDB.carritosPendientes = Array.isArray(data.carritosPendientes)
-      ? data.carritosPendientes
-      : [];
-    localDB.pedidosPersonalizados = Array.isArray(data.pedidosPersonalizados)
-      ? data.pedidosPersonalizados
-      : [];
-    localDB.config = {
-      ...DEFAULT_CONFIG,
-      ...(data.config && typeof data.config === "object" ? data.config : {}),
-    };
-    if (
-      data.listas &&
-      Array.isArray(data.listas.unidades) &&
-      Array.isArray(data.listas.grupos)
-    ) {
-      localDB.listas = data.listas;
+  }
+}
+
+// ── cargarEstadoLocal ─────────────────────────────────────────
+function _aplicarDatosALocalDB(data) {
+  localDB.productos = Array.isArray(data.productos) ? data.productos : [];
+  localDB.movimientos = Array.isArray(data.movimientos) ? data.movimientos : [];
+  localDB.ventas = Array.isArray(data.ventas) ? data.ventas : [];
+  localDB.gastos = Array.isArray(data.gastos) ? data.gastos : [];
+  let migrado = false;
+  localDB.cortes = (Array.isArray(data.cortes) ? data.cortes : []).map((corte, idx) => {
+    if (!corte.id) {
+      const timestamp = new Date(corte.fechaCierre || corte.fechaApertura || Date.now()).getTime() || Date.now();
+      corte.id = `CC-MIG-${idx}-${timestamp}`;
+      migrado = true;
     }
-  } catch (error) {
-    console.error("No se pudo cargar estado local:", error);
+    return corte;
+  });
+  if (migrado) guardarEstadoLocal();
+  localDB.corteActivo =
+    data.corteActivo && typeof data.corteActivo === "object"
+      ? data.corteActivo
+      : null;
+  localDB.carritosPendientes = Array.isArray(data.carritosPendientes)
+    ? data.carritosPendientes
+    : [];
+  localDB.pedidosPersonalizados = Array.isArray(data.pedidosPersonalizados)
+    ? data.pedidosPersonalizados
+    : [];
+  localDB.config = {
+    ...DEFAULT_CONFIG,
+    ...(data.config && typeof data.config === "object" ? data.config : {}),
+  };
+  if (
+    data.listas &&
+    Array.isArray(data.listas.unidades) &&
+    Array.isArray(data.listas.grupos)
+  ) {
+    localDB.listas = data.listas;
+  }
+}
+
+async function cargarEstadoLocal() {
+  // 1. Intentar cargar desde el servidor
+  try {
+    const res = await fetch(API_DB);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Si el servidor tiene datos válidos, los usamos
+    if (validarEstructuraEstado(data)) {
+      _aplicarDatosALocalDB(data);
+
+      // Migración: si había datos en localStorage los subimos al servidor
+      const rawLocal = localStorage.getItem(STORAGE_KEY);
+      if (rawLocal) {
+        try {
+          const dataLocal = JSON.parse(rawLocal);
+          if (
+            validarEstructuraEstado(dataLocal) &&
+            dataLocal.productos.length > 0 &&
+            data.productos.length === 0
+          ) {
+            console.info("Migrando datos de localStorage al servidor...");
+            _aplicarDatosALocalDB(dataLocal);
+            await _persistirEnServidor();
+            localStorage.removeItem(STORAGE_KEY);
+            console.info("Migración completada.");
+          }
+        } catch (_) { }
+      }
+      return;
+    }
+  } catch (err) {
+    console.warn("No se pudo conectar al servidor, usando respaldo local:", err.message);
+  }
+
+  // 2. Fallback: intentar localStorage (backup de emergencia o datos previos)
+  const claves = [STORAGE_KEY + "_backup", STORAGE_KEY];
+  for (const clave of claves) {
+    try {
+      const raw = localStorage.getItem(clave);
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      if (validarEstructuraEstado(data)) {
+        _aplicarDatosALocalDB(data);
+        console.info(`Datos cargados desde localStorage (${clave}).`);
+        return;
+      }
+    } catch (_) { }
   }
 }
 
@@ -298,8 +393,6 @@ function construirCode39Data(codigo) {
   };
 }
 
-
-
 function imprimirCodigoProducto(codigo, nombre = "") {
   const codigoFinal = sanitizarCodigoParaBarcode(
     codigo || sugerirCodigoProductoSiHaceFalta(),
@@ -449,34 +542,46 @@ function formatDate(date) {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  const time = date.toLocaleTimeString();
+  return `${day}/${month}/${year} ${time}`;
 }
 
 function setDefaultDates() {
-  const today = new Date();
-  const monthAgo = new Date();
-  monthAgo.setMonth(monthAgo.getMonth() - 1);
+  const now = new Date();
 
-  document.getElementById("fechaMov").valueAsDate = today;
+  // Construir la fecha local como string YYYY-MM-DD para evitar el desfase UTC
+  function toLocalDateString(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const todayStr = toLocalDateString(now);
+  const monthAgoDate = new Date(now);
+  monthAgoDate.setMonth(monthAgoDate.getMonth() - 1);
+  const monthAgoStr = toLocalDateString(monthAgoDate);
+
+  document.getElementById("fechaMov").value = todayStr;
   const fechaGasto = document.getElementById("fechaGasto");
-  if (fechaGasto) fechaGasto.valueAsDate = today;
-  document.getElementById("fechaDesde").valueAsDate = monthAgo;
-  document.getElementById("fechaHasta").valueAsDate = today;
+  if (fechaGasto) fechaGasto.value = todayStr;
+  document.getElementById("fechaDesde").value = monthAgoStr;
+  document.getElementById("fechaHasta").value = todayStr;
 
   const fechaDesdeVentas = document.getElementById("fechaDesdeVentas");
   const fechaHastaVentas = document.getElementById("fechaHastaVentas");
-  if (fechaDesdeVentas) fechaDesdeVentas.valueAsDate = monthAgo;
-  if (fechaHastaVentas) fechaHastaVentas.valueAsDate = today;
+  if (fechaDesdeVentas) fechaDesdeVentas.value = monthAgoStr;
+  if (fechaHastaVentas) fechaHastaVentas.value = todayStr;
 
   const fechaDesdeGastos = document.getElementById("fechaDesdeGastos");
   const fechaHastaGastos = document.getElementById("fechaHastaGastos");
-  if (fechaDesdeGastos) fechaDesdeGastos.valueAsDate = monthAgo;
-  if (fechaHastaGastos) fechaHastaGastos.valueAsDate = today;
+  if (fechaDesdeGastos) fechaDesdeGastos.value = monthAgoStr;
+  if (fechaHastaGastos) fechaHastaGastos.value = todayStr;
 
   const fechaDesdeCorte = document.getElementById("fechaDesdeCorte");
   const fechaHastaCorte = document.getElementById("fechaHastaCorte");
-  if (fechaDesdeCorte) fechaDesdeCorte.valueAsDate = monthAgo;
-  if (fechaHastaCorte) fechaHastaCorte.valueAsDate = today;
+  if (fechaDesdeCorte) fechaDesdeCorte.value = monthAgoStr;
+  if (fechaHastaCorte) fechaHastaCorte.value = todayStr;
 }
 
 function showTab(tabName, clickedElement = null) {
@@ -731,6 +836,39 @@ function obtenerResumen() {
     return acumulado + parseNumber(gasto.monto, 0);
   }, 0);
 
+  // Estadísticas de Pedidos Personalizados
+  const pedidos = localDB.pedidosPersonalizados || [];
+  const proximaFechaLimit = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+  let totalPedidos = pedidos.length;
+  let pedidosPendientes = 0;
+  let pedidosEnProceso = 0;
+  let pedidosTerminados = 0;
+  let pedidosEntregados = 0;
+  let pedidosVencidos = 0;
+  let pedidosPorVencer = 0;
+
+  pedidos.forEach((p) => {
+    if (p.estado === "ENTREGADO") {
+      pedidosEntregados += 1;
+    } else {
+      if (p.estado === "PENDIENTE") pedidosPendientes += 1;
+      else if (p.estado === "EN_PROCESO") pedidosEnProceso += 1;
+      else if (p.estado === "TERMINADO") pedidosTerminados += 1;
+
+      if (p.fechaEntregaEstimada) {
+        const fechaEntrega = new Date(p.fechaEntregaEstimada);
+        if (!Number.isNaN(fechaEntrega.getTime())) {
+          if (fechaEntrega < now) {
+            pedidosVencidos += 1;
+          } else if (fechaEntrega <= proximaFechaLimit) {
+            pedidosPorVencer += 1;
+          }
+        }
+      }
+    }
+  });
+
   return {
     totalProductos: localDB.productos.length,
     totalMovimientos: localDB.movimientos.length,
@@ -747,6 +885,13 @@ function obtenerResumen() {
     pagosTransferencia: roundTo(resumenPagos.transferencia, 2),
     dineroEnCaja: obtenerDetalleCajaDashboard().valor,
     cajaEstadoLabel: `${obtenerDetalleCajaDashboard().estado} (${obtenerDetalleCajaDashboard().label})`,
+    totalPedidos,
+    pedidosPendientes,
+    pedidosEnProceso,
+    pedidosTerminados,
+    pedidosEntregados,
+    pedidosVencidos,
+    pedidosPorVencer,
   };
 }
 
@@ -804,6 +949,7 @@ function registrarProductoLocal(producto) {
   const margen = Math.max(0, parseNumber(producto.margen, 30));
   const precioVenta = Math.max(0, parseNumber(producto.precioVenta, 0));
   const precioVariable = parseBoolean(producto.precioVariable);
+  const stockInicial = Math.max(0, parseFloat(producto.stockInicial) || 0);
 
   if (!codigo || !nombre) {
     return "Datos del producto incompletos. Codigo y nombre son obligatorios.";
@@ -835,6 +981,18 @@ function registrarProductoLocal(producto) {
     precioVariable,
     fechaCreacion: new Date().toISOString(),
   });
+
+  if (stockInicial > 0) {
+    localDB.movimientos.push({
+      codigo,
+      fecha: new Date().toISOString(),
+      tipo: TIPOS_MOVIMIENTO.INGRESO,
+      cantidad: roundTo(stockInicial, 4),
+      usuario: "Local",
+      timestamp: new Date().toISOString(),
+      observaciones: "Stock inicial al registrar producto",
+    });
+  }
 
   guardarEstadoLocal();
 
@@ -1941,8 +2099,8 @@ function construirHtmlTicket(venta) {
               width: 80mm;
               margin: 0;
               padding: 0;
-              color: #111;
-              font-family: "Courier New", monospace;
+              color: #000000;
+              font-family: "Arial", sans-serif;
               font-size: 11px;
               line-height: 1.2;
             }
@@ -1954,7 +2112,7 @@ function construirHtmlTicket(venta) {
             }
             .center { text-align: center; }
             .space { margin-top: 4px; }
-            .muted { color: #444; font-size: 10px; }
+            .muted { color: #000000; font-size: 10px; }
             .line {
               border-top: 1px dashed #000;
               margin: 4px 0;
@@ -2117,8 +2275,6 @@ function buscarProductoLocal(texto) {
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
-
-
 
 function validarIntegridadLocal() {
   const errores = [];
@@ -2310,6 +2466,46 @@ function loadDashboard() {
             </div>
           </div>
         </section>
+        <section class="stats-section">
+          <div class="stats-section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <h3>Control de Pedidos Personalizados</h3>
+            <button class="btn btn-secondary btn-sm" onclick="showTab('pedidos')">Ver Gestión de Pedidos ➔</button>
+          </div>
+          <div class="stats-row">
+            <div class="stat-card stat-card--neutral" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Totales</div>
+              <div class="stat-value">${data.totalPedidos}</div>
+              <div class="stat-label">Total Pedidos</div>
+            </div>
+            <div class="stat-card stat-card--warning" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Estado</div>
+              <div class="stat-value" style="color:#d97706;">${data.pedidosPendientes}</div>
+              <div class="stat-label">Pedidos Pendientes</div>
+            </div>
+            <div class="stat-card stat-card--sales" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Avance</div>
+              <div class="stat-value">${data.pedidosEnProceso + data.pedidosTerminados}</div>
+              <div class="stat-label">${data.pedidosEnProceso} En Proceso | ${data.pedidosTerminados} Terminados</div>
+            </div>
+          </div>
+          <div class="stats-row">
+            <div class="stat-card stat-card--warning" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Próximos (3 días)</div>
+              <div class="stat-value" style="color: #d97706;">${data.pedidosPorVencer}</div>
+              <div class="stat-label">Por Vencer</div>
+            </div>
+            <div class="stat-card stat-card--alert" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Atrasados</div>
+              <div class="stat-value" style="color: #dc2626;">${data.pedidosVencidos}</div>
+              <div class="stat-label">Pedidos Vencidos</div>
+            </div>
+            <div class="stat-card stat-card--cash" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+              <div class="stat-kicker">Completados</div>
+              <div class="stat-value">${data.pedidosEntregados}</div>
+              <div class="stat-label">Pedidos Entregados</div>
+            </div>
+          </div>
+        </section>
       `;
 }
 
@@ -2492,6 +2688,9 @@ function registrarProducto(event) {
     ? document.getElementById("precioVariableProd").checked
     : false;
 
+  const stockInicialEl = document.getElementById("stockInicialProd");
+  const stockInicial = stockInicialEl ? parseFloat(stockInicialEl.value) || 0 : 0;
+
   const producto = {
     codigo: document.getElementById("codigoProd").value.trim().toUpperCase(),
     nombre: document.getElementById("nombreProd").value.trim(),
@@ -2499,6 +2698,7 @@ function registrarProducto(event) {
     precioVenta:
       parseFloat(document.getElementById("precioVentaProd").value) || 0,
     precioVariable,
+    stockInicial,
   };
 
   const mensaje = registrarProductoLocal(producto);
@@ -2507,6 +2707,7 @@ function registrarProducto(event) {
 
   if (ok) {
     document.getElementById("formProducto").reset();
+    if (stockInicialEl) stockInicialEl.value = "0";
     document.getElementById("stockMinProd").value = "0";
     document.getElementById("precioVentaProd").value = "";
     actualizarPrecioVariableProducto();
@@ -2515,6 +2716,7 @@ function registrarProducto(event) {
 }
 
 function registrarMovimiento(event) {
+  console.log("fechaMov", document.getElementById("fechaMov").value);
   event.preventDefault();
 
   const movimiento = {
@@ -2584,8 +2786,6 @@ function handleTipoChange() {
   if (tipo === "AJUSTE_NEGATIVO")
     cantField.placeholder = "Cantidad a disminuir";
 }
-
-
 
 function buscarProducto() {
   const texto = document.getElementById("buscarTexto").value.trim();
@@ -3860,25 +4060,8 @@ function importarDatosJSON() {
           return;
         }
 
-        localDB.productos = data.productos;
-        localDB.movimientos = data.movimientos;
-        localDB.ventas = Array.isArray(data.ventas) ? data.ventas : [];
-        localDB.gastos = Array.isArray(data.gastos) ? data.gastos : [];
-        localDB.cortes = Array.isArray(data.cortes) ? data.cortes : [];
-        localDB.corteActivo =
-          data.corteActivo && typeof data.corteActivo === "object"
-            ? data.corteActivo
-            : null;
-        localDB.carritosPendientes = Array.isArray(data.carritosPendientes)
-          ? data.carritosPendientes
-          : [];
-        localDB.config = {
-          ...DEFAULT_CONFIG,
-          ...(data.config && typeof data.config === "object"
-            ? data.config
-            : {}),
-        };
-        localDB.listas = data.listas;
+        _aplicarDatosALocalDB(data);
+
         localDB.productos = localDB.productos.map((producto) => ({
           ...producto,
           precioVenta: Math.max(0, parseNumber(producto.precioVenta, 0)),
@@ -3894,6 +4077,9 @@ function importarDatosJSON() {
         }
         if (currentTab === "gastos") {
           renderGastosRecientes();
+        }
+        if (currentTab === "pedidos") {
+          renderizarModuloPedidos();
         }
         renderCarritosPendientes();
         showMessage(
@@ -3916,6 +4102,8 @@ function importarDatosJSON() {
 
 function limpiarFormProducto() {
   document.getElementById("formProducto").reset();
+  const stockInicialEl = document.getElementById("stockInicialProd");
+  if (stockInicialEl) stockInicialEl.value = "0";
   document.getElementById("stockMinProd").value = "0";
   document.getElementById("precioVentaProd").value = "";
   actualizarPrecioVariableProducto();
@@ -4223,12 +4411,16 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
       <meta charset="UTF-8">
       <title>Ticket de Pedido - ${escapeXml(pedido.folio)}</title>
       <style>
+        @page {
+          size: 80mm auto;
+          margin: 0;
+        }
         html, body {
           width: 80mm;
           margin: 0;
           padding: 0;
-          color: #111;
-          font-family: "Courier New", monospace;
+          color: #000;
+          font-family: "Arial", sans-serif;
           font-size: 11px;
           line-height: 1.2;
         }
@@ -4240,7 +4432,7 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
         }
         .center { text-align: center; }
         .space { margin-top: 4px; }
-        .muted { color: #444; font-size: 10px; }
+        .muted { color: #000; font-size: 11px; }
         .line {
           border-top: 1px dashed #000;
           margin: 4px 0;
@@ -4268,7 +4460,7 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
           border: 1px solid #666;
           padding: 4px;
           margin: 4px 0;
-          font-size: 10px;
+          font-size: 11px;
         }
 
         @media print {
@@ -4282,7 +4474,7 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
       <div class="ticket">
         <div class="center">
           <h3>${escapeXml(config.businessName || DEFAULT_CONFIG.businessName)}</h3>
-          <p class="muted">NOTA DE PEDIDO PERSONALIZADO</p>
+          <p class="muted">NOTA DE PEDIDO</p>
           ${config.businessPhone ? `<p class="muted">TEL: ${escapeXml(config.businessPhone)}</p>` : ""}
         </div>
 
@@ -4293,8 +4485,7 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
           <p><span class="strong">FECHA REGISTRO:</span> ${fecha}</p>
           <p><span class="strong">CLIENTE:</span> ${escapeXml(pedido.cliente ? pedido.cliente.nombre : "Sin Nombre")}</p>
           ${pedido.cliente && pedido.cliente.telefono ? `<p><span class="strong">TELÉFONO:</span> ${escapeXml(pedido.cliente.telefono)}</p>` : ""}
-          ${pedido.fechaEntregaEstimada ? `<p><span class="strong">FECHA ENTREGA:</span> ${formatDate(pedido.fechaEntregaEstimada)}</p>` : ""}
-          <p><span class="strong">ESTADO:</span> ${pedido.estado.replace("_", " ")}</p>
+          ${pedido.fechaEntregaEstimada ? `<p><span class="strong">FECHA DE ENTREGA ESTIMADA:</span> ${formatDate(pedido.fechaEntregaEstimada)}</p>` : ""}
         </div>
 
         <div class="line"></div>
@@ -4409,12 +4600,12 @@ function agregarFilaMateriaPrimaPedido(codigoDef = "", cantidadDef = 1) {
     .join("");
 
   div.innerHTML = `
-    <select class="mat-prod-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+    <select class="mat-prod-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 0;">
       <option value="">-- Seleccionar Materia Prima / Insumo --</option>
       ${productosOps}
     </select>
-    <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantidadDef}" placeholder="Cant." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100px;">
-    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 4px 8px;">✕</button>
+    <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantidadDef}" placeholder="Cant." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 6px 10px; font-weight: bold; flex-shrink: 0;">✕</button>
   `;
 
   cont.appendChild(div);
@@ -4590,14 +4781,14 @@ function verDetallePedido(pedidoId) {
   // Filas de Materia Prima
   const materiaPrimaHTML = (pedido.materiasPrimas || []).length > 0
     ? pedido.materiasPrimas
-        .map(
-          (m) => `
+      .map(
+        (m) => `
         <li style="display:flex; justify-content:space-between; padding: 4px 0; border-bottom:1px dashed #e2e8f0;">
           <span><strong>[${escapeXml(m.codigo)}]</strong> ${escapeXml(m.nombre)}</span>
           <span class="badge" style="background:#e2e8f0; color:#1e293b;">${m.cantidad} unidades</span>
         </li>`,
-        )
-        .join("")
+      )
+      .join("")
     : "<p style='color:#94a3b8; font-style:italic;'>No se especificaron materias primas registradas.</p>";
 
   // Historial de Pagos
@@ -4668,7 +4859,7 @@ function verDetallePedido(pedidoId) {
     <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 14px; width: 100%;">
 
       <!-- Sección 2: Control de Avance de Producción -->
-      <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px; background: #fdfdfd; border-left: 4px solid #3b82f6;">
+      <!-- <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px; background: #fdfdfd; border-left: 4px solid #3b82f6;">
         <div class="pedido-detail-header" style="font-size: 0.95rem; border-bottom-color: #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; color: #1e293b;">
           <span>⚡ Acciones de Avance de Producción</span>
         </div>
@@ -4678,7 +4869,7 @@ function verDetallePedido(pedidoId) {
           ${pedido.estado !== "TERMINADO" ? `<button class="btn btn-warning btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'TERMINADO')">📦 Marcar TERMINADO</button>` : ""}
           ${pedido.estado !== "ENTREGADO" ? `<button class="btn btn-success btn-sm" style="justify-content:center;" onclick="cambiarEstadoPedido('${pedido.id}', 'ENTREGADO')">✅ Marcar ENTREGADO y Liquidar</button>` : ""}
         </div>
-      </div>
+      </div> -->
 
       <!-- Sección 3: Datos del Cliente y Trabajo -->
       <div class="pedido-detail-card" style="margin-bottom: 0; padding: 16px;">
@@ -4756,9 +4947,8 @@ function verDetallePedido(pedidoId) {
           </table>
         </div>
 
-        ${
-          saldoPendiente > 0 && pedido.estado !== "ENTREGADO"
-            ? `
+        ${saldoPendiente > 0 && pedido.estado !== "ENTREGADO"
+      ? `
         <div style="background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-top: 8px;">
           <span style="font-size: 0.82rem; font-weight: 700; color: #1e293b; display: block; margin-bottom: 8px;">+ REGISTRAR NUEVO ABONO:</span>
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -4771,8 +4961,8 @@ function verDetallePedido(pedidoId) {
             <button class="btn btn-success" onclick="registrarAbonoPedido('${pedido.id}')" style="white-space: nowrap; padding: 8px 16px; font-size: 0.88rem;">💰 Agregar Abono</button>
           </div>
         </div>`
-            : ""
-        }
+      : ""
+    }
       </div>
 
     </div>

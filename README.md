@@ -1,11 +1,11 @@
 # Sistema de Ventas y Control de Inventario
 
-Sistema web ligero, moderno e interactivo para la gestión de inventario, punto de venta (POS), control de gastos y cortes de caja. Funciona 100% de forma local en el navegador mediante `localStorage` sin necesidad de bases de datos externas o servidores complejos.
+Sistema web moderno e interactivo para la gestión de inventario, punto de venta (POS), control de gastos y cortes de caja. Funciona en **red local**: un servidor Node.js centraliza la base de datos en `db.json` para que múltiples computadoras puedan acceder a los mismos datos simultáneamente.
 
 ## 🚀 Características Principales
 
 - **📊 Dashboard Interactivo:** Métricas financieras en tiempo real, balance de caja actual, resumen de inventario y tendencias.
-- **💳 Punto de Venta (POS):** 
+- **💳 Punto de Venta (POS):**
   - Búsqueda y escaneo de productos por código de barras.
   - Pagos combinados (Efectivo, Tarjeta, Transferencia).
   - Impresión de tickets de venta.
@@ -21,25 +21,66 @@ Sistema web ligero, moderno e interactivo para la gestión de inventario, punto 
   - Seguimiento de ventas, efectivo y gastos durante la sesión.
   - Control de ingresos/retiros de caja y cálculo de diferencias al cierre.
   - Historial completo de cortes con exportación a CSV.
-- **💾 Respaldo y Configuración:** Exportación e importación completa de la base de datos local en formato JSON.
+- **🌐 Base de Datos en Red Local:** Los datos se almacenan en `backend/db.json` y son accesibles desde cualquier computadora de la red.
+- **💾 Respaldo y Configuración:** Exportación e importación completa de la base de datos en formato JSON.
 
 ## 🛠️ Requisitos
 
+- [Node.js](https://nodejs.org) v18 o superior (para el servidor de red local).
 - Navegador web moderno (Google Chrome, Microsoft Edge, Mozilla Firefox, Safari).
 
-## 🚀 Uso e Instalación
+## 🚀 Instalación y Uso
 
-No requiere instalaciones complejas ni dependencias adicionales:
+### Primera vez
 
-1. **Vía Servidor Local (Recomendado):**
-   - Inicia un servidor HTTP local en la carpeta del proyecto:
-     ```bash
-     python -m http.server 8000
-     ```
-   - Abre tu navegador e ingresa a `http://localhost:8000`.
+1. Abre una terminal en la carpeta `backend/`:
+   ```bash
+   cd backend
+   npm install
+   ```
 
-2. **Abrir Directamente:**
-   - Haz doble clic en el archivo [index.html](file:///e:/USER/Documentos%20E/Programas/SISTEMA%20WEB%20INVENTARIO-20260114T231922Z-3-001/SISTEMA%20WEB%20INVENTARIO/index.html) para ejecutar la aplicación en tu navegador.
+2. Inicia el servidor:
+   ```bash
+   node server.js
+   ```
+
+3. Abre el navegador en `http://localhost:3000`.
+
+### Uso diario
+
+**Con ventana de terminal visible:**
+- Doble clic en `backend/iniciar-servidor.bat`
+
+**En segundo plano (sin ventana):**
+- Doble clic en `backend/iniciar-oculto.vbs` para iniciar.
+- Doble clic en `backend/detener-servidor.bat` para detener.
+
+### Acceso desde otras computadoras en la misma red
+
+Al iniciar el servidor, la terminal mostrará la IP de tu PC:
+
+```
+  Esta PC:    http://localhost:3000
+  Otras PCs:  http://192.168.X.X:3000
+```
+
+Las demás computadoras solo necesitan abrir esa dirección en su navegador.
+
+## 📁 Estructura del proyecto
+
+```
+├── index.html               # Interfaz principal de la aplicación
+├── script.js                # Lógica de negocio y comunicación con el servidor
+├── styles.css               # Estilos visuales
+├── assets/                  # Recursos multimedia (sonidos, etc.)
+└── backend/
+    ├── server.js            # Servidor Express (red local, puerto 3000)
+    ├── db.json              # Base de datos (archivo JSON persistente)
+    ├── package.json         # Dependencias Node.js
+    ├── iniciar-servidor.bat # Inicia el servidor con terminal visible
+    ├── iniciar-oculto.vbs   # Inicia el servidor en segundo plano
+    └── detener-servidor.bat # Detiene el servidor en segundo plano
+```
 
 ## 📄 Licencia
 

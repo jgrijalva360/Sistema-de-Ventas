@@ -34,7 +34,7 @@
         <li class="nav-item">
           <a class="nav-link" onclick="showTab('pedidos')">
             <span class="nav-icon">🎨</span>
-            Pedidos Personalizados
+            Pedidos
           </a>
         </li>
         <li class="nav-item">
@@ -140,6 +140,10 @@
                     <label for="nombreProd">Nombre *</label>
                     <input id="nombreProd" type="text" placeholder="Nombre del producto" required
                       onblur="sugerirCodigoProductoSiHaceFalta()">
+                  </div>
+                  <div class="form-group">
+                    <label for="stockInicialProd">Stock Inicial</label>
+                    <input id="stockInicialProd" type="number" min="0" value="0" placeholder="Stock inicial del producto">
                   </div>
                   <div class="form-group">
                     <label for="stockMinProd">Stock Mínimo</label>
@@ -374,6 +378,14 @@
             </div>
           </div>
 
+          <div class="card venta-card venta-card--historial">
+            <div class="card-header">Ultimas Ventas</div>
+            <div class="card-body">
+              <p class="ventas-section-note">Consulta rápidamente las ventas recientes y reimprime tickets.</p>
+              <div id="ventasRecientes"></div>
+            </div>
+          </div>
+
           <div class="card venta-card venta-card--guardados">
             <div class="card-header">Carritos Guardados (Cotizacion / Apartado)</div>
             <div class="card-body">
@@ -408,14 +420,6 @@
               <div class="table-container">
                 <div id="carritosPendientesVenta"></div>
               </div>
-            </div>
-          </div>
-
-          <div class="card venta-card venta-card--historial">
-            <div class="card-header">Ultimas Ventas</div>
-            <div class="card-body">
-              <p class="ventas-section-note">Consulta rapidamente las ventas recientes y reimprime tickets.</p>
-              <div id="ventasRecientes"></div>
             </div>
           </div>
         </div>
@@ -732,12 +736,12 @@
         </div>
       </div>
 
-      <!-- Módulo de Pedidos Personalizados -->
+      <!-- Módulo de Pedidos -->
       <div id="pedidos" class="tab-content">
         <div class="content-header">
-          <h2>Gestión de Pedidos Personalizados</h2>
+          <h2>Gestión de Pedidos</h2>
           <button class="btn btn-success" onclick="abrirModalNuevoPedido()">
-            ➕ Nuevo Pedido Personalizado
+            ➕ Nuevo Pedido
           </button>
         </div>
         <div class="content-body">
@@ -787,7 +791,8 @@
               <div class="form-grid">
                 <div class="form-group">
                   <label for="filtroBusquedaPedido">Buscar por Cliente / Folio / Detalle</label>
-                  <input id="filtroBusquedaPedido" type="text" placeholder="Escriba para buscar..." oninput="filtrarPedidosPersonalizados()">
+                  <input id="filtroBusquedaPedido" type="text" placeholder="Escriba para buscar..."
+                    oninput="filtrarPedidosPersonalizados()">
                 </div>
                 <div class="form-group">
                   <label for="filtroEstadoPedido">Estado del Pedido</label>
@@ -813,10 +818,10 @@
 
           <!-- Tabla de Pedidos -->
           <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header">
               <span>Listado de Pedidos Personalizados</span>
               <button class="btn btn-secondary btn-sm" onclick="generarReportePedidosPersonalizados()">
-                📊 Generar Reporte Completo
+                Generar Reporte Completo
               </button>
             </div>
             <div class="card-body">
@@ -932,31 +937,34 @@
           </div>
           <div class="form-group">
             <label for="pedidoClienteTelefono">Teléfono / Contacto</label>
-            <input id="pedidoClienteTelefono" type="text" placeholder="Teléfono o WhatsApp">
+            <input id="pedidoClienteTelefono" type="text" placeholder="Teléfono o WhatsApp" maxlength="10">
           </div>
           <div class="form-group">
             <label for="pedidoFechaEntrega">Fecha Estimada de Entrega</label>
-            <input id="pedidoFechaEntrega" type="date">
+            <input id="pedidoFechaEntrega" type="datetime-local">
           </div>
         </div>
 
         <div class="form-group">
-          <label for="pedidoEspecificaciones">Especificaciones y Detalle del Diseño *</label>
-          <textarea id="pedidoEspecificaciones" rows="3" placeholder="Describa el diseño, medidas, colores, textos y detalles acordados..." required></textarea>
+          <label for="pedidoEspecificaciones">Especificaciones y Detalles *</label>
+          <textarea id="pedidoEspecificaciones" rows="3"
+            placeholder="Describa el diseño, medidas, colores, textos y detalles acordados..." required></textarea>
         </div>
 
         <!-- Selección de Materia Prima -->
         <div class="card" style="margin-top: 15px; margin-bottom: 15px;">
           <div class="card-header d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
             <span>📦 Materia Prima e Insumos a Utilizar</span>
-            <button type="button" class="btn btn-info btn-sm" onclick="agregarFilaMateriaPrimaPedido()">+ Agregar Insumo</button>
+            <button type="button" class="btn btn-info btn-sm" onclick="agregarFilaMateriaPrimaPedido()">+ Agregar
+              Insumo</button>
           </div>
           <div class="card-body" style="padding: 10px 15px;">
             <div id="contenedorMateriaPrimaPedido">
               <!-- Se agregan filas dinámicas -->
             </div>
             <div class="config-note">
-              💡 <strong>Nota:</strong> El inventario de los insumos agregados se descontará automáticamente cuando el pedido cambie a estado <strong>En Proceso</strong>.
+              💡 <strong>Nota:</strong> El inventario de los insumos agregados se descontará automáticamente cuando el
+              pedido cambie a estado <strong>En Proceso</strong>.
             </div>
           </div>
         </div>
@@ -965,11 +973,13 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="pedidoPrecioTotal">Monto Total Acordado ($) *</label>
-            <input id="pedidoPrecioTotal" type="number" min="0.01" step="0.01" placeholder="0.00" required oninput="calcularSaldoPendienteModalNuevo()">
+            <input id="pedidoPrecioTotal" type="number" min="0.01" step="0.01" placeholder="0.00" required
+              oninput="calcularSaldoPendienteModalNuevo()">
           </div>
           <div class="form-group">
             <label for="pedidoAnticipo">Anticipo Inicial ($) *</label>
-            <input id="pedidoAnticipo" type="number" min="0" step="0.01" value="0.00" required oninput="calcularSaldoPendienteModalNuevo()">
+            <input id="pedidoAnticipo" type="number" min="0" step="0.01" value="0.00" required
+              oninput="calcularSaldoPendienteModalNuevo()">
           </div>
           <div class="form-group">
             <label for="pedidoMetodoPago">Método de Pago del Anticipo</label>

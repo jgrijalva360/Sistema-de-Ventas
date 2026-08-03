@@ -88,6 +88,11 @@ body {
   padding: 20px 30px;
   border-bottom: 1px solid #e9ecef;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .content-header h2 {
@@ -115,6 +120,7 @@ body {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -136,6 +142,11 @@ body {
   border-bottom: 1px solid #e5f2f7;
   font-weight: 600;
   color: #2e86ab;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .card-body {
@@ -345,15 +356,20 @@ textarea:focus {
   color: white;
 }
 
-.table-container {
+.table-container,
+.table-responsive {
+  width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid #e5f2f7;
 }
 
-table {
+table,
+.table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
   background: white;
 }
@@ -380,10 +396,12 @@ tr:hover {
   background: #d4edda;
   color: #155724;
 }
+
 .status-low {
   background: #fff3cd;
   color: #856404;
 }
+
 .status-zero {
   background: #f8d7da;
   color: #721c24;
@@ -393,14 +411,17 @@ tr:hover {
   color: #28a745;
   font-weight: 600;
 }
+
 .text-danger {
   color: #dc3545;
   font-weight: 600;
 }
+
 .text-warning {
   color: #ffc107;
   font-weight: 600;
 }
+
 .text-info {
   color: #17a2b8;
   font-weight: 600;
@@ -818,12 +839,29 @@ tr:hover {
   border: 1px solid #d9edf7;
 }
 
-.venta-summary-grid .form-group:nth-child(1) { grid-area: total; }
-.venta-summary-grid .form-group:nth-child(2) { grid-area: efectivo; }
-.venta-summary-grid .form-group:nth-child(3) { grid-area: tarjeta; }
-.venta-summary-grid .form-group:nth-child(4) { grid-area: transferencia; }
-.venta-summary-grid .form-group:nth-child(5) { grid-area: pagado; }
-.venta-summary-grid .form-group:nth-child(6) { grid-area: cambio; }
+.venta-summary-grid .form-group:nth-child(1) {
+  grid-area: total;
+}
+
+.venta-summary-grid .form-group:nth-child(2) {
+  grid-area: efectivo;
+}
+
+.venta-summary-grid .form-group:nth-child(3) {
+  grid-area: tarjeta;
+}
+
+.venta-summary-grid .form-group:nth-child(4) {
+  grid-area: transferencia;
+}
+
+.venta-summary-grid .form-group:nth-child(5) {
+  grid-area: pagado;
+}
+
+.venta-summary-grid .form-group:nth-child(6) {
+  grid-area: cambio;
+}
 
 .venta-summary-grid .form-group input {
   font-size: 1.7rem;
@@ -948,6 +986,14 @@ tr:hover {
     width: 100%;
   }
 
+  .content-body {
+    padding: 15px;
+  }
+
+  .content-header {
+    padding: 15px;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -975,6 +1021,39 @@ tr:hover {
   .venta-summary-grid .form-group input {
     font-size: 1.35rem;
     min-height: 56px;
+  }
+
+  #statsGridPedidos {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+  }
+
+  #statsGridPedidos .stat-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  #statsGridPedidos .stat-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 1.1rem;
+  }
+
+  #statsGridPedidos .stat-value {
+    font-size: 1.25rem;
+  }
+
+  #statsGridPedidos .stat-label {
+    font-size: 0.75rem;
+  }
+
+  .timeline-wrapper {
+    overflow-x: auto;
+    padding: 10px 5px;
+  }
+
+  .timeline {
+    min-width: 460px;
   }
 }
 
@@ -1102,21 +1181,44 @@ tr:hover {
 /* Filas dinámicas de materia prima */
 .materia-prima-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   margin-bottom: 8px;
   padding: 8px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .materia-prima-row select {
-  flex: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
 }
 
-.materia-prima-row input {
-  flex: 1;
+.materia-prima-row input.mat-prod-cant {
+  flex: 0 0 90px;
+  width: 90px;
+  min-width: 60px;
+}
+
+.materia-prima-row .btn-danger {
+  flex-shrink: 0;
+}
+
+@media (max-width: 576px) {
+  .materia-prima-row {
+    flex-wrap: wrap;
+  }
+  .materia-prima-row select {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .materia-prima-row input.mat-prod-cant {
+    flex: 1 1 auto;
+    width: auto;
+  }
 }
 
 /* Tarjeta de Resumen Detalle Pedido */
@@ -1198,4 +1300,3 @@ tr:hover {
 .config-note strong {
   font-weight: 600;
 }
-
