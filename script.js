@@ -50,6 +50,8 @@ let carritoPendienteActivoId = "";
 
 // const sonidoAgregarCarrito = new Audio("assets/timer_beep.mp3");
 const sonidoAgregarCarrito = new Audio("assets/ball-origin-beep.mp3");
+const sonidoVentaExitosa = new Audio("assets/apple-pay-original.mp3");
+const sonidoVentaFallida = new Audio("assets/apple-pay-failed.mp3");
 
 // ── Almacenamiento en Red Local (JSON Server) ─────────────────────────────
 // El servidor corre en el mismo origen que sirve el HTML.
@@ -59,6 +61,9 @@ const sonidoAgregarCarrito = new Audio("assets/ball-origin-beep.mp3");
 
 const API_DB = "/api/db";
 let _saveDebounceTimer = null;
+let _isPersisting = false;
+let _syncPollInterval = null;
+let _lastServerJsonString = "";
 
 // ── initializeApp ─────────────────────────────────────────────
 async function initializeApp() {
@@ -70,6 +75,7 @@ async function initializeApp() {
   cargarConfiguracionSistema();
   loadDashboard();
   showTab("dashboard");
+  iniciarSincronizacionAuto(3000);
 }
 
 function mostrarCargando(visible) {
@@ -99,6 +105,31 @@ function mostrarCargando(visible) {
   }
 }
 
+function actualizarBadgeSincronizacion(estado, texto) {
+  const badge = document.getElementById("syncBadge");
+  const dot = document.getElementById("syncBadgeDot");
+  const txt = document.getElementById("syncBadgeText");
+  if (!badge || !dot || !txt) return;
+
+  if (estado === "online") {
+    badge.style.color = "#a7f3d0";
+    badge.style.background = "rgba(16, 185, 129, 0.15)";
+    badge.style.borderColor = "rgba(16, 185, 129, 0.3)";
+    dot.style.background = "#10b981";
+  } else if (estado === "saving" || estado === "updated") {
+    badge.style.color = "#fef08a";
+    badge.style.background = "rgba(234, 179, 8, 0.15)";
+    badge.style.borderColor = "rgba(234, 179, 8, 0.3)";
+    dot.style.background = "#eab308";
+  } else if (estado === "offline") {
+    badge.style.color = "#fecaca";
+    badge.style.background = "rgba(239, 68, 68, 0.15)";
+    badge.style.borderColor = "rgba(239, 68, 68, 0.3)";
+    dot.style.background = "#ef4444";
+  }
+  txt.textContent = texto;
+}
+
 // ── guardarEstadoLocal (con debounce 400ms) ───────────────────
 function guardarEstadoLocal() {
   clearTimeout(_saveDebounceTimer);
@@ -106,23 +137,84 @@ function guardarEstadoLocal() {
 }
 
 async function _persistirEnServidor() {
+  _isPersisting = true;
+  actualizarBadgeSincronizacion("saving", "Guardando...");
   try {
+    const rawBody = JSON.stringify(localDB);
     const res = await fetch(API_DB, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(localDB),
+      body: rawBody,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    // Sincronización exitosa — limpiar posible copia de emergencia
+    _lastServerJsonString = rawBody;
     localStorage.removeItem(STORAGE_KEY + "_backup");
+    actualizarBadgeSincronizacion("online", "Conectado en Red");
   } catch (err) {
     console.warn("Servidor no disponible, guardando en localStorage como respaldo:", err.message);
+    actualizarBadgeSincronizacion("offline", "Modo Local (Respaldo)");
     try {
       localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
     } catch (e) {
       console.error("No se pudo guardar respaldo en localStorage:", e);
     }
+  } finally {
+    _isPersisting = false;
   }
+}
+
+// ── Observable / Sincronización Automática entre Computadoras ──────
+function iniciarSincronizacionAuto(intervalMs = 3000) {
+  if (_syncPollInterval) clearInterval(_syncPollInterval);
+
+  _syncPollInterval = setInterval(async () => {
+    if (_saveDebounceTimer || _isPersisting) return;
+
+    try {
+      const res = await fetch(API_DB);
+      if (!res.ok) {
+        actualizarBadgeSincronizacion("offline", "Servidor Inaccesible");
+        return;
+      }
+      const data = await res.json();
+      if (!validarEstructuraEstado(data)) return;
+
+      const serverJson = JSON.stringify(data);
+
+      if (!_lastServerJsonString) {
+        _lastServerJsonString = serverJson;
+        actualizarBadgeSincronizacion("online", "Conectado en Red");
+        return;
+      }
+
+      if (serverJson !== _lastServerJsonString && serverJson !== JSON.stringify(localDB)) {
+        console.info("⚡ Cambio detectado en el servidor desde otra computadora. Actualizando cliente...");
+        _lastServerJsonString = serverJson;
+        _aplicarDatosALocalDB(data);
+        refrescarVistaActual();
+        actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde red!");
+        setTimeout(() => {
+          actualizarBadgeSincronizacion("online", "Conectado en Red");
+        }, 2500);
+      } else {
+        actualizarBadgeSincronizacion("online", "Conectado en Red");
+      }
+    } catch (err) {
+      actualizarBadgeSincronizacion("offline", "Modo Local (Respaldo)");
+    }
+  }, intervalMs);
+}
+
+function refrescarVistaActual() {
+  loadDashboard();
+  if (currentTab === "inventario") mostrarStock();
+  if (currentTab === "ventas") {
+    renderVentasRecientes();
+    renderCarritosPendientes();
+  }
+  if (currentTab === "pedidos") renderizarModuloPedidos();
+  if (currentTab === "gastos") renderGastosRecientes();
+  if (currentTab === "cortes") cargarModuloCortes();
 }
 
 // ── cargarEstadoLocal ─────────────────────────────────────────
@@ -174,6 +266,7 @@ async function cargarEstadoLocal() {
     // Si el servidor tiene datos válidos, los usamos
     if (validarEstructuraEstado(data)) {
       _aplicarDatosALocalDB(data);
+      _lastServerJsonString = JSON.stringify(data);
 
       // Migración: si había datos en localStorage los subimos al servidor
       const rawLocal = localStorage.getItem(STORAGE_KEY);
@@ -1511,6 +1604,7 @@ function limpiarVentaActual() {
 function confirmarVenta() {
   if (!carritoVenta.length) {
     showMessage("msgVenta", "No hay productos en el carrito.", "warning");
+    reproducirSonidoVentaFallida()
     return;
   }
 
@@ -1539,6 +1633,7 @@ function confirmarVenta() {
       "error",
     );
     actualizarTotalesPagoVenta();
+    reproducirSonidoVentaFallida()
     return;
   }
 
@@ -1550,6 +1645,7 @@ function confirmarVenta() {
         `Stock insuficiente para ${item.nombre}. Disponible: ${stockActual}, requerido: ${item.cantidad}.`,
         "error",
       );
+      reproducirSonidoVentaFallida()
       return;
     }
   }
@@ -1616,11 +1712,26 @@ function confirmarVenta() {
     `Venta registrada correctamente. Folio: ${ventaId}. Cambio: ${formatMoney(cambio)}.`,
     "success",
   );
+  reproducirSonidoVentaExitosa();
 
   const autoImprimir = document.getElementById("autoImprimirVenta");
   if (autoImprimir && autoImprimir.checked) {
     imprimirVentaPorId(ventaId);
   }
+}
+
+function reproducirSonidoVentaExitosa() {
+  sonidoVentaExitosa.currentTime = 0;
+  sonidoVentaExitosa.play().catch((err) => {
+    console.error("No se pudo reproducir el sonido de venta exitosa:", err);
+  });
+}
+
+function reproducirSonidoVentaFallida() {
+  sonidoVentaFallida.currentTime = 0;
+  sonidoVentaFallida.play().catch((err) => {
+    console.error("No se pudo reproducir el sonido de venta fallida:", err);
+  });
 }
 
 function renderVentasRecientes() {
