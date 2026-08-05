@@ -151,6 +151,7 @@ body {
 
 .card-body {
   padding: 25px;
+  height: auto;
 }
 
 .form-grid {
@@ -463,10 +464,11 @@ tr:hover {
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 2000;
-  padding: 16px;
+  padding: 20px 16px;
+  overflow-y: auto;
 }
 
 .modal-overlay.open {
@@ -476,18 +478,15 @@ tr:hover {
 .modal-card {
   width: 100%;
   max-width: 460px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
   background: white;
   border-radius: 12px;
   border: 1px solid #e5f2f7;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
+  margin: auto 0;
 }
 
 .modal-card.modal-lg {
-  max-width: 700px;
+  max-width: 820px;
 }
 
 .modal-header {
@@ -497,6 +496,8 @@ tr:hover {
   padding: 16px 20px;
   background: #f0f8fc;
   border-bottom: 1px solid #e5f2f7;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
 }
 
 .modal-header h3 {
@@ -516,9 +517,6 @@ tr:hover {
 .modal-body {
   padding: 20px;
   display: block;
-  overflow-y: auto;
-  flex: 1;
-  max-height: calc(90vh - 60px);
 }
 
 .modal-body.modal-grid {
@@ -1211,10 +1209,12 @@ tr:hover {
   .materia-prima-row {
     flex-wrap: wrap;
   }
+
   .materia-prima-row select {
     flex: 1 1 100%;
     width: 100%;
   }
+
   .materia-prima-row input.mat-prod-cant {
     flex: 1 1 auto;
     width: auto;
@@ -1299,4 +1299,28 @@ tr:hover {
 
 .config-note strong {
   font-weight: 600;
+}
+
+/* Rediseño contenedor Materia Prima e Insumos en Pedido */
+#contenedorMateriaPrimaPedido {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+#contenedorMateriaPrimaPedido::-webkit-scrollbar {
+  width: 6px;
+}
+
+#contenedorMateriaPrimaPedido::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#contenedorMateriaPrimaPedido::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+#contenedorMateriaPrimaPedido::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

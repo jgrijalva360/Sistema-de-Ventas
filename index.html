@@ -17,8 +17,10 @@
     <nav class="sidebar">
       <div class="sidebar-header">
         <h1>Sistema de ventas y control de inventario</h1>
-        <div id="syncBadge" style="margin-top: 10px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 6px; color: #a7f3d0; background: rgba(16, 185, 129, 0.15); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(16, 185, 129, 0.3); transition: all 0.3s ease;">
-          <span id="syncBadgeDot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+        <div id="syncBadge"
+          style="margin-top: 10px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 6px; color: #a7f3d0; background: rgba(16, 185, 129, 0.15); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(16, 185, 129, 0.3); transition: all 0.3s ease;">
+          <span id="syncBadgeDot"
+            style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
           <span id="syncBadgeText">Conectado en Red</span>
         </div>
       </div>
@@ -57,12 +59,6 @@
           <a class="nav-link" onclick="showTab('gastos')">
             <span class="nav-icon">💸</span>
             Gastos
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" onclick="showTab('buscar')">
-            <span class="nav-icon">🔍</span>
-            Buscar productos
           </a>
         </li>
         <li class="nav-item">
@@ -147,7 +143,8 @@
                   </div>
                   <div class="form-group">
                     <label for="stockInicialProd">Stock Inicial</label>
-                    <input id="stockInicialProd" type="number" min="0" value="0" placeholder="Stock inicial del producto">
+                    <input id="stockInicialProd" type="number" min="0" value="0"
+                      placeholder="Stock inicial del producto">
                   </div>
                   <div class="form-group">
                     <label for="stockMinProd">Stock Mínimo</label>
@@ -438,9 +435,19 @@
           <div class="card">
             <div class="card-header">Stock Actual</div>
             <div class="card-body">
+              <div class="form-grid" style="margin-bottom: 1rem;">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                  <label for="buscarInventarioTexto">Buscar por código o nombre</label>
+                  <input id="buscarInventarioTexto" type="text" placeholder="Escriba código o nombre para buscar..."
+                    onkeyup="filtrarInventarioEnTiempoReal()">
+                </div>
+              </div>
               <div class="actions">
                 <button class="btn btn-primary" onclick="mostrarStock()">
                   Actualizar Stock
+                </button>
+                <button class="btn btn-secondary" onclick="limpiarBusquedaInventario()">
+                  Limpiar Búsqueda
                 </button>
                 <button class="btn btn-success" onclick="exportarStock()">
                   Exportar CSV
@@ -557,37 +564,6 @@
         </div>
       </div>
 
-      <!-- Búsqueda de Productos -->
-      <div id="buscar" class="tab-content">
-        <div class="content-header">
-          <h2>Búsqueda de Productos</h2>
-        </div>
-        <div class="content-body">
-          <div class="card">
-            <div class="card-header">Buscar Productos</div>
-            <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="buscarTexto">Buscar por código o nombre</label>
-                  <input id="buscarTexto" type="text" placeholder="Escriba para buscar..."
-                    onkeyup="buscarEnTiempoReal()">
-                </div>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" onclick="buscarProducto()">
-                  Buscar
-                </button>
-                <button class="btn btn-secondary" onclick="limpiarBusqueda()">
-                  Limpiar
-                </button>
-              </div>
-              <div class="table-container">
-                <div id="resultadosBusqueda"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- Corte de Caja -->
       <div id="cortes" class="tab-content">
@@ -955,20 +931,26 @@
             placeholder="Describa el diseño, medidas, colores, textos y detalles acordados..." required></textarea>
         </div>
 
-        <!-- Selección de Materia Prima -->
+        <!-- Selección de Materia Prima y Servicios -->
         <div class="card" style="margin-top: 15px; margin-bottom: 15px;">
-          <div class="card-header d-flex justify-content-between align-items-center" style="padding: 10px 15px;">
-            <span>📦 Materia Prima e Insumos a Utilizar</span>
-            <button type="button" class="btn btn-info btn-sm" onclick="agregarFilaMateriaPrimaPedido()">+ Agregar
-              Insumo</button>
-          </div>
-          <div class="card-body" style="padding: 10px 15px;">
-            <div id="contenedorMateriaPrimaPedido">
-              <!-- Se agregan filas dinámicas -->
+          <div class="card-header d-flex justify-content-between align-items-center"
+            style="padding: 10px 15px; flex-wrap: wrap; gap: 8px;">
+            <span>📦 Materia Prima, Insumos y Servicios del Pedido</span>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-info btn-sm" onclick="agregarFilaMateriaPrimaPedido('INVENTARIO')">+
+                Insumo (Inventario)</button>
+              <button type="button" class="btn btn-warning btn-sm" onclick="agregarFilaMateriaPrimaPedido('EXTRA')">+
+                Servicio / Insumo Extra</button>
             </div>
-            <div class="config-note">
-              💡 <strong>Nota:</strong> El inventario de los insumos agregados se descontará automáticamente cuando el
-              pedido cambie a estado <strong>En Proceso</strong>.
+          </div>
+          <div class="card-body" style="padding: 12px 15px;">
+            <div id="contenedorMateriaPrimaPedido">
+              <!-- Se agregan elementos dinámicos en formato de tarjeta/fila limpia -->
+            </div>
+            <div class="config-note" style="margin-top: 10px;">
+              💡 <strong>Nota:</strong> Los insumos del inventario descontarán stock al pasar a estado <strong>En
+                Proceso</strong>. Los servicios o insumos extras no afectan el stock. La suma de subtotales actualiza
+              automáticamente el Total Acordado.
             </div>
           </div>
         </div>

@@ -767,6 +767,7 @@ function obtenerStock() {
         cantidad: calcularStock(p.codigo),
         costoPromedioPieza,
         precioVenta,
+        precioVariable: parseBoolean(p.precioVariable),
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -1199,11 +1200,6 @@ function guardarEdicionProducto(event) {
   guardarEstadoLocal();
   loadDashboard();
   mostrarStock();
-
-  const textoBusqueda = document.getElementById("buscarTexto");
-  if (textoBusqueda && textoBusqueda.value.trim().length >= 2) {
-    displaySearchResults(buscarProductoLocal(textoBusqueda.value.trim()));
-  }
 
   cerrarModalEditarProducto();
   showMessage("stockTable", "Producto actualizado correctamente.", "success");
@@ -2186,11 +2182,16 @@ function construirHtmlTicket(venta) {
 
   let rows = "";
   (venta.items || []).forEach((item) => {
+    const pu = parseNumber(item.precioUnitario, 0);
+    const sub = parseNumber(item.subtotal, item.cantidad * pu) || parseNumber(item.total, 0);
     rows += `
           <tr>
             <td class="c-cant">${roundTo(item.cantidad, 2)}</td>
-            <td class="c-prod">${item.nombre}</td>
-            <td class="c-sub">${formatMoney(item.subtotal)}</td>
+            <td class="c-prod">
+              ${escapeXml(item.nombre)}
+              ${pu > 0 ? `<br><small style="color:#333;">@ ${formatMoney(pu)} c/u</small>` : ""}
+            </td>
+            <td class="c-sub">${formatMoney(sub)}</td>
           </tr>
         `;
   });
@@ -2898,94 +2899,36 @@ function handleTipoChange() {
     cantField.placeholder = "Cantidad a disminuir";
 }
 
-function buscarProducto() {
-  const texto = document.getElementById("buscarTexto").value.trim();
-  if (!texto) {
-    showMessage(
-      "resultadosBusqueda",
-      "Ingrese un texto para buscar",
-      "warning",
-    );
-    return;
-  }
-
-  const data = buscarProductoLocal(texto);
-  displaySearchResults(data);
-}
-
-function buscarEnTiempoReal() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    const texto = document.getElementById("buscarTexto").value.trim();
-    if (texto.length >= 2) {
-      buscarProducto();
-    } else if (texto.length === 0) {
-      document.getElementById("resultadosBusqueda").innerHTML = "";
-    }
-  }, 300);
-}
-
-function displaySearchResults(data) {
-  const container = document.getElementById("resultadosBusqueda");
-
-  if (data.length === 0) {
-    container.innerHTML =
-      '<div class="message warning">No se encontraron productos</div>';
-    return;
-  }
-
-  let html = `
-        <table>
-          <thead>
-            <tr>
-              <th>Codigo</th>
-              <th>Nombre</th>
-              <th>Stock Min.</th>
-              <th>Stock Actual</th>
-              <th>Precio Real/Venta</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-  data.forEach((producto) => {
-    const { codigo, nombre, stockMin, stockActual, precioVenta } = producto;
-    let statusClass = "status-normal";
-    let estado = "Normal";
-
-    if (stockActual <= 0) {
-      statusClass = "status-zero";
-      estado = "Sin Stock";
-    } else if (stockActual <= stockMin && stockMin > 0) {
-      statusClass = "status-low";
-      estado = "Stock Bajo";
-    }
-
-    html += `
-          <tr class="${statusClass}">
-            <td>${codigo}</td>
-            <td>${nombre}</td>
-            <td>${stockMin}</td>
-            <td>${stockActual}</td>
-            <td>${producto.precioVariable ? "Variable" : precioVenta > 0 ? formatMoney(precioVenta) : "N/D"}</td>
-            <td>${estado}</td>
-          </tr>
-        `;
-  });
-
-  html += "</tbody></table>";
-  container.innerHTML = html;
-}
-
 function mostrarStock() {
   const loading = document.getElementById("loading");
   const container = document.getElementById("stockTable");
+  const filtroInput = document.getElementById("buscarInventarioTexto");
+  const query = filtroInput ? filtroInput.value.trim().toLowerCase() : "";
 
   loading.style.display = "block";
-  const data = obtenerStock();
+  let data = obtenerStock();
+  if (query) {
+    data = data.filter((p) => {
+      const cod = (p.codigo || "").toLowerCase();
+      const nom = (p.nombre || "").toLowerCase();
+      return cod.includes(query) || nom.includes(query);
+    });
+  }
   loading.style.display = "none";
   displayStockTable(data, container);
+}
+
+function filtrarInventarioEnTiempoReal() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    mostrarStock();
+  }, 300);
+}
+
+function limpiarBusquedaInventario() {
+  const input = document.getElementById("buscarInventarioTexto");
+  if (input) input.value = "";
+  mostrarStock();
 }
 
 function displayStockTable(data, container) {
@@ -4235,10 +4178,7 @@ function limpiarFormGasto() {
   document.getElementById("msgGasto").innerHTML = "";
 }
 
-function limpiarBusqueda() {
-  document.getElementById("buscarTexto").value = "";
-  document.getElementById("resultadosBusqueda").innerHTML = "";
-}
+
 
 function showMessage(containerId, message, type) {
   const container = document.getElementById(containerId);
@@ -4489,17 +4429,18 @@ function generarHTMLTicketPedidoPersonalizado(pedido) {
   let materiasPrimasFilas = "";
   if (pedido.materiasPrimas && pedido.materiasPrimas.length > 0) {
     materiasPrimasFilas = pedido.materiasPrimas
-      .map(
-        (m) =>
-          `<tr>
+      .map((m) => {
+        const pu = parseNumber(m.precioUnitario, 0);
+        const sub = roundTo(parseNumber(m.subtotal, m.cantidad * pu), 2);
+        return `<tr>
             <td class="c-cant">${m.cantidad}</td>
-            <td class="c-prod">${escapeXml(m.nombre)}</td>
-            <td class="c-sub">-</td>
-          </tr>`,
-      )
+            <td class="c-prod">${m.codigo ? `[${escapeXml(m.codigo)}] ` : ""}${escapeXml(m.nombre)}</td>
+            <td class="c-sub">${sub > 0 ? formatMoney(sub) : (pu > 0 ? formatMoney(pu) : "-")}</td>
+          </tr>`;
+      })
       .join("");
   } else {
-    materiasPrimasFilas = `<tr><td colspan="3" class="center muted">Sin insumos especificados</td></tr>`;
+    materiasPrimasFilas = `<tr><td colspan="3" class="center muted">Sin insumos especificadas</td></tr>`;
   }
 
   let historialPagosFilas = "";
@@ -4672,10 +4613,10 @@ function abrirModalNuevoPedido() {
   const form = document.getElementById("formNuevoPedido");
   if (form) form.reset();
 
-  const cont = document.getElementById("contenedorMateriaPrimaPedido");
-  if (cont) {
-    cont.innerHTML = "";
-    agregarFilaMateriaPrimaPedido(); // Fila inicial
+  const container = document.getElementById("contenedorMateriaPrimaPedido");
+  if (container) {
+    container.innerHTML = "";
+    agregarFilaMateriaPrimaPedido("INVENTARIO"); // Fila inicial
   }
 
   calcularSaldoPendienteModalNuevo();
@@ -4695,31 +4636,164 @@ function cerrarModalNuevoPedido() {
   }
 }
 
-function agregarFilaMateriaPrimaPedido(codigoDef = "", cantidadDef = 1) {
-  const cont = document.getElementById("contenedorMateriaPrimaPedido");
-  if (!cont) return;
+function agregarFilaMateriaPrimaPedido(tipoDef = "INVENTARIO", datosDef = {}) {
+  const container = document.getElementById("contenedorMateriaPrimaPedido");
+  if (!container) return;
+
+  const sinInsumos = document.getElementById("divSinInsumosModal");
+  if (sinInsumos) sinInsumos.remove();
 
   const div = document.createElement("div");
   div.className = "materia-prima-row";
 
-  const productosOps = localDB.productos
-    .map((p) => {
-      const stock = calcularStock(p.codigo);
-      const sel = p.codigo === codigoDef ? "selected" : "";
-      return `<option value="${escapeXml(p.codigo)}" ${sel}>[${escapeXml(p.codigo)}] ${escapeXml(p.nombre)} (Stock: ${stock})</option>`;
-    })
-    .join("");
+  const esExtra = tipoDef === "EXTRA" || datosDef.esExtra === true;
+  const cantDef = parseNumber(datosDef.cantidad, 1);
+  const precioDef = parseNumber(datosDef.precioUnitario, 0);
+  const subtotalDef = roundTo(cantDef * precioDef, 2);
 
-  div.innerHTML = `
-    <select class="mat-prod-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 0;">
-      <option value="">-- Seleccionar Materia Prima / Insumo --</option>
-      ${productosOps}
-    </select>
-    <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantidadDef}" placeholder="Cant." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
-    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 6px 10px; font-weight: bold; flex-shrink: 0;">✕</button>
+  div.style.cssText = `
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: ${esExtra ? "#fff7ed" : "#f8fafc"};
+    border: 1px solid ${esExtra ? "#fed7aa" : "#e2e8f0"};
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
   `;
 
-  cont.appendChild(div);
+  if (!esExtra) {
+    const productosOps = localDB.productos
+      .map((p) => {
+        const stock = calcularStock(p.codigo);
+        const sel = p.codigo === (datosDef.codigo || "") ? "selected" : "";
+        const precioSugerido = Math.max(0, parseNumber(p.precioVenta, 0));
+        return `<option value="${escapeXml(p.codigo)}" data-precio="${precioSugerido}" ${sel}>[${escapeXml(p.codigo)}] ${escapeXml(p.nombre)} (Stock: ${stock})</option>`;
+      })
+      .join("");
+
+    div.innerHTML = `
+      <div style="flex: 2 1 200px; min-width: 160px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px;">INSUMO (INVENTARIO)</label>
+        <select class="mat-prod-select" onchange="actualizarPrecioSugeridoInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85rem; background: #ffffff;">
+          <option value="" data-precio="0">-- Seleccionar Insumo --</option>
+          ${productosOps}
+        </select>
+      </div>
+      <div style="flex: 1 1 70px; min-width: 60px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: center;">CANT.</label>
+        <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
+        <input type="number" class="mat-prod-precio" min="0" step="0.01" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
+        <input type="number" class="mat-prod-subtotal" readonly value="${subtotalDef || ""}" placeholder="0.00" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem; background: #f1f5f9; font-weight: 700; color: #0f172a;">
+      </div>
+      <div style="display: flex; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFilaInsumoPedido(this)" title="Eliminar fila" style="padding: 7px 12px; font-weight: bold; border-radius: 6px; height: 35px; line-height: 1;">✕</button>
+      </div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div style="flex: 2 1 200px; min-width: 160px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px;">SERVICIO / CONCEPTO EXTRA</label>
+        <input type="text" class="mat-prod-extra-nombre" value="${escapeXml(datosDef.nombre || "")}" placeholder="Ej. Mano de obra, Diseño, Servicio..." style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #f97316; font-size: 0.85rem; background: #ffffff;">
+      </div>
+      <div style="flex: 1 1 70px; min-width: 60px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: center;">CANT.</label>
+        <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #fdba74; text-align: center; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
+        <input type="number" class="mat-prod-precio" min="0" step="0.01" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #fdba74; text-align: right; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
+        <input type="number" class="mat-prod-subtotal" readonly value="${subtotalDef || ""}" placeholder="0.00" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #f97316; text-align: right; font-size: 0.85rem; background: #ffedd5; font-weight: 700; color: #c2410c;">
+      </div>
+      <div style="display: flex; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFilaInsumoPedido(this)" title="Eliminar fila" style="padding: 7px 12px; font-weight: bold; border-radius: 6px; height: 35px; line-height: 1;">✕</button>
+      </div>
+    `;
+  }
+
+  container.appendChild(div);
+  const modalOverlay = container.closest(".modal-overlay");
+  if (modalOverlay) {
+    modalOverlay.scrollTop = modalOverlay.scrollHeight;
+  }
+  recalcularTotalPedidoModal();
+}
+
+function actualizarPrecioSugeridoInsumo(selectEl) {
+  const row = selectEl.closest(".materia-prima-row");
+  if (!row) return;
+
+  const selectedOpt = selectEl.options[selectEl.selectedIndex];
+  const precioSugerido = parseNumber(selectedOpt ? selectedOpt.getAttribute("data-precio") : 0, 0);
+  const inputPrecio = row.querySelector(".mat-prod-precio");
+  if (inputPrecio && (!inputPrecio.value || parseNumber(inputPrecio.value, 0) === 0)) {
+    inputPrecio.value = precioSugerido > 0 ? precioSugerido : "";
+  }
+  recalcularSubtotalFilaInsumo(selectEl);
+}
+
+function recalcularSubtotalFilaInsumo(el) {
+  const row = el.closest(".materia-prima-row");
+  if (!row) return;
+
+  const cantInput = row.querySelector(".mat-prod-cant");
+  const precioInput = row.querySelector(".mat-prod-precio");
+  const subtotalInput = row.querySelector(".mat-prod-subtotal");
+
+  const cant = parseNumber(cantInput ? cantInput.value : 0, 0);
+  const precio = parseNumber(precioInput ? precioInput.value : 0, 0);
+  const subtotal = roundTo(cant * precio, 2);
+
+  if (subtotalInput) {
+    subtotalInput.value = subtotal > 0 ? subtotal.toFixed(2) : "0.00";
+  }
+
+  recalcularTotalPedidoModal();
+}
+
+function eliminarFilaInsumoPedido(btnEl) {
+  const row = btnEl.closest(".materia-prima-row");
+  if (row) row.remove();
+
+  const container = document.getElementById("contenedorMateriaPrimaPedido");
+  if (container && container.querySelectorAll(".materia-prima-row").length === 0) {
+    container.innerHTML = `
+      <div id="divSinInsumosModal" style="text-align: center; color: #94a3b8; padding: 18px 10px; font-style: italic; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
+        Haga clic en los botones de arriba para agregar insumos del inventario o servicios extras.
+      </div>
+    `;
+  }
+  recalcularTotalPedidoModal();
+}
+
+function recalcularTotalPedidoModal() {
+  const subtotales = document.querySelectorAll("#contenedorMateriaPrimaPedido .mat-prod-subtotal");
+  let suma = 0;
+  let hayFilas = false;
+
+  subtotales.forEach((subInput) => {
+    hayFilas = true;
+    suma += parseNumber(subInput.value, 0);
+  });
+
+  const totalInput = document.getElementById("pedidoPrecioTotal");
+  if (totalInput && (hayFilas || suma > 0)) {
+    totalInput.value = roundTo(suma, 2).toFixed(2);
+  }
+
+  calcularSaldoPendienteModalNuevo();
 }
 
 function calcularSaldoPendienteModalNuevo() {
@@ -4770,22 +4844,39 @@ function guardarNuevoPedidoPersonalizado(event) {
     return;
   }
 
-  // Recolectar materias primas
+  // Recolectar materias primas e insumos/servicios extras
   const materiasPrimas = [];
   const filasMat = document.querySelectorAll("#contenedorMateriaPrimaPedido .materia-prima-row");
   filasMat.forEach((row) => {
     const select = row.querySelector(".mat-prod-select");
+    const extraNombreInput = row.querySelector(".mat-prod-extra-nombre");
     const inputCant = row.querySelector(".mat-prod-cant");
-    if (select && select.value && inputCant) {
-      const cant = parseNumber(inputCant.value, 0);
-      if (cant > 0) {
-        const prod = localDB.productos.find((p) => p.codigo === select.value);
-        materiasPrimas.push({
-          codigo: select.value,
-          nombre: prod ? prod.nombre : select.value,
-          cantidad: cant,
-        });
-      }
+    const inputPrecio = row.querySelector(".mat-prod-precio");
+
+    const cantRaw = parseNumber(inputCant ? inputCant.value : 1, 1);
+    const cant = cantRaw > 0 ? cantRaw : 1;
+    const precioUnitario = parseNumber(inputPrecio ? inputPrecio.value : 0, 0);
+    const subtotal = roundTo(cant * precioUnitario, 2);
+
+    if (select && select.value) {
+      const prod = localDB.productos.find((p) => p.codigo === select.value);
+      materiasPrimas.push({
+        codigo: select.value,
+        nombre: prod ? prod.nombre : select.value,
+        cantidad: cant,
+        precioUnitario,
+        subtotal,
+        esExtra: false,
+      });
+    } else if (extraNombreInput && extraNombreInput.value.trim()) {
+      materiasPrimas.push({
+        codigo: "",
+        nombre: extraNombreInput.value.trim(),
+        cantidad: cant,
+        precioUnitario,
+        subtotal,
+        esExtra: true,
+      });
     }
   });
 
@@ -4794,13 +4885,17 @@ function guardarNuevoPedidoPersonalizado(event) {
 
   const fechaAhora = new Date().toISOString();
   const pagos = [];
+  let pagoAnticipoObj = null;
   if (anticipo > 0) {
-    pagos.push({
+    pagoAnticipoObj = {
+      id: `PAGO-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       fecha: fechaAhora,
       concepto: "Anticipo Inicial",
       monto: anticipo,
       metodo: metodoPago,
-    });
+      ventaId: null,
+    };
+    pagos.push(pagoAnticipoObj);
   }
 
   const pedido = {
@@ -4834,6 +4929,11 @@ function guardarNuevoPedidoPersonalizado(event) {
   }
 
   localDB.pedidosPersonalizados.push(pedido);
+
+  if (pagoAnticipoObj) {
+    registrarPagoPedidoComoVenta(pedido, pagoAnticipoObj);
+  }
+
   guardarEstadoLocal();
   cerrarModalNuevoPedido();
   renderizarModuloPedidos();
@@ -4889,18 +4989,40 @@ function verDetallePedido(pedidoId) {
     </div>
   `;
 
-  // Filas de Materia Prima
+  // Filas de Materia Prima y Servicios
   const materiaPrimaHTML = (pedido.materiasPrimas || []).length > 0
-    ? pedido.materiasPrimas
-      .map(
-        (m) => `
-        <li style="display:flex; justify-content:space-between; padding: 4px 0; border-bottom:1px dashed #e2e8f0;">
-          <span><strong>[${escapeXml(m.codigo)}]</strong> ${escapeXml(m.nombre)}</span>
-          <span class="badge" style="background:#e2e8f0; color:#1e293b;">${m.cantidad} unidades</span>
-        </li>`,
-      )
-      .join("")
-    : "<p style='color:#94a3b8; font-style:italic;'>No se especificaron materias primas registradas.</p>";
+    ? `
+      <div style="overflow-x: auto;">
+        <table class="table" style="width: 100%; font-size: 0.85rem; margin: 0;">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Concepto / Producto</th>
+              <th style="text-align:center;">Cant.</th>
+              <th style="text-align:right;">P. Unitario</th>
+              <th style="text-align:right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pedido.materiasPrimas
+      .map((m) => {
+        const esEx = m.esExtra || !m.codigo;
+        const pu = parseNumber(m.precioUnitario, 0);
+        const sub = roundTo(parseNumber(m.subtotal, m.cantidad * pu), 2);
+        return `
+                <tr>
+                  <td><span class="badge" style="background:${esEx ? "#ffedd5" : "#e2e8f0"}; color:${esEx ? "#c2410c" : "#1e293b"};">${esEx ? "Servicio / Extra" : "Inventario"}</span></td>
+                  <td><strong>${m.codigo ? `[${escapeXml(m.codigo)}] ` : ""}${escapeXml(m.nombre)}</strong></td>
+                  <td style="text-align:center;">${m.cantidad}</td>
+                  <td style="text-align:right;">${pu > 0 ? formatMoney(pu) : "-"}</td>
+                  <td style="text-align:right; font-weight:700; color:#0f172a;">${sub > 0 ? formatMoney(sub) : "-"}</td>
+                </tr>`;
+      })
+      .join("")}
+          </tbody>
+        </table>
+      </div>`
+    : "<p style='color:#94a3b8; font-style:italic;'>No se especificaron materias primas o servicios registrados.</p>";
 
   // Historial de Pagos
   const pagosHTML = (pedido.pagos || [])
@@ -5015,9 +5137,9 @@ function verDetallePedido(pedidoId) {
             ${pedido.descontadoInventario ? "✔️ Inventario Descontado" : "⏳ Pendiente de Descontar"}
           </span>
         </div>
-        <ul style="list-style: none; padding: 0; margin: 0; max-height: 160px; overflow-y: auto;">
+        <div style="margin: 0; max-height: 240px; overflow-y: auto;">
           ${materiaPrimaHTML}
-        </ul>
+        </div>
       </div>
 
       <!-- Sección 5: Estado Financiero y Control de Abonos (Ancho Completo) -->
@@ -5131,15 +5253,19 @@ function cambiarEstadoPedido(pedidoId, nuevoEstado) {
       }
 
       // Registrar pago de liquidación
-      pedido.pagos.push({
+      const pagoLiquidacion = {
+        id: `PAGO-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         fecha: new Date().toISOString(),
         concepto: "Liquidación Final de Entrega",
         monto: saldoPendiente,
         metodo: metodoPagoFinal,
-      });
+        ventaId: null,
+      };
+      pedido.pagos.push(pagoLiquidacion);
+      registrarPagoPedidoComoVenta(pedido, pagoLiquidacion);
     }
 
-    // Registrar la VENTA en localDB.ventas para integración con finanzas y cortes de caja
+    // Registrar en localDB.ventas para integración con finanzas y cortes de caja
     registrarVentaFinalPedidoPersonalizado(pedido, metodoPagoFinal);
   }
 
@@ -5161,6 +5287,7 @@ function descontarMateriaPrimaPedido(pedido) {
   }
 
   pedido.materiasPrimas.forEach((m) => {
+    if (m.esExtra || !m.codigo) return; // Omitir servicios/insumos extras fuera de inventario
     const prod = localDB.productos.find((p) => p.codigo === m.codigo);
     if (prod) {
       // Registrar movimiento de SALIDA de materia prima
@@ -5185,7 +5312,7 @@ function registrarAbonoPedido(pedidoId) {
   if (!pedido) return;
 
   const montoInput = document.getElementById("montoAbonoInput");
-  const metodoInput = document.getElementById("metodoAbonoInput");
+  const metodoInput = document.getElementById("metodoAbonoSelect") || document.getElementById("metodoAbonoInput");
 
   const monto = parseNumber(montoInput ? montoInput.value : 0, 0);
   const metodo = metodoInput ? metodoInput.value : "EFECTIVO";
@@ -5206,12 +5333,17 @@ function registrarAbonoPedido(pedidoId) {
     return;
   }
 
-  pedido.pagos.push({
+  const nuevoPago = {
+    id: `PAGO-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     fecha: new Date().toISOString(),
     concepto: "Abono Parcial",
     monto,
     metodo,
-  });
+    ventaId: null,
+  };
+
+  pedido.pagos.push(nuevoPago);
+  registrarPagoPedidoComoVenta(pedido, nuevoPago);
 
   guardarEstadoLocal();
   renderizarModuloPedidos();
@@ -5219,47 +5351,57 @@ function registrarAbonoPedido(pedidoId) {
   alert(`¡Abono de ${formatMoney(monto)} registrado correctamente!`);
 }
 
-function registrarVentaFinalPedidoPersonalizado(pedido, metodoPagoUltimo) {
-  if (pedido.ventaId) return; // Ya registrada previamente
+function registrarPagoPedidoComoVenta(pedido, pagoObj) {
+  if (!pedido || !pagoObj) return;
+  const monto = roundTo(parseNumber(pagoObj.monto, 0), 2);
+  if (monto <= 0) return;
+  if (pagoObj.ventaId) return; // Ya registrado previamente
 
-  const ventaId = `VTA-PED-${Date.now()}`;
-  const total = parseNumber(pedido.precioTotal, 0);
+  const ventaId = `VTA-PED-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const metodo = (pagoObj.metodo || "EFECTIVO").toUpperCase();
+  const concepto = pagoObj.concepto || "Pago de Pedido";
 
-  // Calcular desglose de métodos de pago desde los abonos y liquidación
-  let ef = 0, tar = 0, trans = 0;
-  (pedido.pagos || []).forEach((p) => {
-    const m = parseNumber(p.monto, 0);
-    if (p.metodo === "TARJETA") tar += m;
-    else if (p.metodo === "TRANSFERENCIA") trans += m;
-    else ef += m;
-  });
+  const pagos = {
+    efectivo: metodo === "EFECTIVO" ? monto : 0,
+    tarjeta: metodo === "TARJETA" ? monto : 0,
+    transferencia: metodo === "TRANSFERENCIA" ? monto : 0,
+  };
+
+  const fechaPago = pagoObj.fecha || new Date().toISOString();
 
   const nuevaVenta = {
     id: ventaId,
-    fecha: new Date().toISOString(),
+    fecha: fechaPago,
     items: [
       {
-        codigo: pedido.folio,
-        nombre: `Pedido Personalizado: ${pedido.especificaciones.slice(0, 50)}...`,
+        codigo: pedido.folio || "PEDIDO",
+        nombre: `${concepto}: ${pedido.folio} (${pedido.cliente ? pedido.cliente.nombre : "Cliente"})`,
         cantidad: 1,
-        precioUnitario: total,
-        total,
+        precioUnitario: monto,
+        subtotal: monto,
+        total: monto,
       },
     ],
-    total,
-    pagos: {
-      efectivo: roundTo(ef, 2),
-      tarjeta: roundTo(tar, 2),
-      transferencia: roundTo(trans, 2),
-    },
+    total: monto,
+    pagos: pagos,
     tipo: "VENTA_PEDIDO_PERSONALIZADO",
     cliente: pedido.cliente ? pedido.cliente.nombre : "",
     folioPedido: pedido.folio,
+    conceptoPedido: concepto,
   };
 
   if (!localDB.ventas) localDB.ventas = [];
   localDB.ventas.push(nuevaVenta);
-  pedido.ventaId = ventaId;
+  pagoObj.ventaId = ventaId;
+}
+
+function registrarVentaFinalPedidoPersonalizado(pedido, metodoPagoUltimo) {
+  if (!pedido || !pedido.pagos) return;
+  (pedido.pagos || []).forEach((pago) => {
+    if (!pago.ventaId && parseNumber(pago.monto, 0) > 0) {
+      registrarPagoPedidoComoVenta(pedido, pago);
+    }
+  });
 }
 
 function eliminarPedidoPersonalizado(pedidoId) {
@@ -5277,6 +5419,161 @@ function eliminarPedidoPersonalizado(pedidoId) {
     guardarEstadoLocal();
     renderizarModuloPedidos();
   }
+}
+
+function imprimirTicketPedidoPersonalizado(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) {
+    alert("No se encontró el pedido a imprimir.");
+    return;
+  }
+
+  const popup = window.open("", "_blank", "width=420,height=680");
+  if (!popup) {
+    alert("El navegador bloqueó la ventana de impresión. Habilite los popups.");
+    return;
+  }
+
+  popup.document.open();
+  popup.document.write(construirHtmlTicketPedido(pedido));
+  popup.document.close();
+}
+
+function construirHtmlTicketPedido(pedido) {
+  const config = localDB.config || DEFAULT_CONFIG;
+  const fecha = formatDate(pedido.fechaCreacion);
+  const clienteNombre = pedido.cliente ? pedido.cliente.nombre : "Cliente";
+  const clienteTel = pedido.cliente && pedido.cliente.telefono ? pedido.cliente.telefono : "";
+
+  const totalPagado = (pedido.pagos || []).reduce((acc, p) => acc + parseNumber(p.monto, 0), 0);
+  const saldoPendiente = Math.max(0, parseNumber(pedido.precioTotal, 0) - totalPagado);
+
+  let rows = "";
+  (pedido.materiasPrimas || []).forEach((m) => {
+    const pu = parseNumber(m.precioUnitario, 0);
+    const sub = roundTo(parseNumber(m.subtotal, m.cantidad * pu), 2);
+    rows += `
+      <tr>
+        <td class="c-cant">${roundTo(m.cantidad, 2)}</td>
+        <td class="c-prod">
+          ${escapeXml(m.nombre)}
+          ${pu > 0 ? `<br><small style="color:#333;">@ ${formatMoney(pu)} c/u</small>` : ""}
+        </td>
+        <td class="c-sub">${formatMoney(sub)}</td>
+      </tr>
+    `;
+  });
+
+  if (!rows) {
+    rows = `
+      <tr>
+        <td class="c-cant">1</td>
+        <td class="c-prod">Pedido Personalizado (${escapeXml(pedido.folio)})</td>
+        <td class="c-sub">${formatMoney(pedido.precioTotal)}</td>
+      </tr>
+    `;
+  }
+
+  let pagosRows = "";
+  (pedido.pagos || []).forEach((pago) => {
+    pagosRows += `
+      <div class="totals-row">
+        <span>${escapeXml(pago.concepto)} (${escapeXml(pago.metodo || "EFECTIVO")})</span>
+        <span>${formatMoney(pago.monto)}</span>
+      </div>
+    `;
+  });
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Nota de Pedido ${pedido.folio}</title>
+      <style>
+        @page { size: 80mm auto; margin: 0; }
+        html, body {
+          width: 80mm; margin: 0; padding: 0;
+          color: #000; font-family: "Arial", sans-serif;
+          font-size: 11px; line-height: 1.2;
+        }
+        h1, h2, h3, p { margin: 0; }
+        .ticket { width: 72mm; margin: 0 auto; padding: 3mm 0; }
+        .center { text-align: center; }
+        .space { margin-top: 4px; }
+        .muted { color: #000; font-size: 10px; }
+        .line { border-top: 1px dashed #000; margin: 4px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: fixed; }
+        th, td { padding: 2px 0; vertical-align: top; word-wrap: break-word; }
+        th { text-align: left; font-weight: 700; }
+        .c-cant { width: 10mm; text-align: left; }
+        .c-prod { width: 42mm; }
+        .c-sub { width: 20mm; text-align: right; }
+        .totals { margin-top: 4px; font-size: 11px; }
+        .totals-row { display: flex; justify-content: space-between; margin: 2px 0; }
+        .total-final { font-size: 12px; font-weight: 700; }
+        .strong { font-weight: 700; }
+      </style>
+    </head>
+    <body>
+      <div class="ticket">
+        <div class="center">
+          <h3>${config.businessName || DEFAULT_CONFIG.businessName}</h3>
+          <p class="muted">NOTA / TICKET DE PEDIDO</p>
+          ${config.businessPhone ? `<p class="muted">TEL: ${config.businessPhone}</p>` : ""}
+        </div>
+
+        <div class="line"></div>
+
+        <div class="space">
+          <p><span class="strong">FOLIO:</span> ${pedido.folio}</p>
+          <p><span class="strong">FECHA:</span> ${fecha}</p>
+          <p><span class="strong">CLIENTE:</span> ${escapeXml(clienteNombre)}</p>
+          ${clienteTel ? `<p><span class="strong">TELÉFONO:</span> ${escapeXml(clienteTel)}</p>` : ""}
+          <p><span class="strong">ESTADO:</span> ${pedido.estado}</p>
+        </div>
+
+        ${pedido.especificaciones ? `
+        <div class="line"></div>
+        <p><span class="strong">ESPECIFICACIONES:</span></p>
+        <p style="font-size:10px; white-space:pre-wrap;">${escapeXml(pedido.especificaciones)}</p>
+        ` : ""}
+
+        <div class="line"></div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="c-cant">CANT</th>
+              <th class="c-prod">CONCEPTO / INSUMO</th>
+              <th class="c-sub">SUBTOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div class="line"></div>
+
+        <div class="totals">
+          <div class="totals-row total-final"><span>TOTAL ACORDADO</span><span>${formatMoney(pedido.precioTotal)}</span></div>
+          <div class="line"></div>
+          <p class="strong" style="margin:2px 0;">PAGOS / ABONOS:</p>
+          ${pagosRows || '<div class="totals-row"><span>Anticipo</span><span>$0.00</span></div>'}
+          <div class="totals-row"><span>TOTAL PAGADO</span><span>${formatMoney(totalPagado)}</span></div>
+          <div class="totals-row total-final"><span>SALDO PENDIENTE</span><span>${formatMoney(saldoPendiente)}</span></div>
+        </div>
+
+        <div class="line"></div>
+        <p class="center muted">GRACIAS POR SU PREFERENCIA</p>
+        ${config.fiscalLegend ? `<p class="center muted">${config.fiscalLegend}</p>` : ""}
+        <p class="center muted space">------ FIN DE NOTA ------</p>
+      </div>
+      <script>window.onload = function(){ window.print(); };</script>
+    </body>
+    </html>
+  `;
 }
 
 function generarReportePedidosPersonalizados() {
