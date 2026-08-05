@@ -639,6 +639,19 @@ function formatDate(date) {
   return `${day}/${month}/${year} ${time}`;
 }
 
+function formatDateOnly(date) {
+  if (!(date instanceof Date)) {
+    date = new Date(date);
+  }
+  if (Number.isNaN(date.getTime())) {
+    return "Fecha invalida";
+  }
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 function setDefaultDates() {
   const now = new Date();
 
@@ -1480,7 +1493,7 @@ function renderVentaCarrito() {
           <tbody>
       `;
 
-  carritoVenta.forEach((item) => {
+  carritoVenta.slice().reverse().forEach((item) => {
     html += `
           <tr>
             <td>${item.codigo}</td>
@@ -4384,30 +4397,26 @@ function filtrarPedidosPersonalizados() {
 
       return `
       <tr>
-        <td><strong>${escapeXml(p.folio)}</strong></td>
-        <td>${formatDate(p.fechaCreacion)}</td>
-        <td>${escapeXml(p.cliente ? p.cliente.nombre : "Sin Nombre")}</td>
-        <td>${escapeXml(p.cliente ? p.cliente.telefono || "-" : "-")}</td>
-        <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeXml(p.especificaciones)}">
+        <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;"><strong>${escapeXml(p.folio)}</strong></td>
+        <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;">${formatDateOnly(p.fechaCreacion)}</td>
+        <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;">${escapeXml(p.cliente ? p.cliente.nombre : "Sin Nombre")}</td>
+        <td onclick="verDetallePedido('${p.id}')" style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; cursor: pointer;" title="${escapeXml(p.especificaciones)}">
           ${escapeXml(p.especificaciones)}
         </td>
-        <td><strong>${formatMoney(p.precioTotal)}</strong></td>
-        <td style="color:#047857;">${formatMoney(totalPagado)}</td>
-        <td style="color:${saldo > 0 ? "#dc2626" : "#16a34a"}; font-weight:700;">
+        <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;"><strong>${formatMoney(p.precioTotal)}</strong></td>
+        <td onclick="verDetallePedido('${p.id}')" style="color:#047857; white-space: nowrap; text-align: center; cursor: pointer;">${formatMoney(totalPagado)}</td>
+        <td onclick="verDetallePedido('${p.id}')" style="color:${saldo > 0 ? "#dc2626" : "#16a34a"}; font-weight:700; white-space: nowrap; text-align: center; cursor: pointer;">
           ${formatMoney(saldo)}
         </td>
-        <td>
+        <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;">
           <span class="badge ${badgeClass}">${estadoTexto}</span>
         </td>
-        <td style="white-space: nowrap;">
-          <div style="display: inline-flex; gap: 4px; align-items: center;">
-            <button class="btn btn-info btn-sm" onclick="verDetallePedido('${p.id}')">
-              👁️ Ver / Timeline
-            </button>
-            <button class="btn btn-primary btn-sm" onclick="imprimirTicketPedidoPersonalizado('${p.id}')" title="Imprimir Nota / Ticket">
+        <td style="white-space: nowrap; text-align: center">
+          <div style="display: inline-flex; gap: 6px; align-items: center;">
+            <button class="btn btn-primary btn-sm" onclick="imprimirTicketPedidoPersonalizado('${p.id}')" title="Imprimir Nota / Ticket" style="padding: 5px 10px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s ease;">
               🖨️ Ticket
             </button>
-            <button class="btn btn-danger btn-sm" onclick="eliminarPedidoPersonalizado('${p.id}')" title="Eliminar Pedido">
+            <button class="btn btn-danger btn-sm" onclick="eliminarPedidoPersonalizado('${p.id}')" title="Eliminar Pedido" style="padding: 5px 10px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; border: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s ease;">
               🗑️
             </button>
           </div>
@@ -4636,9 +4645,22 @@ function cerrarModalNuevoPedido() {
   }
 }
 
+function cargarDatalistInsumosInventario() {
+  const datalist = document.getElementById("listaInsumosInventario");
+  if (!datalist) return;
+  datalist.innerHTML = localDB.productos
+    .map((p) => {
+      const stock = calcularStock(p.codigo);
+      return `<option value="[${escapeXml(p.codigo)}] ${escapeXml(p.nombre)}" data-codigo="${escapeXml(p.codigo)}" data-precio="${Math.max(0, parseNumber(p.precioVenta, 0))}">(Stock: ${stock})</option>`;
+    })
+    .join("");
+}
+
 function agregarFilaMateriaPrimaPedido(tipoDef = "INVENTARIO", datosDef = {}) {
   const container = document.getElementById("contenedorMateriaPrimaPedido");
   if (!container) return;
+
+  cargarDatalistInsumosInventario();
 
   const sinInsumos = document.getElementById("divSinInsumosModal");
   if (sinInsumos) sinInsumos.remove();
@@ -4666,30 +4688,29 @@ function agregarFilaMateriaPrimaPedido(tipoDef = "INVENTARIO", datosDef = {}) {
   `;
 
   if (!esExtra) {
-    const productosOps = localDB.productos
-      .map((p) => {
-        const stock = calcularStock(p.codigo);
-        const sel = p.codigo === (datosDef.codigo || "") ? "selected" : "";
-        const precioSugerido = Math.max(0, parseNumber(p.precioVenta, 0));
-        return `<option value="${escapeXml(p.codigo)}" data-precio="${precioSugerido}" ${sel}>[${escapeXml(p.codigo)}] ${escapeXml(p.nombre)} (Stock: ${stock})</option>`;
-      })
-      .join("");
+    let initialDisplayVal = "";
+    let initialCodigo = datosDef.codigo || "";
+    if (initialCodigo) {
+      const prodEncontrado = localDB.productos.find((p) => p.codigo === initialCodigo);
+      if (prodEncontrado) {
+        initialDisplayVal = `[${prodEncontrado.codigo}] ${prodEncontrado.nombre}`;
+      } else {
+        initialDisplayVal = initialCodigo;
+      }
+    }
 
     div.innerHTML = `
       <div style="flex: 2 1 200px; min-width: 160px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px;">INSUMO (INVENTARIO)</label>
-        <select class="mat-prod-select" onchange="actualizarPrecioSugeridoInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85rem; background: #ffffff;">
-          <option value="" data-precio="0">-- Seleccionar Insumo --</option>
-          ${productosOps}
-        </select>
+        <input type="text" class="mat-prod-input" list="listaInsumosInventario" value="${escapeXml(initialDisplayVal)}" data-codigo="${escapeXml(initialCodigo)}" placeholder="🔍 Escribe o busca un insumo..." oninput="onInsumoInputChanged(this)" onfocus="this.select()" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85rem; background: #ffffff;">
       </div>
       <div style="flex: 1 1 70px; min-width: 60px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: center;">CANT.</label>
-        <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; font-size: 0.85rem;">
+        <input type="number" class="mat-prod-cant" min="0" step="1" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; font-size: 0.85rem;">
       </div>
       <div style="flex: 1 1 90px; min-width: 80px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
-        <input type="number" class="mat-prod-precio" min="0" step="0.01" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem;">
+        <input type="number" class="mat-prod-precio" min="0" step="1" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem;">
       </div>
       <div style="flex: 1 1 90px; min-width: 80px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
@@ -4707,11 +4728,11 @@ function agregarFilaMateriaPrimaPedido(tipoDef = "INVENTARIO", datosDef = {}) {
       </div>
       <div style="flex: 1 1 70px; min-width: 60px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: center;">CANT.</label>
-        <input type="number" class="mat-prod-cant" min="0.01" step="0.01" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #fdba74; text-align: center; font-size: 0.85rem;">
+        <input type="number" class="mat-prod-cant" min="0" step="1" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #fdba74; text-align: center; font-size: 0.85rem;">
       </div>
       <div style="flex: 1 1 90px; min-width: 80px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
-        <input type="number" class="mat-prod-precio" min="0" step="0.01" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #fdba74; text-align: right; font-size: 0.85rem;">
+        <input type="number" class="mat-prod-precio" min="0" step="1" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumo(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #fdba74; text-align: right; font-size: 0.85rem;">
       </div>
       <div style="flex: 1 1 90px; min-width: 80px;">
         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
@@ -4731,17 +4752,40 @@ function agregarFilaMateriaPrimaPedido(tipoDef = "INVENTARIO", datosDef = {}) {
   recalcularTotalPedidoModal();
 }
 
-function actualizarPrecioSugeridoInsumo(selectEl) {
-  const row = selectEl.closest(".materia-prima-row");
+function onInsumoInputChanged(inputEl) {
+  const val = inputEl.value.trim();
+  const row = inputEl.closest(".materia-prima-row");
   if (!row) return;
 
-  const selectedOpt = selectEl.options[selectEl.selectedIndex];
-  const precioSugerido = parseNumber(selectedOpt ? selectedOpt.getAttribute("data-precio") : 0, 0);
+  const datalist = document.getElementById("listaInsumosInventario");
+  let codigoEncontrado = "";
+  let precioSugerido = 0;
+
+  if (datalist) {
+    const options = Array.from(datalist.options);
+    const matchedOption = options.find((opt) => opt.value === val);
+    if (matchedOption) {
+      codigoEncontrado = matchedOption.getAttribute("data-codigo") || "";
+      precioSugerido = parseNumber(matchedOption.getAttribute("data-precio") || 0, 0);
+    } else {
+      const prod = localDB.productos.find(
+        (p) => p.codigo.toLowerCase() === val.toLowerCase() || `[${p.codigo}] ${p.nombre}`.toLowerCase() === val.toLowerCase()
+      );
+      if (prod) {
+        codigoEncontrado = prod.codigo;
+        precioSugerido = Math.max(0, parseNumber(prod.precioVenta, 0));
+      }
+    }
+  }
+
+  inputEl.setAttribute("data-codigo", codigoEncontrado);
+
   const inputPrecio = row.querySelector(".mat-prod-precio");
-  if (inputPrecio && (!inputPrecio.value || parseNumber(inputPrecio.value, 0) === 0)) {
+  if (codigoEncontrado && inputPrecio && (!inputPrecio.value || parseNumber(inputPrecio.value, 0) === 0)) {
     inputPrecio.value = precioSugerido > 0 ? precioSugerido : "";
   }
-  recalcularSubtotalFilaInsumo(selectEl);
+
+  recalcularSubtotalFilaInsumo(inputEl);
 }
 
 function recalcularSubtotalFilaInsumo(el) {
@@ -4778,8 +4822,136 @@ function eliminarFilaInsumoPedido(btnEl) {
   recalcularTotalPedidoModal();
 }
 
-function recalcularTotalPedidoModal() {
-  const subtotales = document.querySelectorAll("#contenedorMateriaPrimaPedido .mat-prod-subtotal");
+function agregarFilaMateriaPrimaPedidoEdit(tipoDef = "INVENTARIO", datosDef = {}) {
+  const container = document.getElementById("contenedorMateriaPrimaPedidoEdit");
+  if (!container) return;
+
+  cargarDatalistInsumosInventario();
+
+  const sinInsumos = container.querySelector("#divSinInsumosModalEdit");
+  if (sinInsumos) sinInsumos.remove();
+
+  const div = document.createElement("div");
+  div.className = "materia-prima-row";
+
+  const esExtra = tipoDef === "EXTRA" || datosDef.esExtra === true;
+  const cantDef = parseNumber(datosDef.cantidad, 1);
+  const precioDef = parseNumber(datosDef.precioUnitario, 0);
+  const subtotalDef = roundTo(cantDef * precioDef, 2);
+
+  div.style.cssText = `
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: ${esExtra ? "#fff7ed" : "#f8fafc"};
+    border: 1px solid ${esExtra ? "#fed7aa" : "#e2e8f0"};
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+  `;
+
+  if (!esExtra) {
+    let initialDisplayVal = "";
+    let initialCodigo = datosDef.codigo || "";
+    if (initialCodigo) {
+      const prodEncontrado = localDB.productos.find((p) => p.codigo === initialCodigo);
+      if (prodEncontrado) {
+        initialDisplayVal = `[${prodEncontrado.codigo}] ${prodEncontrado.nombre}`;
+      } else {
+        initialDisplayVal = initialCodigo;
+      }
+    } else if (datosDef.nombre) {
+      initialDisplayVal = datosDef.nombre;
+    }
+
+    div.innerHTML = `
+      <div style="flex: 2 1 200px; min-width: 160px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px;">INSUMO (INVENTARIO)</label>
+        <input type="text" class="mat-prod-input" list="listaInsumosInventario" value="${escapeXml(initialDisplayVal)}" data-codigo="${escapeXml(initialCodigo)}" placeholder="🔍 Escribe o busca un insumo..." oninput="onInsumoInputChanged(this)" onfocus="this.select()" style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85rem; background: #ffffff;">
+      </div>
+      <div style="flex: 1 1 70px; min-width: 60px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: center;">CANT.</label>
+        <input type="number" class="mat-prod-cant" min="0" step="1" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumoEdit(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
+        <input type="number" class="mat-prod-precio" min="0" step="1" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumoEdit(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
+        <input type="number" class="mat-prod-subtotal" readonly value="${subtotalDef || ""}" placeholder="0.00" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: right; font-size: 0.85rem; background: #f1f5f9; font-weight: 700; color: #0f172a;">
+      </div>
+      <div style="display: flex; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFilaInsumoPedidoEdit(this)" title="Eliminar fila" style="padding: 7px 12px; font-weight: bold; border-radius: 6px; height: 35px; line-height: 1;">✕</button>
+      </div>
+    `;
+  } else {
+    div.innerHTML = `
+      <div style="flex: 2 1 200px; min-width: 160px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px;">SERVICIO / CONCEPTO EXTRA</label>
+        <input type="text" class="mat-prod-extra-nombre" value="${escapeXml(datosDef.nombre || "")}" placeholder="Ej. Mano de obra, Diseño, Servicio..." style="width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; border: 1px solid #f97316; font-size: 0.85rem; background: #ffffff;">
+      </div>
+      <div style="flex: 1 1 70px; min-width: 60px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: center;">CANT.</label>
+        <input type="number" class="mat-prod-cant" min="0" step="1" value="${cantDef}" placeholder="1" oninput="recalcularSubtotalFilaInsumoEdit(this)" style="width: 100%; box-sizing: border-box; padding: 7px 6px; border-radius: 6px; border: 1px solid #fdba74; text-align: center; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">PRECIO U.</label>
+        <input type="number" class="mat-prod-precio" min="0" step="1" value="${precioDef || ""}" placeholder="0.00" oninput="recalcularSubtotalFilaInsumoEdit(this)" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #fdba74; text-align: right; font-size: 0.85rem;">
+      </div>
+      <div style="flex: 1 1 90px; min-width: 80px;">
+        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #c2410c; margin-bottom: 4px; text-align: right;">SUBTOTAL</label>
+        <input type="number" class="mat-prod-subtotal" readonly value="${subtotalDef || ""}" placeholder="0.00" style="width: 100%; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; border: 1px solid #f97316; text-align: right; font-size: 0.85rem; background: #ffedd5; font-weight: 700; color: #c2410c;">
+      </div>
+      <div style="display: flex; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFilaInsumoPedidoEdit(this)" title="Eliminar fila" style="padding: 7px 12px; font-weight: bold; border-radius: 6px; height: 35px; line-height: 1;">✕</button>
+      </div>
+    `;
+  }
+
+  container.appendChild(div);
+  recalcularTotalPedidoModalEdit();
+}
+
+function recalcularSubtotalFilaInsumoEdit(el) {
+  const row = el.closest(".materia-prima-row");
+  if (!row) return;
+
+  const cantInput = row.querySelector(".mat-prod-cant");
+  const precioInput = row.querySelector(".mat-prod-precio");
+  const subtotalInput = row.querySelector(".mat-prod-subtotal");
+
+  const cant = parseNumber(cantInput ? cantInput.value : 0, 0);
+  const precio = parseNumber(precioInput ? precioInput.value : 0, 0);
+  const subtotal = roundTo(cant * precio, 2);
+
+  if (subtotalInput) {
+    subtotalInput.value = subtotal > 0 ? subtotal.toFixed(2) : "0.00";
+  }
+
+  recalcularTotalPedidoModalEdit();
+}
+
+function eliminarFilaInsumoPedidoEdit(btnEl) {
+  const row = btnEl.closest(".materia-prima-row");
+  if (row) row.remove();
+
+  const container = document.getElementById("contenedorMateriaPrimaPedidoEdit");
+  if (container && container.querySelectorAll(".materia-prima-row").length === 0) {
+    container.innerHTML = `
+      <div id="divSinInsumosModalEdit" style="text-align: center; color: #94a3b8; padding: 18px 10px; font-style: italic; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
+        Haga clic en los botones de arriba para agregar insumos del inventario o servicios extras.
+      </div>
+    `;
+  }
+  recalcularTotalPedidoModalEdit();
+}
+
+function recalcularTotalPedidoModalEdit() {
+  const subtotales = document.querySelectorAll("#contenedorMateriaPrimaPedidoEdit .mat-prod-subtotal");
   let suma = 0;
   let hayFilas = false;
 
@@ -4788,12 +4960,198 @@ function recalcularTotalPedidoModal() {
     suma += parseNumber(subInput.value, 0);
   });
 
-  const totalInput = document.getElementById("pedidoPrecioTotal");
+  const totalInput = document.getElementById("editPedidoPrecioTotal");
   if (totalInput && (hayFilas || suma > 0)) {
     totalInput.value = roundTo(suma, 2).toFixed(2);
   }
 
-  calcularSaldoPendienteModalNuevo();
+  calcularSaldoPendienteModalEdit();
+}
+
+function calcularSaldoPendienteModalEdit() {
+  const total = parseNumber(
+    document.getElementById("editPedidoPrecioTotal")
+      ? document.getElementById("editPedidoPrecioTotal").value
+      : 0,
+    0,
+  );
+
+  const id = document.getElementById("editPedidoId") ? document.getElementById("editPedidoId").value : "";
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === id);
+
+  const totalPagado = pedido ? (pedido.pagos || []).reduce((acc, p) => acc + parseNumber(p.monto, 0), 0) : 0;
+  const saldo = Math.max(0, total - totalPagado);
+
+  const lblPagado = document.getElementById("lblTotalPagadoModalEdit");
+  if (lblPagado) lblPagado.textContent = formatMoney(totalPagado);
+
+  const lblSaldo = document.getElementById("lblSaldoPendienteModalEdit");
+  if (lblSaldo) lblSaldo.textContent = formatMoney(saldo);
+}
+
+function abrirModalEditarPedido(pedidoId) {
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === pedidoId);
+  if (!pedido) {
+    alert("No se encontró el pedido para editar.");
+    return;
+  }
+
+  document.getElementById("editPedidoId").value = pedido.id;
+  document.getElementById("editPedidoClienteNombre").value = pedido.cliente ? pedido.cliente.nombre : "";
+  document.getElementById("editPedidoClienteTelefono").value = pedido.cliente ? pedido.cliente.telefono || "" : "";
+  document.getElementById("editPedidoFechaEntrega").value = pedido.fechaEntregaEstimada || "";
+  document.getElementById("editPedidoEspecificaciones").value = pedido.especificaciones || "";
+  document.getElementById("editPedidoPrecioTotal").value = parseNumber(pedido.precioTotal, 0).toFixed(2);
+
+  const container = document.getElementById("contenedorMateriaPrimaPedidoEdit");
+  if (container) {
+    container.innerHTML = "";
+    if (pedido.materiasPrimas && pedido.materiasPrimas.length > 0) {
+      pedido.materiasPrimas.forEach((m) => {
+        agregarFilaMateriaPrimaPedidoEdit(m.esExtra ? "EXTRA" : "INVENTARIO", m);
+      });
+    } else {
+      agregarFilaMateriaPrimaPedidoEdit("INVENTARIO");
+    }
+  }
+
+  calcularSaldoPendienteModalEdit();
+
+  const modalDetalle = document.getElementById("modalDetallePedido");
+  if (modalDetalle) {
+    modalDetalle.classList.remove("open");
+    modalDetalle.setAttribute("aria-hidden", "true");
+  }
+
+  const modal = document.getElementById("modalEditarPedido");
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function cerrarModalEditarPedido() {
+  const modal = document.getElementById("modalEditarPedido");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function guardarEdicionPedidoPersonalizado(event) {
+  event.preventDefault();
+
+  const id = document.getElementById("editPedidoId").value;
+  const pedido = localDB.pedidosPersonalizados.find((p) => p.id === id);
+  if (!pedido) {
+    alert("No se encontró el pedido a actualizar.");
+    return;
+  }
+
+  const clienteNombre = document.getElementById("editPedidoClienteNombre").value.trim();
+  const clienteTelefono = document.getElementById("editPedidoClienteTelefono").value.trim();
+  const fechaEntrega = document.getElementById("editPedidoFechaEntrega").value;
+  const especificaciones = document.getElementById("editPedidoEspecificaciones").value.trim();
+  const total = parseNumber(document.getElementById("editPedidoPrecioTotal").value, 0);
+
+  if (!clienteNombre) {
+    alert("Por favor ingrese el nombre del cliente.");
+    return;
+  }
+
+  if (total <= 0) {
+    alert("El monto total acordado debe ser mayor a $0.00.");
+    return;
+  }
+
+  const totalPagado = (pedido.pagos || []).reduce((acc, p) => acc + parseNumber(p.monto, 0), 0);
+  if (total < roundTo(totalPagado, 2)) {
+    alert(`El total acordado (${formatMoney(total)}) no puede ser menor a los abonos/anticipos ya recibidos (${formatMoney(totalPagado)}).`);
+    return;
+  }
+
+  // Recolectar insumos actualizados
+  const materiasPrimas = [];
+  const filasMat = document.querySelectorAll("#contenedorMateriaPrimaPedidoEdit .materia-prima-row");
+  filasMat.forEach((row) => {
+    const inputInsumo = row.querySelector(".mat-prod-input");
+    const extraNombreInput = row.querySelector(".mat-prod-extra-nombre");
+    const inputCant = row.querySelector(".mat-prod-cant");
+    const inputPrecio = row.querySelector(".mat-prod-precio");
+
+    const cantRaw = parseNumber(inputCant ? inputCant.value : 1, 1);
+    const cant = cantRaw > 0 ? cantRaw : 1;
+    const precioUnitario = parseNumber(inputPrecio ? inputPrecio.value : 0, 0);
+    const subtotal = roundTo(cant * precioUnitario, 2);
+
+    if (inputInsumo) {
+      let codigo = inputInsumo.getAttribute("data-codigo") || "";
+      const val = inputInsumo.value.trim();
+
+      if (!codigo && val) {
+        const prod = localDB.productos.find(
+          (p) => p.codigo.toLowerCase() === val.toLowerCase() || `[${p.codigo}] ${p.nombre}`.toLowerCase() === val.toLowerCase()
+        );
+        if (prod) codigo = prod.codigo;
+      }
+
+      if (codigo) {
+        const prod = localDB.productos.find((p) => p.codigo === codigo);
+        materiasPrimas.push({
+          codigo: codigo,
+          nombre: prod ? prod.nombre : (val || codigo),
+          cantidad: cant,
+          precioUnitario,
+          subtotal,
+          esExtra: false,
+        });
+      } else if (val) {
+        materiasPrimas.push({
+          codigo: "",
+          nombre: val,
+          cantidad: cant,
+          precioUnitario,
+          subtotal,
+          esExtra: true,
+        });
+      }
+    } else if (extraNombreInput && extraNombreInput.value.trim()) {
+      materiasPrimas.push({
+        codigo: "",
+        nombre: extraNombreInput.value.trim(),
+        cantidad: cant,
+        precioUnitario,
+        subtotal,
+        esExtra: true,
+      });
+    }
+  });
+
+  pedido.cliente = {
+    nombre: clienteNombre,
+    telefono: clienteTelefono,
+  };
+  pedido.fechaEntregaEstimada = fechaEntrega || "";
+  pedido.especificaciones = especificaciones;
+  pedido.precioTotal = total;
+  pedido.materiasPrimas = materiasPrimas;
+
+  if (!pedido.historialEstados) pedido.historialEstados = [];
+  pedido.historialEstados.push({
+    estado: pedido.estado,
+    fecha: new Date().toISOString(),
+    nota: "Pedido corregido / editado por el usuario",
+  });
+
+  guardarEstadoLocal();
+  cerrarModalEditarPedido();
+  renderizarModuloPedidos();
+
+  if (document.getElementById("modalDetallePedido") && document.getElementById("modalDetallePedido").classList.contains("open")) {
+    verDetallePedido(pedido.id);
+  }
+
+  alert(`¡Pedido ${pedido.folio} actualizado correctamente!`);
 }
 
 function calcularSaldoPendienteModalNuevo() {
@@ -4848,7 +5206,7 @@ function guardarNuevoPedidoPersonalizado(event) {
   const materiasPrimas = [];
   const filasMat = document.querySelectorAll("#contenedorMateriaPrimaPedido .materia-prima-row");
   filasMat.forEach((row) => {
-    const select = row.querySelector(".mat-prod-select");
+    const inputInsumo = row.querySelector(".mat-prod-input");
     const extraNombreInput = row.querySelector(".mat-prod-extra-nombre");
     const inputCant = row.querySelector(".mat-prod-cant");
     const inputPrecio = row.querySelector(".mat-prod-precio");
@@ -4858,16 +5216,28 @@ function guardarNuevoPedidoPersonalizado(event) {
     const precioUnitario = parseNumber(inputPrecio ? inputPrecio.value : 0, 0);
     const subtotal = roundTo(cant * precioUnitario, 2);
 
-    if (select && select.value) {
-      const prod = localDB.productos.find((p) => p.codigo === select.value);
-      materiasPrimas.push({
-        codigo: select.value,
-        nombre: prod ? prod.nombre : select.value,
-        cantidad: cant,
-        precioUnitario,
-        subtotal,
-        esExtra: false,
-      });
+    if (inputInsumo) {
+      let codigo = inputInsumo.getAttribute("data-codigo") || "";
+      const val = inputInsumo.value.trim();
+
+      if (!codigo && val) {
+        const prod = localDB.productos.find(
+          (p) => p.codigo.toLowerCase() === val.toLowerCase() || `[${p.codigo}] ${p.nombre}`.toLowerCase() === val.toLowerCase()
+        );
+        if (prod) codigo = prod.codigo;
+      }
+
+      if (codigo) {
+        const prod = localDB.productos.find((p) => p.codigo === codigo);
+        materiasPrimas.push({
+          codigo: codigo,
+          nombre: prod ? prod.nombre : codigo,
+          cantidad: cant,
+          precioUnitario,
+          subtotal,
+          esExtra: false,
+        });
+      }
     } else if (extraNombreInput && extraNombreInput.value.trim()) {
       materiasPrimas.push({
         codigo: "",
@@ -5050,7 +5420,10 @@ function verDetallePedido(pedidoId) {
           </div>
           <small style="color:#64748b; font-size:0.82rem;">Registrado el ${formatDate(pedido.fechaCreacion)}</small>
         </div>
-        <div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-warning btn-sm" onclick="abrirModalEditarPedido('${pedido.id}')" style="padding: 8px 16px;">
+            ✏️ Editar / Corregir Pedido
+          </button>
           <button class="btn btn-primary btn-sm" onclick="imprimirTicketPedidoPersonalizado('${pedido.id}')" style="box-shadow:0 2px 6px rgba(14,165,233,0.25); padding: 8px 16px;">
             🖨️ Imprimir Ticket / Nota
           </button>

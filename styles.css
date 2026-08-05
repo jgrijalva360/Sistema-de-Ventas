@@ -1156,24 +1156,32 @@ tr:hover {
   background: #fef3c7;
   color: #b45309;
   border: 1px solid #fcd34d;
+  padding: 4px;
+  border-radius: 8px;
 }
 
 .badge-pedido-proceso {
   background: #e0e7ff;
   color: #3730a3;
   border: 1px solid #a5b4fc;
+  padding: 4px;
+  border-radius: 8px;
 }
 
 .badge-pedido-terminado {
   background: #f3e8ff;
   color: #6b21a8;
   border: 1px solid #d8b4fe;
+  padding: 4px;
+  border-radius: 8px;
 }
 
 .badge-pedido-entregado {
   background: #dcfce7;
   color: #15803d;
   border: 1px solid #86efac;
+  padding: 4px;
+  border-radius: 8px;
 }
 
 /* Filas dinámicas de materia prima */
