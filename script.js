@@ -355,31 +355,13 @@ function slugifyCode(value) {
 }
 
 function generarCodigoSugeridoProducto() {
-  const nombre = document.getElementById("nombreProd")
-    ? document.getElementById("nombreProd").value
-    : "";
-  const base = slugifyCode(nombre)
-    .split("-")
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((parte) => parte.slice(0, 3))
-    .join("");
-  const fecha = new Date();
-  const stamp = `${String(fecha.getHours()).padStart(2, "0")}${String(fecha.getMinutes()).padStart(2, "0")}`;
-  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
-  const prefijo = (base || "PRO").slice(0, 3);
-
-  let codigo = `B${prefijo}${stamp}${random}`.slice(0, 12);
   const existentes = new Set(
     localDB.productos.map((p) => normalizeCode(p.codigo)),
   );
-  while (existentes.has(normalizeCode(codigo))) {
-    codigo =
-      `B${prefijo}${stamp}${Math.random().toString(36).slice(2, 6).toUpperCase()}`.slice(
-        0,
-        12,
-      );
-  }
+  let codigo = "";
+  do {
+    codigo = Math.floor(10000000 + Math.random() * 90000000).toString();
+  } while (existentes.has(normalizeCode(codigo)));
 
   const codigoField = document.getElementById("codigoProd");
   if (codigoField) codigoField.value = codigo;
@@ -688,6 +670,11 @@ function setDefaultDates() {
   const fechaHastaCorte = document.getElementById("fechaHastaCorte");
   if (fechaDesdeCorte) fechaDesdeCorte.value = monthAgoStr;
   if (fechaHastaCorte) fechaHastaCorte.value = todayStr;
+
+  const fechaDesdeResumen = document.getElementById("fechaDesdeResumen");
+  const fechaHastaResumen = document.getElementById("fechaHastaResumen");
+  if (fechaDesdeResumen) fechaDesdeResumen.value = monthAgoStr;
+  if (fechaHastaResumen) fechaHastaResumen.value = todayStr;
 }
 
 function showTab(tabName, clickedElement = null) {
@@ -740,6 +727,17 @@ function showTab(tabName, clickedElement = null) {
   if (tabName === "pedidos") {
     renderizarModuloPedidos();
   }
+  if (tabName === "reportes") {
+    generarResumenFinanciero();
+  }
+}
+
+function showReporteTab(panelName, clickedBtn) {
+  document.querySelectorAll(".reporte-panel").forEach((p) => p.classList.remove("active"));
+  document.querySelectorAll(".reportes-tab").forEach((t) => t.classList.remove("active"));
+  const panel = document.getElementById(`reporte-${panelName}`);
+  if (panel) panel.classList.add("active");
+  if (clickedBtn) clickedBtn.classList.add("active");
 }
 
 function calcularStock(codigo) {
@@ -943,6 +941,11 @@ function obtenerResumen() {
     return acumulado + parseNumber(gasto.monto, 0);
   }, 0);
 
+  // Total retiros de caja acumulados de todos los cortes cerrados
+  const totalRetiros = (localDB.cortes || []).reduce((acumulado, corte) => {
+    return acumulado + parseNumber(corte.retiros, 0);
+  }, 0);
+
   // Estadísticas de Pedidos Personalizados
   const pedidos = localDB.pedidosPersonalizados || [];
   const proximaFechaLimit = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
@@ -966,9 +969,9 @@ function obtenerResumen() {
       if (p.fechaEntregaEstimada) {
         const fechaEntrega = new Date(p.fechaEntregaEstimada);
         if (!Number.isNaN(fechaEntrega.getTime())) {
-          if (fechaEntrega < now) {
+          if (fechaEntrega < now && p.estado !== "TERMINADO") {
             pedidosVencidos += 1;
-          } else if (fechaEntrega <= proximaFechaLimit) {
+          } else if (fechaEntrega <= proximaFechaLimit && p.estado !== "TERMINADO") {
             pedidosPorVencer += 1;
           }
         }
@@ -976,12 +979,17 @@ function obtenerResumen() {
     }
   });
 
+  const dineroEnCaja = obtenerDetalleCajaDashboard().valor;
+  const cajaEsperada = roundTo(resumenPagos.efectivo - totalGastos - totalRetiros, 2);
+  const diferenciaCaja = roundTo(dineroEnCaja - cajaEsperada, 2);
+
   return {
     totalProductos: localDB.productos.length,
     totalMovimientos: localDB.movimientos.length,
     totalVentas: roundTo(totalVentas, 2),
     cantidadVentas: localDB.ventas.length,
     totalGastos: roundTo(totalGastos, 2),
+    totalRetiros: roundTo(totalRetiros, 2),
     sinStock,
     stockBajo,
     valorTotalInventario: Math.round(valorTotalInventario * 100) / 100,
@@ -990,8 +998,10 @@ function obtenerResumen() {
     pagosEfectivo: roundTo(resumenPagos.efectivo, 2),
     pagosTarjeta: roundTo(resumenPagos.tarjeta, 2),
     pagosTransferencia: roundTo(resumenPagos.transferencia, 2),
-    dineroEnCaja: obtenerDetalleCajaDashboard().valor,
+    dineroEnCaja,
     cajaEstadoLabel: `${obtenerDetalleCajaDashboard().estado} (${obtenerDetalleCajaDashboard().label})`,
+    cajaEsperada,
+    diferenciaCaja,
     totalPedidos,
     pedidosPendientes,
     pedidosEnProceso,
@@ -1249,7 +1259,28 @@ function registrarMovimientoLocal(mov) {
     return `Stock insuficiente. Disponible: ${stockActual}, Solicitado: ${cantidadProcesada}`;
   }
 
-  const fechaMovimiento = new Date(`${mov.fecha}T12:00:00`);
+  const now = new Date();
+  const hoyStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  let fechaMovimiento;
+  if (!mov.fecha || mov.fecha === hoyStr) {
+    fechaMovimiento = now;
+  } else {
+    const horaStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    const parsedDate = new Date(`${mov.fecha}T${horaStr}`);
+    fechaMovimiento = Number.isNaN(parsedDate.getTime())
+      ? new Date(`${mov.fecha}T12:00:00`)
+      : parsedDate;
+  }
+
+  const costoCompra = parseNumber(mov.costoCompra, 0);
+  const unidadCompra = mov.unidadCompra || "PIEZA";
+  const piezasPorPresentacion = parseNumber(mov.piezasPorPresentacion, 1) || 1;
+  const costoPorPieza =
+    costoCompra > 0 && cantidadProcesada > 0
+      ? roundTo(costoCompra / (cantidadProcesada * piezasPorPresentacion), 4)
+      : 0;
+
   localDB.movimientos.push({
     codigo,
     fecha: fechaMovimiento.toISOString(),
@@ -1258,6 +1289,10 @@ function registrarMovimientoLocal(mov) {
     usuario: "Local",
     timestamp: new Date().toISOString(),
     observaciones: mov.observaciones || "",
+    unidadCompra,
+    piezasPorPresentacion,
+    costoCompra,
+    costoPorPieza,
   });
 
   guardarEstadoLocal();
@@ -2488,6 +2523,20 @@ function exportarStockCSVLocal() {
   return csv;
 }
 
+let mostrarValoresVentasCaja = false;
+
+function togglePrivacidadVentasCaja() {
+  mostrarValoresVentasCaja = !mostrarValoresVentasCaja;
+  loadDashboard();
+
+  if (mostrarValoresVentasCaja) {
+    setTimeout(() => {
+      mostrarValoresVentasCaja = false;
+      loadDashboard();
+    }, 10000);
+  }
+}
+
 function exportarEstadoLocal() {
   return JSON.stringify(localDB, null, 2);
 }
@@ -2495,60 +2544,55 @@ function exportarEstadoLocal() {
 function loadDashboard() {
   const data = obtenerResumen();
   const statsGrid = document.getElementById("statsGrid");
+
+
+  const hideVal = (monto) => (mostrarValoresVentasCaja ? formatMoney(monto) : "••••••");
+
   statsGrid.innerHTML = `
         <section class="stats-section">
-          <div class="stats-section-header">
+          <div class="stats-section-header" style="display: flex; justify-content: space-between; align-items: center;">
             <h3>Ventas y Caja</h3>
-          </div>
-          <div class="stats-row">
-            <div class="stat-card stat-card--cash">
-              <div class="stat-kicker">PAGO</div>
-              <div class="stat-value">${formatMoney(data.pagosEfectivo)}</div>
-              <div class="stat-label">Pagos en Efectivo</div>
-            </div>
-            <div class="stat-card stat-card--card-payment">
-              <div class="stat-kicker">Pago</div>
-              <div class="stat-value">${formatMoney(data.pagosTarjeta)}</div>
-              <div class="stat-label">Pagos con Tarjeta</div>
-            </div>
-            <div class="stat-card stat-card--transfer-payment">
-              <div class="stat-kicker">Pago</div>
-              <div class="stat-value">${formatMoney(data.pagosTransferencia)}</div>
-              <div class="stat-label">Pagos por Transferencia</div>
-            </div>
+            <button class="btn btn-secondary btn-sm" onclick="togglePrivacidadVentasCaja()" style="display: flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.82rem;">
+              <span>${mostrarValoresVentasCaja ? "👁️ Ocultar valores" : "🔒 Mostrar valores"}</span>
+            </button>
           </div>
           <div class="stats-row">
             <div class="stat-card stat-card--sales">
               <div class="stat-kicker">Ingresos</div>
-              <div class="stat-value">${formatMoney(data.totalVentas)}</div>
-              <div class="stat-label">Total Ventas</div>
+              <div class="stat-value">${hideVal(data.totalVentas)}</div>
+              <div class="stat-label">Total Ventas (${data.cantidadVentas})</div>
             </div>
             <div class="stat-card stat-card--expense">
-              <div class="stat-kicker">Salidas</div>
-              <div class="stat-value">${formatMoney(data.totalGastos)}</div>
-              <div class="stat-label">Total Gastos</div>
+              <div class="stat-kicker">Egresos</div>
+              <div class="stat-value">${hideVal(data.totalGastos)}</div>
+              <div class="stat-label">Total Gastos Operativos</div>
             </div>
-            <div class="stat-card stat-card--cash">
-              <div class="stat-kicker">Caja actual</div>
-              <div class="stat-value">${formatMoney(data.dineroEnCaja)}</div>
-              <div class="stat-label">${data.cajaEstadoLabel}</div>
+            <div class="stat-card stat-card--withdrawal">
+              <div class="stat-kicker">Retiros</div>
+              <div class="stat-value">${hideVal(data.totalRetiros)}</div>
+              <div class="stat-label">Retiros (Resguardo de Caja)</div>
             </div>
           </div>
           <div class="stats-row">
-            <div class="stat-card stat-card--neutral">
-              <div class="stat-kicker">Actividad</div>
-              <div class="stat-value">${data.cantidadVentas}</div>
-              <div class="stat-label">Cantidad de Ventas</div>
+            <div class="stat-card stat-card--cash">
+              <div class="stat-kicker">Efectivo recibido</div>
+              <div class="stat-value">${hideVal(data.pagosEfectivo)}</div>
+              <div class="stat-label">Pagos en Efectivo</div>
+            </div>
+            <div class="stat-card stat-card--cash">
+              <div class="stat-kicker">Caja actual</div>
+              <div class="stat-value">${hideVal(data.dineroEnCaja)}</div>
+              <div class="stat-label">${data.cajaEstadoLabel}</div>
             </div>
             <div class="stat-card stat-card--neutral">
-              <div class="stat-kicker">Tendencia</div>
-              <div class="stat-value">${data.ventasUltimoMes}</div>
-              <div class="stat-label">Ventas Ultimo Mes</div>
+              <div class="stat-kicker">Caja esperada</div>
+              <div class="stat-value">${hideVal(data.cajaEsperada)}</div>
+              <div class="stat-label">Efectivo − Gastos − Retiros</div>
             </div>
-            <div class="stat-card stat-card--neutral">
-              <div class="stat-kicker">Flujo</div>
-              <div class="stat-value">${formatMoney(data.pagosTarjeta + data.pagosTransferencia)}</div>
-              <div class="stat-label">Total Cobros Bancarios</div>
+            <div class="stat-card ${data.diferenciaCaja >= 0 ? 'stat-card--cash' : 'stat-card--alert'}">
+              <div class="stat-kicker">${data.diferenciaCaja >= 0 ? '✅ Sobrante' : '⚠️ Faltante'}</div>
+              <div class="stat-value">${hideVal(Math.abs(data.diferenciaCaja))}</div>
+              <div class="stat-label">Diferencia en Caja</div>
             </div>
           </div>
         </section>
@@ -2619,7 +2663,7 @@ function loadDashboard() {
               <div class="stat-value" style="color: #d97706;">${data.pedidosPorVencer}</div>
               <div class="stat-label">Por Vencer</div>
             </div>
-            <div class="stat-card stat-card--alert" onclick="showTab('pedidos')" style="cursor:pointer;" title="Ir al módulo de Pedidos">
+            <div class="stat-card stat-card--alert" onclick="verPedidosVencidos()" style="cursor:pointer;" title="Ver Pedidos Vencidos">
               <div class="stat-kicker">Atrasados</div>
               <div class="stat-value" style="color: #dc2626;">${data.pedidosVencidos}</div>
               <div class="stat-label">Pedidos Vencidos</div>
@@ -3169,12 +3213,10 @@ function obtenerReporteVentas(filtros) {
     })
     .flatMap((venta) => {
       const items = Array.isArray(venta.items) ? venta.items : [];
-      const efectivo = parseNumber(venta.pagos && venta.pagos.efectivo, 0);
-      const tarjeta = parseNumber(venta.pagos && venta.pagos.tarjeta, 0);
-      const transferencia = parseNumber(
-        venta.pagos && venta.pagos.transferencia,
-        0,
-      );
+      const pagosNetos = calcularPagosNetosVenta(venta);
+      const efectivo = pagosNetos.efectivo;
+      const tarjeta = pagosNetos.tarjeta;
+      const transferencia = pagosNetos.transferencia;
       const total = parseNumber(venta.total, 0);
       const cambio = parseNumber(venta.cambio, 0);
 
@@ -3247,13 +3289,40 @@ function displayReporteVentasTable(data) {
   }
 
   const foliosUnicos = new Set(data.map((row) => row.id)).size;
-  const totalVentas = roundTo(
-    data.reduce((acc, row) => acc + parseNumber(row.importeLinea, 0), 0),
-    2,
-  );
+  let totalCantidad = 0;
+  let totalImporte = 0;
+  const ventasMap = new Map();
+
+  data.forEach((row) => {
+    totalCantidad += parseNumber(row.cantidad, 0);
+    totalImporte += parseNumber(row.importeLinea, 0);
+
+    if (!ventasMap.has(row.id)) {
+      ventasMap.set(row.id, {
+        efectivo: parseNumber(row.efectivo, 0),
+        tarjeta: parseNumber(row.tarjeta, 0),
+        transferencia: parseNumber(row.transferencia, 0),
+      });
+    }
+  });
+
+  let totalEfectivo = 0;
+  let totalTarjeta = 0;
+  let totalTransferencia = 0;
+  ventasMap.forEach((pago) => {
+    totalEfectivo += pago.efectivo;
+    totalTarjeta += pago.tarjeta;
+    totalTransferencia += pago.transferencia;
+  });
+
+  totalCantidad = roundTo(totalCantidad, 2);
+  totalImporte = roundTo(totalImporte, 2);
+  totalEfectivo = roundTo(totalEfectivo, 2);
+  totalTarjeta = roundTo(totalTarjeta, 2);
+  totalTransferencia = roundTo(totalTransferencia, 2);
 
   let html = `
-        <div class="message success">Se encontraron ${foliosUnicos} venta(s) y ${data.length} linea(s) de producto. Importe total: ${formatMoney(totalVentas)}</div>
+        <div class="message success">Se encontraron ${foliosUnicos} venta(s) y ${data.length} linea(s) de producto. Importe total: ${formatMoney(totalImporte)}</div>
         <table>
           <thead>
             <tr>
@@ -3263,16 +3332,31 @@ function displayReporteVentasTable(data) {
               <th>Producto</th>
               <th>Cantidad</th>
               <th>Precio Unitario</th>
-              <th>Importe Total</th>
               <th>Efectivo</th>
               <th>Tarjeta</th>
               <th>Transferencia</th>
+              <th>Importe Total</th>
             </tr>
           </thead>
           <tbody>
       `;
 
+  const foliosMostrados = new Set();
+
   data.forEach((row) => {
+    const esPrimerItemDelFolio = !foliosMostrados.has(row.id);
+    foliosMostrados.add(row.id);
+
+    const efectivoTexto = esPrimerItemDelFolio
+      ? formatMoney(row.efectivo)
+      : '<span style="color:#94a3b8;">-</span>';
+    const tarjetaTexto = esPrimerItemDelFolio
+      ? formatMoney(row.tarjeta)
+      : '<span style="color:#94a3b8;">-</span>';
+    const transTexto = esPrimerItemDelFolio
+      ? formatMoney(row.transferencia)
+      : '<span style="color:#94a3b8;">-</span>';
+
     html += `
           <tr>
             <td>${row.fechaTexto}</td>
@@ -3281,15 +3365,30 @@ function displayReporteVentasTable(data) {
             <td>${row.nombreProducto}</td>
             <td>${row.cantidad}</td>
             <td>${formatMoney(row.precioUnitario)}</td>
+            <td>${efectivoTexto}</td>
+            <td>${tarjetaTexto}</td>
+            <td>${transTexto}</td>
             <td>${formatMoney(row.importeLinea)}</td>
-            <td>${formatMoney(row.efectivo)}</td>
-            <td>${formatMoney(row.tarjeta)}</td>
-            <td>${formatMoney(row.transferencia)}</td>
           </tr>
         `;
   });
 
-  html += "</tbody></table>";
+  html += `
+          </tbody>
+          <tfoot>
+            <tr style="font-weight: bold; background: #e0f2fe; border-top: 2px solid #0284c7; color: #0369a1;">
+              <td colspan="4" style="text-align: right; font-weight: bold;">TOTALES:</td>
+              <td>${totalCantidad}</td>
+              <td>-</td>
+              <td>${formatMoney(totalEfectivo)}</td>
+              <td>${formatMoney(totalTarjeta)}</td>
+              <td>${formatMoney(totalTransferencia)}</td>
+              <td>${formatMoney(totalImporte)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+
   container.innerHTML = html;
 }
 
@@ -3318,11 +3417,57 @@ function exportarReporteVentas() {
     return;
   }
 
-  let csv =
-    "Fecha,Folio,Codigo,Producto,Cantidad,Precio Unitario,Importe Total,Importe Venta,Efectivo,Tarjeta,Transferencia,Cambio\n";
+  let totalCantidad = 0;
+  let totalImporte = 0;
+  const ventasMap = new Map();
+
   data.forEach((row) => {
-    csv += `"${row.fechaTexto}","${row.id}","${row.codigoProducto}","${row.nombreProducto}","${row.cantidad}","${row.precioUnitario}","${row.importeLinea}","${row.importeVenta}","${row.efectivo}","${row.tarjeta}","${row.transferencia}","${row.cambio}"\n`;
+    totalCantidad += parseNumber(row.cantidad, 0);
+    totalImporte += parseNumber(row.importeLinea, 0);
+
+    if (!ventasMap.has(row.id)) {
+      ventasMap.set(row.id, {
+        efectivo: parseNumber(row.efectivo, 0),
+        tarjeta: parseNumber(row.tarjeta, 0),
+        transferencia: parseNumber(row.transferencia, 0),
+      });
+    }
   });
+
+  let totalEfectivo = 0;
+  let totalTarjeta = 0;
+  let totalTransferencia = 0;
+  ventasMap.forEach((pago) => {
+    totalEfectivo += pago.efectivo;
+    totalTarjeta += pago.tarjeta;
+    totalTransferencia += pago.transferencia;
+  });
+
+  totalCantidad = roundTo(totalCantidad, 2);
+  totalImporte = roundTo(totalImporte, 2);
+  totalEfectivo = roundTo(totalEfectivo, 2);
+  totalTarjeta = roundTo(totalTarjeta, 2);
+  totalTransferencia = roundTo(totalTransferencia, 2);
+
+  let csv = "\uFEFF"; // UTF-8 BOM para compatibilidad con Excel
+  csv +=
+    "Fecha,Folio,Codigo,Producto,Cantidad,Precio Unitario,Efectivo,Tarjeta,Transferencia,Importe Total\n";
+
+  const foliosMostrados = new Set();
+
+  data.forEach((row) => {
+    const esPrimerItemDelFolio = !foliosMostrados.has(row.id);
+    foliosMostrados.add(row.id);
+
+    const efectivoVal = esPrimerItemDelFolio ? row.efectivo : "-";
+    const tarjetaVal = esPrimerItemDelFolio ? row.tarjeta : "-";
+    const transVal = esPrimerItemDelFolio ? row.transferencia : "-";
+
+    csv += `"${row.fechaTexto}","${row.id}","${row.codigoProducto}","${row.nombreProducto}","${row.cantidad}","${row.precioUnitario}","${efectivoVal}","${tarjetaVal}","${transVal}","${row.importeLinea}"\n`;
+  });
+
+  // Fila de totales alineada a la interfaz del sistema
+  csv += `"TOTALES","","","","${totalCantidad}","-","${totalImporte}","${totalEfectivo}","${totalTarjeta}","${totalTransferencia}"\n`;
 
   descargarArchivo(
     `Reporte_Ventas_${filtros.fechaDesde}_${filtros.fechaHasta}.csv`,
@@ -3475,6 +3620,191 @@ function exportarReporteGastos() {
   );
 }
 
+// ── Resumen Financiero General ────────────────────────────────────────────
+function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
+  const desde = new Date(`${fechaDesde}T00:00:00`);
+  const hasta = new Date(`${fechaHasta}T23:59:59`);
+
+  if (
+    Number.isNaN(desde.getTime()) ||
+    Number.isNaN(hasta.getTime()) ||
+    desde > hasta
+  ) {
+    return null;
+  }
+
+  const desdeIso = desde.toISOString();
+  const hastaIso = hasta.toISOString();
+  const resumen = obtenerResumenFinancieroEnRango(desdeIso, hastaIso);
+
+  // Retiros de cortes cerrados en el rango
+  const retirosPeriodo = (localDB.cortes || [])
+    .filter((c) => {
+      if (c.estado !== "CERRADO" || !c.fechaCierre) return false;
+      const fc = new Date(c.fechaCierre);
+      return !Number.isNaN(fc.getTime()) && fc >= desde && fc <= hasta;
+    })
+    .reduce((acc, c) => acc + parseNumber(c.retiros, 0), 0);
+
+  const totalIngresos = resumen.totalVentasNetas;
+  const totalGastos = resumen.totalGastos;
+  const totalEgresos = totalGastos;
+  const gananciasBrutas = roundTo(totalIngresos - totalGastos, 2);
+  const efectivoEnCajaPeriodo = roundTo(resumen.pagosEfectivo - totalGastos - retirosPeriodo, 2);
+
+  return {
+    fechaDesde,
+    fechaHasta,
+    ventasCount: resumen.ventasCount,
+    gastosCount: resumen.gastosCount,
+    pagosEfectivo: roundTo(resumen.pagosEfectivo, 2),
+    pagosTarjeta: roundTo(resumen.pagosTarjeta, 2),
+    pagosTransferencia: roundTo(resumen.pagosTransferencia, 2),
+    totalVentas: roundTo(resumen.totalVentasNetas, 2),
+    totalGastos: roundTo(totalGastos, 2),
+    retiros: roundTo(retirosPeriodo, 2),
+    totalIngresos: roundTo(totalIngresos, 2),
+    totalEgresos: roundTo(totalEgresos, 2),
+    gananciasBrutas,
+    efectivoEnCajaPeriodo,
+    cobrosBancarios: roundTo(resumen.pagosTarjeta + resumen.pagosTransferencia, 2),
+  };
+}
+
+function generarResumenFinanciero() {
+  const fechaDesde = document.getElementById("fechaDesdeResumen").value;
+  const fechaHasta = document.getElementById("fechaHastaResumen").value;
+
+  if (!fechaDesde || !fechaHasta) {
+    showMessage("msgResumenFinanciero", "Seleccione las fechas para generar el resumen.", "warning");
+    return;
+  }
+
+  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta);
+  if (!data) {
+    showMessage("msgResumenFinanciero", "Rango de fechas inválido.", "warning");
+    return;
+  }
+
+  const container = document.getElementById("resumenFinancieroContainer");
+  const esGanancia = data.gananciasBrutas >= 0;
+
+  container.innerHTML = `
+    <div class="resumen-financiero-layout">
+      <!-- Columna Izquierda: Ingresos y Egresos -->
+      <div class="resumen-col">
+        <div class="resumen-financiero-card">
+          <h4>📥 Ingresos Totales</h4>
+          <div class="table-responsive">
+            <table class="resumen-table">
+              <tr><td>Total Ventas</td><td class="text-right text-success">${formatMoney(data.totalVentas)}</td></tr>
+              <tr class="sub-row"><td>  └ Efectivo</td><td class="text-right">${formatMoney(data.pagosEfectivo)}</td></tr>
+              <tr class="sub-row"><td>  └ Tarjeta</td><td class="text-right">${formatMoney(data.pagosTarjeta)}</td></tr>
+              <tr class="sub-row"><td>  └ Transferencia</td><td class="text-right">${formatMoney(data.pagosTransferencia)}</td></tr>
+              <tr><td>Cantidad de Ventas</td><td class="text-right">${data.ventasCount}</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="resumen-financiero-card">
+          <h4>📤 Egresos (Gastos Operativos)</h4>
+          <div class="table-responsive">
+            <table class="resumen-table">
+              <tr><td>Gastos Registrados</td><td class="text-right text-danger">${formatMoney(data.totalGastos)}</td></tr>
+              <tr class="total-row"><td><strong>Total Egresos</strong></td><td class="text-right text-danger"><strong>${formatMoney(data.totalGastos)}</strong></td></tr>
+              <tr><td>Cantidad de Gastos</td><td class="text-right">${data.gastosCount}</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Columna Derecha: Movimientos de Caja y Resultado -->
+      <div class="resumen-col">
+        <div class="resumen-financiero-card">
+          <h4>🏦 Retiros y Movimientos de Caja</h4>
+          <div class="table-responsive">
+            <table class="resumen-table">
+              <tr><td>Efectivo Ingresado por Ventas</td><td class="text-right">${formatMoney(data.pagosEfectivo)}</td></tr>
+              <tr><td>(-) Gastos Pagados en Efectivo</td><td class="text-right text-danger">${formatMoney(data.totalGastos)}</td></tr>
+              <tr><td>(-) Retiros (Resguardo a Bóveda/Banco)</td><td class="text-right text-danger">${formatMoney(data.retiros)}</td></tr>
+              <tr class="total-row"><td><strong>Efectivo Restante en Caja</strong></td><td class="text-right"><strong>${formatMoney(data.efectivoEnCajaPeriodo)}</strong></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="resumen-financiero-card resumen-financiero-card--resultado ${esGanancia ? 'resumen-resultado--positivo' : 'resumen-resultado--negativo'}">
+          <h4>${esGanancia ? '✅' : '⚠️'} Resultado Neto del Periodo</h4>
+          <div class="table-responsive">
+            <table class="resumen-table">
+              <tr><td>Total Ingresos</td><td class="text-right">${formatMoney(data.totalIngresos)}</td></tr>
+              <tr><td>(-) Gastos Operativos</td><td class="text-right">${formatMoney(data.totalGastos)}</td></tr>
+              <tr class="total-row resultado-final"><td><strong>${esGanancia ? 'Ganancia Neta' : 'Pérdida Neta'}</strong></td><td class="text-right"><strong>${formatMoney(Math.abs(data.gananciasBrutas))}</strong></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  showMessage("msgResumenFinanciero", "Resumen financiero generado.", "success");
+}
+
+function exportarResumenFinanciero() {
+  const fechaDesde = document.getElementById("fechaDesdeResumen").value;
+  const fechaHasta = document.getElementById("fechaHastaResumen").value;
+
+  if (!fechaDesde || !fechaHasta) {
+    showMessage("msgResumenFinanciero", "Seleccione las fechas para exportar el resumen.", "warning");
+    return;
+  }
+
+  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta);
+  if (!data) {
+    showMessage("msgResumenFinanciero", "Rango de fechas inválido.", "warning");
+    return;
+  }
+
+  let csv = "\uFEFF"; // UTF-8 BOM
+  csv += `RESUMEN FINANCIERO GENERAL\n`;
+  csv += `Periodo: ${fechaDesde} al ${fechaHasta}\n`;
+  csv += `Generado: ${new Date().toLocaleString("es-MX")}\n`;
+  csv += `\n`;
+
+  csv += `CONCEPTO,MONTO\n`;
+  csv += `\n`;
+
+  csv += `=== INGRESOS ===,\n`;
+  csv += `Total Ventas,${data.totalVentas}\n`;
+  csv += `  Pagos en Efectivo,${data.pagosEfectivo}\n`;
+  csv += `  Pagos con Tarjeta,${data.pagosTarjeta}\n`;
+  csv += `  Pagos por Transferencia,${data.pagosTransferencia}\n`;
+  csv += `Cantidad de Ventas,${data.ventasCount}\n`;
+  csv += `\n`;
+
+  csv += `=== EGRESOS (GASTOS OPERATIVOS) ===,\n`;
+  csv += `Total Gastos Operativos,${data.totalGastos}\n`;
+  csv += `Cantidad de Gastos,${data.gastosCount}\n`;
+  csv += `\n`;
+
+  csv += `=== RETIROS Y MOVIMIENTOS DE CAJA ===,\n`;
+  csv += `Efectivo Ingresado por Ventas,${data.pagosEfectivo}\n`;
+  csv += `(-) Gastos Operativos,${data.totalGastos}\n`;
+  csv += `(-) Retiros (Resguardo de Caja),${data.retiros}\n`;
+  csv += `Efectivo Restante en Caja,${data.efectivoEnCajaPeriodo}\n`;
+  csv += `\n`;
+
+  csv += `=== RESULTADO NETO DEL PERIODO ===,\n`;
+  csv += `Total Ingresos,${data.totalIngresos}\n`;
+  csv += `(-) Total Gastos,${data.totalGastos}\n`;
+  csv += `${data.gananciasBrutas >= 0 ? "GANANCIA NETA" : "PERDIDA NETA"},${Math.abs(data.gananciasBrutas)}\n`;
+
+  descargarArchivo(
+    `Resumen_Financiero_${fechaDesde}_${fechaHasta}.csv`,
+    csv,
+    "text/csv;charset=utf-8;",
+  );
+  showMessage("msgResumenFinanciero", "Resumen financiero exportado exitosamente.", "success");
+}
+
 function obtenerCorteActivo() {
   if (!localDB.corteActivo || typeof localDB.corteActivo !== "object") {
     return null;
@@ -3621,20 +3951,37 @@ function actualizarResumenCorteActual() {
 function renderEstadoCorteActual() {
   const estadoField = document.getElementById("estadoCorteActual");
   const fechaAperturaField = document.getElementById("fechaAperturaCorteActual");
+  const usuarioAperturaField = document.getElementById("usuarioAperturaCorte");
   const cajaInicialField = document.getElementById("cajaInicialCorte");
-  const observacionesAperturaField = document.getElementById(
-    "observacionesAperturaCorte",
-  );
+  const observacionesAperturaField = document.getElementById("observacionesAperturaCorte");
   const btnAbrir = document.getElementById("btnAbrirCorte");
   const btnCerrar = document.getElementById("btnCerrarCorte");
+
+  const panelApertura = document.getElementById("panelAperturaCorte");
+  const badgeApertura = document.getElementById("badgeAperturaCorte");
+  const panelCierre = document.getElementById("panelCierreCorte");
+  const badgeCierre = document.getElementById("badgeCierreCorte");
+
+  const cierreInputIds = [
+    "periodicidadCorte",
+    "retirosCorte",
+    "ingresosCajaCorte",
+    "cajaContadaCorte",
+    "observacionesCierreCorte",
+  ];
+
   const corteActivo = obtenerCorteActivo();
 
   if (corteActivo) {
     if (estadoField) estadoField.value = `ABIERTO (${corteActivo.id})`;
     if (fechaAperturaField) {
-      fechaAperturaField.value = obtenerFechaHoraLocalTexto(
-        corteActivo.fechaApertura,
-      );
+      fechaAperturaField.value = obtenerFechaHoraLocalTexto(corteActivo.fechaApertura);
+    }
+
+    // Panel Apertura: Registrado y bloqueado
+    if (usuarioAperturaField) {
+      usuarioAperturaField.value = corteActivo.usuario || "Local";
+      usuarioAperturaField.disabled = true;
     }
     if (cajaInicialField) {
       cajaInicialField.value = String(roundTo(corteActivo.cajaInicial, 2));
@@ -3645,10 +3992,39 @@ function renderEstadoCorteActual() {
       observacionesAperturaField.disabled = true;
     }
     if (btnAbrir) btnAbrir.disabled = true;
+
+    if (panelApertura) {
+      panelApertura.classList.remove("corte-panel--active");
+      panelApertura.classList.add("corte-panel--locked");
+    }
+    if (badgeApertura) {
+      badgeApertura.textContent = "Registrada";
+      badgeApertura.className = "corte-panel-badge corte-panel-badge--success";
+    }
+
+    // Panel Cierre: Activo y listo para operar
+    cierreInputIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = false;
+    });
     if (btnCerrar) btnCerrar.disabled = false;
+
+    if (panelCierre) {
+      panelCierre.classList.remove("corte-panel--disabled");
+      panelCierre.classList.add("corte-panel--active");
+    }
+    if (badgeCierre) {
+      badgeCierre.textContent = "Listo para Cierre";
+      badgeCierre.className = "corte-panel-badge corte-panel-badge--info";
+    }
   } else {
     if (estadoField) estadoField.value = "SIN CORTE ABIERTO";
     if (fechaAperturaField) fechaAperturaField.value = "-";
+
+    // Panel Apertura: Requerido y activo
+    if (usuarioAperturaField) {
+      usuarioAperturaField.disabled = false;
+    }
     if (cajaInicialField) {
       cajaInicialField.disabled = false;
       const cortesOrdenados = (localDB.cortes || [])
@@ -3665,23 +4041,37 @@ function renderEstadoCorteActual() {
       observacionesAperturaField.value = "";
     }
     if (btnAbrir) btnAbrir.disabled = false;
-    if (btnCerrar) btnCerrar.disabled = true;
 
-    const cierreIds = [
-      "retirosCorte",
-      "ingresosCajaCorte",
-      "cajaContadaCorte",
-      "observacionesCierreCorte",
-    ];
-    cierreIds.forEach((id) => {
+    if (panelApertura) {
+      panelApertura.classList.remove("corte-panel--locked");
+      panelApertura.classList.add("corte-panel--active");
+    }
+    if (badgeApertura) {
+      badgeApertura.textContent = "Requerida";
+      badgeApertura.className = "corte-panel-badge corte-panel-badge--warning";
+    }
+
+    // Panel Cierre: Deshabilitado en espera de apertura
+    cierreInputIds.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
+      el.disabled = true;
       if (el.tagName === "TEXTAREA") {
         el.value = "";
-      } else {
+      } else if (id !== "periodicidadCorte") {
         el.value = "0";
       }
     });
+    if (btnCerrar) btnCerrar.disabled = true;
+
+    if (panelCierre) {
+      panelCierre.classList.remove("corte-panel--active");
+      panelCierre.classList.add("corte-panel--disabled");
+    }
+    if (badgeCierre) {
+      badgeCierre.textContent = "Abra Caja Primero";
+      badgeCierre.className = "corte-panel-badge corte-panel-badge--muted";
+    }
   }
 
   actualizarResumenCorteActual();
@@ -3690,6 +4080,19 @@ function renderEstadoCorteActual() {
 function abrirCorteCaja() {
   if (obtenerCorteActivo()) {
     showMessage("msgCorte", "Ya existe un corte abierto.", "warning");
+    return;
+  }
+
+  const usuarioApertura = (
+    document.getElementById("usuarioAperturaCorte")
+      ? document.getElementById("usuarioAperturaCorte").value
+      : ""
+  )
+    .toString()
+    .trim();
+
+  if (!usuarioApertura) {
+    showMessage("msgCorte", "Ingrese el nombre del usuario / cajero que realiza la apertura.", "warning");
     return;
   }
 
@@ -3719,12 +4122,12 @@ function abrirCorteCaja() {
     cajaInicial,
     observacionesApertura,
     estado: "ABIERTO",
-    usuario: "Local",
+    usuario: usuarioApertura,
   };
 
   guardarEstadoLocal();
   renderEstadoCorteActual();
-  showMessage("msgCorte", "Corte abierto correctamente.", "success");
+  showMessage("msgCorte", `Corte abierto por ${usuarioApertura} correctamente.`, "success");
 }
 
 function cerrarCorteCaja() {
@@ -3829,7 +4232,7 @@ function cerrarCorteCaja() {
     diferencia,
     observacionesApertura: corteActivo.observacionesApertura || "",
     observacionesCierre,
-    usuario: "Local",
+    usuario: corteActivo.usuario || "Local",
     estado: "CERRADO",
   });
 
@@ -3901,6 +4304,7 @@ function displayReporteCortesTable(data) {
           <thead>
             <tr>
               <th>Folio</th>
+              <th>Usuario</th>
               <th>Periodicidad</th>
               <th>Apertura</th>
               <th>Cierre</th>
@@ -3923,6 +4327,7 @@ function displayReporteCortesTable(data) {
     html += `
           <tr>
             <td>${corte.id || "-"}</td>
+            <td><strong>${corte.usuario || "Local"}</strong></td>
             <td>${corte.periodicidad || "DIARIO"}</td>
             <td>${obtenerFechaHoraLocalTexto(corte.fechaApertura)}</td>
             <td>${obtenerFechaHoraLocalTexto(corte.fechaCierre)}</td>
@@ -4007,10 +4412,10 @@ function exportarReporteCortes() {
   }
 
   let csv =
-    "Folio,Periodicidad,Apertura,Cierre,Caja Inicial,Ventas Netas,Efectivo,Tarjeta,Transferencia,Gastos,Retiros,Ingresos Caja,Caja Esperada,Caja Contada,Diferencia,Observaciones Apertura,Observaciones Cierre\n";
+    "Folio,Usuario,Periodicidad,Apertura,Cierre,Caja Inicial,Ventas Netas,Efectivo,Tarjeta,Transferencia,Gastos,Retiros,Ingresos Caja,Caja Esperada,Caja Contada,Diferencia,Observaciones Apertura,Observaciones Cierre\n";
 
   data.forEach((corte) => {
-    csv += `"${corte.id || ""}","${corte.periodicidad || "DIARIO"}","${obtenerFechaHoraLocalTexto(corte.fechaApertura)}","${obtenerFechaHoraLocalTexto(corte.fechaCierre)}","${roundTo(parseNumber(corte.cajaInicial, 0), 2)}","${roundTo(parseNumber(corte.totalVentasNetas, 0), 2)}","${roundTo(parseNumber(corte.pagosEfectivo, 0), 2)}","${roundTo(parseNumber(corte.pagosTarjeta, 0), 2)}","${roundTo(parseNumber(corte.pagosTransferencia, 0), 2)}","${roundTo(parseNumber(corte.totalGastos, 0), 2)}","${roundTo(parseNumber(corte.retiros, 0), 2)}","${roundTo(parseNumber(corte.ingresosCaja, 0), 2)}","${roundTo(parseNumber(corte.cajaEsperada, 0), 2)}","${roundTo(parseNumber(corte.cajaContada, 0), 2)}","${roundTo(parseNumber(corte.diferencia, 0), 2)}","${(corte.observacionesApertura || "").replace(/"/g, '""')}","${(corte.observacionesCierre || "").replace(/"/g, '""')}"\n`;
+    csv += `"${corte.id || ""}","${(corte.usuario || "Local").replace(/"/g, '""')}","${corte.periodicidad || "DIARIO"}","${obtenerFechaHoraLocalTexto(corte.fechaApertura)}","${obtenerFechaHoraLocalTexto(corte.fechaCierre)}","${roundTo(parseNumber(corte.cajaInicial, 0), 2)}","${roundTo(parseNumber(corte.totalVentasNetas, 0), 2)}","${roundTo(parseNumber(corte.pagosEfectivo, 0), 2)}","${roundTo(parseNumber(corte.pagosTarjeta, 0), 2)}","${roundTo(parseNumber(corte.pagosTransferencia, 0), 2)}","${roundTo(parseNumber(corte.totalGastos, 0), 2)}","${roundTo(parseNumber(corte.retiros, 0), 2)}","${roundTo(parseNumber(corte.ingresosCaja, 0), 2)}","${roundTo(parseNumber(corte.cajaEsperada, 0), 2)}","${roundTo(parseNumber(corte.cajaContada, 0), 2)}","${roundTo(parseNumber(corte.diferencia, 0), 2)}","${(corte.observacionesApertura || "").replace(/"/g, '""')}","${(corte.observacionesCierre || "").replace(/"/g, '""')}"\n`;
   });
 
   descargarArchivo(
@@ -4293,25 +4698,43 @@ function renderizarModuloPedidos() {
   }
 
   const pedidos = localDB.pedidosPersonalizados;
+  const now = new Date();
   const totalCount = pedidos.length;
   const pendientes = pedidos.filter((p) => p.estado === "PENDIENTE").length;
   const proceso = pedidos.filter((p) => p.estado === "EN_PROCESO").length;
   const terminados = pedidos.filter((p) => p.estado === "TERMINADO").length;
   const entregados = pedidos.filter((p) => p.estado === "ENTREGADO").length;
+  const vencidos = pedidos.filter((p) => {
+    if (p.estado === "TERMINADO" || p.estado === "ENTREGADO") return false;
+    if (!p.fechaEntregaEstimada) return false;
+    const fechaEntrega = new Date(p.fechaEntregaEstimada);
+    return !Number.isNaN(fechaEntrega.getTime()) && fechaEntrega < now;
+  }).length;
 
   const statTotal = document.getElementById("statTotalPedidos");
   const statPendientes = document.getElementById("statPendientesPedidos");
   const statProceso = document.getElementById("statProcesoPedidos");
   const statTerminados = document.getElementById("statTerminadosPedidos");
   const statEntregados = document.getElementById("statEntregadosPedidos");
+  const statVencidos = document.getElementById("statVencidosPedidos");
 
   if (statTotal) statTotal.textContent = totalCount;
   if (statPendientes) statPendientes.textContent = pendientes;
   if (statProceso) statProceso.textContent = proceso;
   if (statTerminados) statTerminados.textContent = terminados;
   if (statEntregados) statEntregados.textContent = entregados;
+  if (statVencidos) statVencidos.textContent = vencidos;
 
   filtrarPedidosPersonalizados();
+}
+
+function verPedidosVencidos() {
+  showTab("pedidos");
+  const select = document.getElementById("filtroEstadoPedido");
+  if (select) {
+    select.value = "VENCIDOS";
+    filtrarPedidosPersonalizados();
+  }
 }
 
 function filtrarPedidosPersonalizados() {
@@ -4335,7 +4758,17 @@ function filtrarPedidosPersonalizados() {
   let lista = [...localDB.pedidosPersonalizados];
 
   if (estadoFiltro && estadoFiltro !== "TODOS") {
-    lista = lista.filter((p) => p.estado === estadoFiltro);
+    if (estadoFiltro === "VENCIDOS") {
+      const now = new Date();
+      lista = lista.filter((p) => {
+        if (p.estado === "TERMINADO" || p.estado === "ENTREGADO") return false;
+        if (!p.fechaEntregaEstimada) return false;
+        const fechaEntrega = new Date(p.fechaEntregaEstimada);
+        return !Number.isNaN(fechaEntrega.getTime()) && fechaEntrega < now;
+      });
+    } else {
+      lista = lista.filter((p) => p.estado === estadoFiltro);
+    }
   }
 
   if (busqueda) {
@@ -4374,6 +4807,8 @@ function filtrarPedidosPersonalizados() {
     return;
   }
 
+  const now = new Date();
+
   tbody.innerHTML = lista
     .map((p) => {
       const totalPagado = (p.pagos || []).reduce(
@@ -4381,6 +4816,18 @@ function filtrarPedidosPersonalizados() {
         0,
       );
       const saldo = Math.max(0, parseNumber(p.precioTotal, 0) - totalPagado);
+
+      let isVencido = false;
+      if (
+        p.estado !== "TERMINADO" &&
+        p.estado !== "ENTREGADO" &&
+        p.fechaEntregaEstimada
+      ) {
+        const fechaEntrega = new Date(p.fechaEntregaEstimada);
+        if (!Number.isNaN(fechaEntrega.getTime()) && fechaEntrega < now) {
+          isVencido = true;
+        }
+      }
 
       let badgeClass = "badge-pedido-pendiente";
       let estadoTexto = "Pendiente";
@@ -4396,7 +4843,7 @@ function filtrarPedidosPersonalizados() {
       }
 
       return `
-      <tr>
+      <tr style="${isVencido ? "background-color: #fff5f5;" : ""}">
         <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;"><strong>${escapeXml(p.folio)}</strong></td>
         <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;">${formatDateOnly(p.fechaCreacion)}</td>
         <td onclick="verDetallePedido('${p.id}')" style="white-space: nowrap; text-align: center; cursor: pointer;">${escapeXml(p.cliente ? p.cliente.nombre : "Sin Nombre")}</td>
@@ -4820,6 +5267,45 @@ function eliminarFilaInsumoPedido(btnEl) {
     `;
   }
   recalcularTotalPedidoModal();
+}
+
+function recalcularTotalPedidoModal() {
+  const subtotales = document.querySelectorAll("#contenedorMateriaPrimaPedido .mat-prod-subtotal");
+  let suma = 0;
+  let hayFilas = false;
+
+  subtotales.forEach((subInput) => {
+    hayFilas = true;
+    suma += parseNumber(subInput.value, 0);
+  });
+
+  const totalInput = document.getElementById("pedidoPrecioTotal");
+  if (totalInput && (hayFilas || suma > 0)) {
+    totalInput.value = roundTo(suma, 2).toFixed(2);
+  }
+
+  calcularSaldoPendienteModalNuevo();
+}
+
+function calcularSaldoPendienteModalNuevo() {
+  const total = parseNumber(
+    document.getElementById("pedidoPrecioTotal")
+      ? document.getElementById("pedidoPrecioTotal").value
+      : 0,
+    0,
+  );
+  const anticipo = parseNumber(
+    document.getElementById("pedidoAnticipo")
+      ? document.getElementById("pedidoAnticipo").value
+      : 0,
+    0,
+  );
+
+  const saldo = Math.max(0, total - anticipo);
+  const lbl = document.getElementById("lblSaldoPendienteModalNuevo");
+  if (lbl) {
+    lbl.textContent = formatMoney(saldo);
+  }
 }
 
 function agregarFilaMateriaPrimaPedidoEdit(tipoDef = "INVENTARIO", datosDef = {}) {
@@ -5972,7 +6458,17 @@ function generarReportePedidosPersonalizados() {
   let lista = [...(localDB.pedidosPersonalizados || [])];
 
   if (estadoFiltro && estadoFiltro !== "TODOS") {
-    lista = lista.filter((p) => p.estado === estadoFiltro);
+    if (estadoFiltro === "VENCIDOS") {
+      const now = new Date();
+      lista = lista.filter((p) => {
+        if (p.estado === "TERMINADO" || p.estado === "ENTREGADO") return false;
+        if (!p.fechaEntregaEstimada) return false;
+        const fechaEntrega = new Date(p.fechaEntregaEstimada);
+        return !Number.isNaN(fechaEntrega.getTime()) && fechaEntrega < now;
+      });
+    } else {
+      lista = lista.filter((p) => p.estado === estadoFiltro);
+    }
   }
   if (busqueda) {
     lista = lista.filter(
@@ -6136,6 +6632,19 @@ window.addEventListener("load", () => {
     if (input) {
       input.addEventListener("input", actualizarTotalesPagoVenta);
       input.addEventListener("change", actualizarTotalesPagoVenta);
+      input.addEventListener("focus", function () {
+        if (parseNumber(this.value, 0) === 0) {
+          this.value = "";
+        } else {
+          this.select();
+        }
+      });
+      input.addEventListener("blur", function () {
+        if (this.value.trim() === "") {
+          this.value = "0";
+          actualizarTotalesPagoVenta();
+        }
+      });
     }
   });
 

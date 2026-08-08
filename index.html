@@ -152,43 +152,55 @@
               </div>
 
               <div class="venta-summary-grid">
-                <div class="form-group">
-                  <label for="totalVenta">Total a pagar</label>
-                  <input id="totalVenta" type="text" readonly>
-                </div>
-                <div class="form-group">
-                  <label for="pagoEfectivo">Pago en efectivo</label>
-                  <input id="pagoEfectivo" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="pagoTarjeta">Pago con tarjeta</label>
-                  <input id="pagoTarjeta" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="pagoTransferencia">Pago por transferencia</label>
-                  <input id="pagoTransferencia" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="totalPagadoVenta">Total pagado</label>
-                  <input id="totalPagadoVenta" type="text" readonly>
-                </div>
-                <div class="form-group">
-                  <label for="cambioVenta">Cambio a devolver</label>
-                  <input id="cambioVenta" type="text" readonly>
-                </div>
-              </div>
+                <!-- Columna 1: Métodos de Pago y Opciones de Ticket -->
+                <div class="summary-col">
+                  <div class="form-group">
+                    <label for="pagoEfectivo">Pago en efectivo</label>
+                    <input id="pagoEfectivo" type="number" min="0" step="0.01" value="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="pagoTransferencia">Pago por transferencia</label>
+                    <input id="pagoTransferencia" type="number" min="0" step="0.01" value="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="pagoTarjeta">Pago con tarjeta</label>
+                    <input id="pagoTarjeta" type="number" min="0" step="0.01" value="0">
+                  </div>
 
-              <div class="actions">
-                <button type="button" class="btn btn-primary" onclick="confirmarVenta()">Confirmar venta</button>
-                <button type="button" class="btn btn-info" onclick="imprimirUltimaVenta()">Imprimir ultimo
-                  ticket</button>
-              </div>
+                  <!-- Opciones de Ticket / Auto-Impresión (Toggle Switch Moderno) -->
+                  <div class="ticket-config-card">
+                    <div class="toggle-row">
+                      <div class="toggle-info">
+                        <span class="toggle-title">🖨️ Imprimir ticket automáticamente</span>
+                        <span class="toggle-subtitle">Genera el comprobante al confirmar</span>
+                      </div>
+                      <label class="toggle-switch">
+                        <input id="autoImprimirVenta" type="checkbox" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
 
-              <div class="venta-print-options">
-                <label>
-                  <input id="autoImprimirVenta" type="checkbox" checked>
-                  Imprimir ticket automaticamente al confirmar
-                </label>
+                <!-- Columna 2: Totales y Confirmar Venta -->
+                <div class="summary-col">
+                  <div class="form-group">
+                    <label for="totalVenta">Total a pagar</label>
+                    <input id="totalVenta" type="text" readonly>
+                  </div>
+                  <div class="form-group">
+                    <label for="totalPagadoVenta">Total pagado</label>
+                    <input id="totalPagadoVenta" type="text" readonly>
+                  </div>
+                  <div class="form-group">
+                    <label for="cambioVenta">Cambio a devolver</label>
+                    <input id="cambioVenta" type="text" readonly>
+                  </div>
+                  <div class="form-group" style="margin-top: 10px;">
+                    <button type="button" class="btn btn-primary btn-confirmar-venta-lg"
+                      onclick="confirmarVenta()">Confirmar venta</button>
+                  </div>
+                </div>
               </div>
 
               <div id="msgVenta"></div>
@@ -288,6 +300,14 @@
                 <span class="stat-value" id="statEntregadosPedidos">0</span>
               </div>
             </div>
+            <div class="stat-card" onclick="verPedidosVencidos()" style="cursor:pointer;"
+              title="Filtrar Pedidos Vencidos">
+              <div class="stat-icon" style="background:#fee2e2; color:#dc2626;">⚠️</div>
+              <div class="stat-content">
+                <span class="stat-label">Vencidos</span>
+                <span class="stat-value" id="statVencidosPedidos">0</span>
+              </div>
+            </div>
           </div>
 
           <!-- Filtros y Búsqueda -->
@@ -308,6 +328,7 @@
                     <option value="EN_PROCESO">En Proceso</option>
                     <option value="TERMINADO">Terminado (Pendiente de Entrega)</option>
                     <option value="ENTREGADO">Entregado</option>
+                    <option value="VENCIDOS">Vencidos</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -592,96 +613,143 @@
           <h2>Reportes y Análisis</h2>
         </div>
         <div class="content-body">
-          <div class="card">
-            <div class="card-header">Historial de Movimientos</div>
-            <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="fechaDesde">Fecha Desde</label>
-                  <input id="fechaDesde" type="date" required>
+          <!-- Sub-pestañas de reportes -->
+          <div class="reportes-tabs">
+            <button class="reportes-tab active" onclick="showReporteTab('resumenFinanciero', this)">💰 Resumen Financiero</button>
+            <button class="reportes-tab" onclick="showReporteTab('movimientos', this)">📋 Movimientos</button>
+            <button class="reportes-tab" onclick="showReporteTab('ventasReporte', this)">💳 Ventas</button>
+            <button class="reportes-tab" onclick="showReporteTab('gastosReporte', this)">💸 Gastos</button>
+          </div>
+
+          <!-- Panel: Resumen Financiero -->
+          <div id="reporte-resumenFinanciero" class="reporte-panel active">
+            <div class="card">
+              <div class="card-header">Resumen Financiero General</div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="fechaDesdeResumen">Fecha Desde</label>
+                    <input id="fechaDesdeResumen" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="fechaHastaResumen">Fecha Hasta</label>
+                    <input id="fechaHastaResumen" type="date" required>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="fechaHasta">Fecha Hasta</label>
-                  <input id="fechaHasta" type="date" required>
+                <div class="actions">
+                  <button class="btn btn-primary" onclick="generarResumenFinanciero()">
+                    Generar Resumen
+                  </button>
+                  <button class="btn btn-success" onclick="exportarResumenFinanciero()">
+                    Exportar Resumen CSV
+                  </button>
                 </div>
-                <div class="form-group">
-                  <label for="filtroTipo">Filtrar por Tipo</label>
-                  <select id="filtroTipo">
-                    <option value="">Todos los movimientos</option>
-                    <option value="INGRESO">Solo Ingresos</option>
-                    <option value="SALIDA">Solo Salidas</option>
-                    <option value="AJUSTE_POSITIVO">Solo Ajustes Positivos</option>
-                    <option value="AJUSTE_NEGATIVO">Solo Ajustes Negativos</option>
-                  </select>
-                </div>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" onclick="mostrarHistorial()">
-                  Generar Reporte
-                </button>
-                <button class="btn btn-success" onclick="exportarReporte()">
-                  Exportar Reporte
-                </button>
-              </div>
-              <div class="table-container">
-                <div id="historialTable"></div>
+                <div id="msgResumenFinanciero"></div>
+                <div id="resumenFinancieroContainer"></div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-header">Reporte de Ventas</div>
-            <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="fechaDesdeVentas">Fecha Desde</label>
-                  <input id="fechaDesdeVentas" type="date" required>
+          <!-- Panel: Historial de Movimientos -->
+          <div id="reporte-movimientos" class="reporte-panel">
+            <div class="card">
+              <div class="card-header">Historial de Movimientos</div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="fechaDesde">Fecha Desde</label>
+                    <input id="fechaDesde" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="fechaHasta">Fecha Hasta</label>
+                    <input id="fechaHasta" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="filtroTipo">Filtrar por Tipo</label>
+                    <select id="filtroTipo">
+                      <option value="">Todos los movimientos</option>
+                      <option value="INGRESO">Solo Ingresos</option>
+                      <option value="SALIDA">Solo Salidas</option>
+                      <option value="AJUSTE_POSITIVO">Solo Ajustes Positivos</option>
+                      <option value="AJUSTE_NEGATIVO">Solo Ajustes Negativos</option>
+                    </select>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="fechaHastaVentas">Fecha Hasta</label>
-                  <input id="fechaHastaVentas" type="date" required>
+                <div class="actions">
+                  <button class="btn btn-primary" onclick="mostrarHistorial()">
+                    Generar Reporte
+                  </button>
+                  <button class="btn btn-success" onclick="exportarReporte()">
+                    Exportar Reporte
+                  </button>
                 </div>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" onclick="mostrarReporteVentas()">
-                  Generar Reporte de Ventas
-                </button>
-                <button class="btn btn-success" onclick="exportarReporteVentas()">
-                  Exportar Ventas
-                </button>
-              </div>
-              <div class="table-container">
-                <div id="reporteVentasTable"></div>
+                <div class="table-container">
+                  <div id="historialTable"></div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-header">Reporte de Gastos</div>
-            <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="fechaDesdeGastos">Fecha Desde</label>
-                  <input id="fechaDesdeGastos" type="date" required>
+          <!-- Panel: Reporte de Ventas -->
+          <div id="reporte-ventasReporte" class="reporte-panel">
+            <div class="card">
+              <div class="card-header">Reporte de Ventas</div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="fechaDesdeVentas">Fecha Desde</label>
+                    <input id="fechaDesdeVentas" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="fechaHastaVentas">Fecha Hasta</label>
+                    <input id="fechaHastaVentas" type="date" required>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="fechaHastaGastos">Fecha Hasta</label>
-                  <input id="fechaHastaGastos" type="date" required>
+                <div class="actions">
+                  <button class="btn btn-primary" onclick="mostrarReporteVentas()">
+                    Generar Reporte de Ventas
+                  </button>
+                  <button class="btn btn-success" onclick="exportarReporteVentas()">
+                    Exportar Ventas
+                  </button>
                 </div>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" onclick="mostrarReporteGastos()">
-                  Generar Reporte de Gastos
-                </button>
-                <button class="btn btn-success" onclick="exportarReporteGastos()">
-                  Exportar Gastos
-                </button>
-              </div>
-              <div class="table-container">
-                <div id="reporteGastosTable"></div>
+                <div class="table-container">
+                  <div id="reporteVentasTable"></div>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- Panel: Reporte de Gastos -->
+          <div id="reporte-gastosReporte" class="reporte-panel">
+            <div class="card">
+              <div class="card-header">Reporte de Gastos</div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="fechaDesdeGastos">Fecha Desde</label>
+                    <input id="fechaDesdeGastos" type="date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="fechaHastaGastos">Fecha Hasta</label>
+                    <input id="fechaHastaGastos" type="date" required>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button class="btn btn-primary" onclick="mostrarReporteGastos()">
+                    Generar Reporte de Gastos
+                  </button>
+                  <button class="btn btn-success" onclick="exportarReporteGastos()">
+                    Exportar Gastos
+                  </button>
+                </div>
+                <div class="table-container">
+                  <div id="reporteGastosTable"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -692,58 +760,105 @@
         </div>
         <div class="content-body">
           <div class="card">
-            <div class="card-header">Apertura y Cierre</div>
+            <div class="card-header d-flex justify-content-between align-items-center" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <span>🧾 Gestión de Corte de Caja</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="cargarModuloCortes()">🔄 Actualizar vista</button>
+            </div>
             <div class="card-body">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="estadoCorteActual">Estado actual</label>
-                  <input id="estadoCorteActual" type="text" readonly>
+              <!-- Barra de Estado General -->
+              <div class="corte-status-bar" id="corteStatusBar">
+                <div class="corte-status-item">
+                  <span class="corte-status-label">Estado actual:</span>
+                  <input id="estadoCorteActual" type="text" class="corte-status-input" readonly>
                 </div>
-                <div class="form-group">
-                  <label for="fechaAperturaCorteActual">Fecha de apertura</label>
-                  <input id="fechaAperturaCorteActual" type="text" readonly>
-                </div>
-                <div class="form-group">
-                  <label for="periodicidadCorte">Periodicidad del corte</label>
-                  <select id="periodicidadCorte">
-                    <option value="DIARIO">Diario</option>
-                    <option value="SEMANAL">Semanal</option>
-                    <option value="QUINCENAL">Quincenal</option>
-                    <option value="MENSUAL">Mensual</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="cajaInicialCorte">Caja inicial *</label>
-                  <input id="cajaInicialCorte" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="retirosCorte">Retiros de caja</label>
-                  <input id="retirosCorte" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="ingresosCajaCorte">Ingresos a caja (ajustes)</label>
-                  <input id="ingresosCajaCorte" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                  <label for="cajaContadaCorte">Caja contada al cierre *</label>
-                  <input id="cajaContadaCorte" type="number" min="0" step="0.01" value="0">
-                </div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                  <label for="observacionesAperturaCorte">Observaciones de apertura</label>
-                  <textarea id="observacionesAperturaCorte" rows="2" placeholder="Notas al abrir el corte"></textarea>
-                </div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                  <label for="observacionesCierreCorte">Observaciones de cierre</label>
-                  <textarea id="observacionesCierreCorte" rows="2" placeholder="Notas al cerrar el corte"></textarea>
+                <div class="corte-status-item">
+                  <span class="corte-status-label">Fecha de apertura:</span>
+                  <input id="fechaAperturaCorteActual" type="text" class="corte-status-input" readonly>
                 </div>
               </div>
-              <div class="actions">
-                <button id="btnAbrirCorte" type="button" class="btn btn-success" onclick="abrirCorteCaja()">Abrir
-                  corte</button>
-                <button id="btnCerrarCorte" type="button" class="btn btn-primary" onclick="cerrarCorteCaja()">Cerrar
-                  corte</button>
-                <button type="button" class="btn btn-secondary" onclick="cargarModuloCortes()">Actualizar vista</button>
+
+              <!-- Grid de Paneles Apertura / Cierre -->
+              <div class="corte-grid">
+                <!-- Panel 1: Apertura de Caja -->
+                <div class="corte-panel corte-panel--apertura" id="panelAperturaCorte">
+                  <div class="corte-panel-header">
+                    <div class="corte-panel-title">
+                      <span class="corte-panel-icon">🔓</span>
+                      <span>Apertura de Caja</span>
+                    </div>
+                    <span class="corte-panel-badge" id="badgeAperturaCorte">Pendiente</span>
+                  </div>
+                  <p class="corte-panel-subtitle">Ingrese los datos para iniciar la jornada o turno de caja.</p>
+                  
+                  <div class="form-group">
+                    <label for="usuarioAperturaCorte">Usuario / Cajero que apertura *</label>
+                    <input id="usuarioAperturaCorte" type="text" placeholder="Ej. Juan Pérez, Cajero 1...">
+                  </div>
+                  <div class="form-group">
+                    <label for="cajaInicialCorte">Caja inicial / Fondo de caja ($) *</label>
+                    <input id="cajaInicialCorte" type="number" min="0" step="0.01" value="0" placeholder="0.00">
+                  </div>
+                  <div class="form-group">
+                    <label for="observacionesAperturaCorte">Observaciones de apertura</label>
+                    <textarea id="observacionesAperturaCorte" rows="2" placeholder="Notas o detalles al abrir la caja..."></textarea>
+                  </div>
+                  <div class="corte-panel-actions">
+                    <button id="btnAbrirCorte" type="button" class="btn btn-success btn-block" onclick="abrirCorteCaja()">
+                      🔓 Abrir corte de caja
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Panel 2: Cierre de Caja -->
+                <div class="corte-panel corte-panel--cierre" id="panelCierreCorte">
+                  <div class="corte-panel-header">
+                    <div class="corte-panel-title">
+                      <span class="corte-panel-icon">🔒</span>
+                      <span>Cierre de Caja</span>
+                    </div>
+                    <span class="corte-panel-badge" id="badgeCierreCorte">Inactivo</span>
+                  </div>
+                  <p class="corte-panel-subtitle">Ingrese el dinero contado y movimientos para realizar el arqueo final.</p>
+
+                  <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                    <div class="form-group">
+                      <label for="periodicidadCorte">Periodicidad del corte</label>
+                      <select id="periodicidadCorte">
+                        <option value="DIARIO">Diario</option>
+                        <option value="SEMANAL">Semanal</option>
+                        <option value="QUINCENAL">Quincenal</option>
+                        <option value="MENSUAL">Mensual</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="cajaContadaCorte">Caja contada al cierre ($) *</label>
+                      <input id="cajaContadaCorte" type="number" min="0" step="0.01" value="0" placeholder="Conteo real del dinero">
+                    </div>
+                  </div>
+
+                  <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                    <div class="form-group">
+                      <label for="retirosCorte">Retiros de caja (Resguardo) ($)</label>
+                      <input id="retirosCorte" type="number" min="0" step="0.01" value="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                      <label for="ingresosCajaCorte">Ingresos a caja (Ajustes) ($)</label>
+                      <input id="ingresosCajaCorte" type="number" min="0" step="0.01" value="0" placeholder="0.00">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="observacionesCierreCorte">Observaciones de cierre</label>
+                    <textarea id="observacionesCierreCorte" rows="2" placeholder="Notas del arqueo o justificación de diferencias..."></textarea>
+                  </div>
+                  <div class="corte-panel-actions">
+                    <button id="btnCerrarCorte" type="button" class="btn btn-primary btn-block" onclick="cerrarCorteCaja()">
+                      🔒 Cerrar corte de caja
+                    </button>
+                  </div>
+                </div>
               </div>
+
               <div id="msgCorte"></div>
               <div id="resumenCorteActual" class="corte-resumen"></div>
             </div>
