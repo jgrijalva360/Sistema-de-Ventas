@@ -246,8 +246,7 @@
                 <button type="button" class="btn btn-warning" onclick="guardarCarritoPendiente()">Guardar carrito
                   pendiente</button>
               </div>
-              <div class="table-container">
-                <div id="carritosPendientesVenta"></div>
+              <div id="carritosPendientesVenta" class="table-container">
               </div>
             </div>
           </div>
@@ -615,7 +614,8 @@
         <div class="content-body">
           <!-- Sub-pestañas de reportes -->
           <div class="reportes-tabs">
-            <button class="reportes-tab active" onclick="showReporteTab('resumenFinanciero', this)">💰 Resumen Financiero</button>
+            <button class="reportes-tab active" onclick="showReporteTab('resumenFinanciero', this)">💰 Resumen
+              Financiero</button>
             <button class="reportes-tab" onclick="showReporteTab('movimientos', this)">📋 Movimientos</button>
             <button class="reportes-tab" onclick="showReporteTab('ventasReporte', this)">💳 Ventas</button>
             <button class="reportes-tab" onclick="showReporteTab('gastosReporte', this)">💸 Gastos</button>
@@ -760,9 +760,11 @@
         </div>
         <div class="content-body">
           <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div class="card-header d-flex justify-content-between align-items-center"
+              style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
               <span>🧾 Gestión de Corte de Caja</span>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="cargarModuloCortes()">🔄 Actualizar vista</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="cargarModuloCortes()">🔄 Actualizar
+                vista</button>
             </div>
             <div class="card-body">
               <!-- Barra de Estado General -->
@@ -789,7 +791,7 @@
                     <span class="corte-panel-badge" id="badgeAperturaCorte">Pendiente</span>
                   </div>
                   <p class="corte-panel-subtitle">Ingrese los datos para iniciar la jornada o turno de caja.</p>
-                  
+
                   <div class="form-group">
                     <label for="usuarioAperturaCorte">Usuario / Cajero que apertura *</label>
                     <input id="usuarioAperturaCorte" type="text" placeholder="Ej. Juan Pérez, Cajero 1...">
@@ -800,10 +802,12 @@
                   </div>
                   <div class="form-group">
                     <label for="observacionesAperturaCorte">Observaciones de apertura</label>
-                    <textarea id="observacionesAperturaCorte" rows="2" placeholder="Notas o detalles al abrir la caja..."></textarea>
+                    <textarea id="observacionesAperturaCorte" rows="2"
+                      placeholder="Notas o detalles al abrir la caja..."></textarea>
                   </div>
                   <div class="corte-panel-actions">
-                    <button id="btnAbrirCorte" type="button" class="btn btn-success btn-block" onclick="abrirCorteCaja()">
+                    <button id="btnAbrirCorte" type="button" class="btn btn-success btn-block"
+                      onclick="abrirCorteCaja()">
                       🔓 Abrir corte de caja
                     </button>
                   </div>
@@ -818,9 +822,11 @@
                     </div>
                     <span class="corte-panel-badge" id="badgeCierreCorte">Inactivo</span>
                   </div>
-                  <p class="corte-panel-subtitle">Ingrese el dinero contado y movimientos para realizar el arqueo final.</p>
+                  <p class="corte-panel-subtitle">Ingrese el dinero contado y movimientos para realizar el arqueo final.
+                  </p>
 
-                  <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                  <div class="form-grid"
+                    style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
                     <div class="form-group">
                       <label for="periodicidadCorte">Periodicidad del corte</label>
                       <select id="periodicidadCorte">
@@ -832,11 +838,13 @@
                     </div>
                     <div class="form-group">
                       <label for="cajaContadaCorte">Caja contada al cierre ($) *</label>
-                      <input id="cajaContadaCorte" type="number" min="0" step="0.01" value="0" placeholder="Conteo real del dinero">
+                      <input id="cajaContadaCorte" type="number" min="0" step="0.01" value="0"
+                        placeholder="Conteo real del dinero">
                     </div>
                   </div>
 
-                  <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                  <div class="form-grid"
+                    style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
                     <div class="form-group">
                       <label for="retirosCorte">Retiros de caja (Resguardo) ($)</label>
                       <input id="retirosCorte" type="number" min="0" step="0.01" value="0" placeholder="0.00">
@@ -849,10 +857,12 @@
 
                   <div class="form-group">
                     <label for="observacionesCierreCorte">Observaciones de cierre</label>
-                    <textarea id="observacionesCierreCorte" rows="2" placeholder="Notas del arqueo o justificación de diferencias..."></textarea>
+                    <textarea id="observacionesCierreCorte" rows="2"
+                      placeholder="Notas del arqueo o justificación de diferencias..."></textarea>
                   </div>
                   <div class="corte-panel-actions">
-                    <button id="btnCerrarCorte" type="button" class="btn btn-primary btn-block" onclick="cerrarCorteCaja()">
+                    <button id="btnCerrarCorte" type="button" class="btn btn-primary btn-block"
+                      onclick="cerrarCorteCaja()">
                       🔒 Cerrar corte de caja
                     </button>
                   </div>

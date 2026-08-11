@@ -1793,11 +1793,12 @@ function renderVentasRecientes() {
     .slice(0, 10);
 
   let html = `
-        <table>
+        <table style="width: 100%; min-width: 900px;">
           <thead>
             <tr>
               <th>Folio</th>
               <th>Fecha</th>
+              <th>Productos</th>
               <th>Items</th>
               <th>Total</th>
               <th>Efectivo</th>
@@ -1821,6 +1822,7 @@ function renderVentasRecientes() {
           <tr>
             <td>${venta.id}</td>
             <td>${formatDate(venta.fecha)}</td>
+            <td>${venta.items.map((item) => item.nombre).join(", ")}</td>
             <td>${roundTo(itemsCount, 2)}</td>
             <td>${formatMoney(venta.total)}</td>
             <td>${formatMoney(venta.pagos ? venta.pagos.efectivo : 0)}</td>
