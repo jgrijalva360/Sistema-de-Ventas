@@ -1,3 +1,5 @@
 backend/node_modules
 backend/db.json
 backend/server.log
+environment.js
+.firebase

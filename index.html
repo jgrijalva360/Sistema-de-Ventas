@@ -8,9 +8,14 @@
   <title>Sistema de ventas y control de inventario</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="assets/favicon.ico" />
+  <!-- Firebase SDK Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="environment.js"></script>
 </head>
 
-<body>
+<body style="display: none;">
   <div class="app-container">
 
     <!-- Menu de navegación (SIDEBAR) -->
@@ -83,6 +88,12 @@
           <a class="nav-link" onclick="showTab('configuracion')">
             <span class="nav-icon">⚙️</span>
             Configuración
+          </a>
+        </li>
+        <li class="nav-item" style="margin-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 10px;">
+          <a class="nav-link" onclick="cerrarSesionFirebase()" style="color: #fca5a5;">
+            <span class="nav-icon">🚪</span>
+            Cerrar Sesión
           </a>
         </li>
       </ul>
@@ -912,52 +923,120 @@
       <!-- Configuración del Sistema -->
       <div id="configuracion" class="tab-content">
         <div class="content-header">
-          <h2>Configuración del Sistema</h2>
+          <div>
+            <h2 style="color: #0f172a;">⚙️ Configuración del Sistema</h2>
+            <p style="color: #475569; margin: 4px 0 0 0; font-size: 0.9rem;">Gestiona los datos del negocio, respaldos de información y mantenimiento periódico.</p>
+          </div>
         </div>
-        <div class="content-body">
+        
+        <div class="content-body" style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
+          
+          <!-- 1. Datos del Negocio -->
           <div class="card">
-            <div class="card-header">Datos del Negocio</div>
+            <div class="card-header" style="display: flex; align-items: center; gap: 8px; color: #0f172a; font-weight: 700;">
+              <span>🏪</span> Datos del Negocio & Ticket
+            </div>
             <div class="card-body">
               <form id="formConfigNegocio" onsubmit="guardarConfiguracionSistema(event)">
                 <div class="form-grid">
                   <div class="form-group">
-                    <label for="businessNameConfig">Nombre del negocio *</label>
-                    <input id="businessNameConfig" type="text" placeholder="Nombre que aparecerá en el ticket" required>
+                    <label for="businessNameConfig" style="color: #1e293b; font-weight: 600;">Nombre del negocio *</label>
+                    <input id="businessNameConfig" type="text" placeholder="Ej: Mi Tienda" required style="color: #0f172a;">
                   </div>
                   <div class="form-group">
-                    <label for="businessPhoneConfig">Teléfono</label>
-                    <input id="businessPhoneConfig" type="text" placeholder="Teléfono de contacto">
+                    <label for="businessPhoneConfig" style="color: #1e293b; font-weight: 600;">Teléfono de contacto</label>
+                    <input id="businessPhoneConfig" type="text" placeholder="Ej: +52 55 1234 5678" style="color: #0f172a;">
                   </div>
                   <div class="form-group" style="grid-column: 1 / -1;">
-                    <label for="fiscalLegendConfig">Leyenda fiscal</label>
-                    <textarea id="fiscalLegendConfig" rows="3"
-                      placeholder="Leyenda o aviso fiscal del ticket"></textarea>
+                    <label for="fiscalLegendConfig" style="color: #1e293b; font-weight: 600;">Leyenda o aviso fiscal (Pie del ticket)</label>
+                    <textarea id="fiscalLegendConfig" rows="2"
+                      placeholder="Ej: ¡Gracias por su compra! Conserve este ticket para cualquier aclaración." style="color: #0f172a;"></textarea>
                   </div>
                 </div>
-                <div class="actions">
-                  <button class="btn btn-success" type="submit">Guardar configuración</button>
-                  <button class="btn btn-secondary" type="button" onclick="restaurarConfiguracionSistema()">Restaurar
-                    valores por defecto</button>
+                <div class="actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                  <button class="btn btn-success" type="submit">💾 Guardar Cambios</button>
+                  <button class="btn btn-secondary" type="button" onclick="restaurarConfiguracionSistema()">Restaurar Valores por Defecto</button>
                 </div>
               </form>
-              <div id="msgConfigNegocio"></div>
+              <div id="msgConfigNegocio" style="margin-top: 10px;"></div>
             </div>
           </div>
 
+          <!-- 2. Copias de Seguridad (Backup & Restauración) -->
           <div class="card">
-            <div class="card-header">Herramientas de Administración</div>
+            <div class="card-header" style="display: flex; align-items: center; gap: 8px; color: #0f172a; font-weight: 700;">
+              <span>💾</span> Copias de Seguridad y Respaldos
+            </div>
             <div class="card-body">
-              <div class="actions">
-                <button class="btn btn-info" onclick="validarIntegridad()">
-                  Validar Integridad
+              <p style="color: #334155; font-size: 0.92rem; margin-top: 0; margin-bottom: 14px; font-weight: 500;">
+                Descarga una copia completa de tus productos, inventario, ventas y gastos en formato JSON, o restaura una copia generada previamente.
+              </p>
+              <div class="actions" style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <button class="btn btn-info" type="button" onclick="descargarBackupBaseDeDatos()">
+                  ⬇️ Descargar Copia de Seguridad (JSON)
                 </button>
-                <button class="btn btn-danger" onclick="confirmarReset()">
-                  Reset Sistema
-                </button>
+                
+                <label class="btn btn-secondary" style="margin:0; cursor:pointer; display: flex; align-items: center; gap: 6px;">
+                  📁 Restaurar desde Archivo JSON
+                  <input type="file" accept=".json" style="display:none;" onchange="restaurarBackupDesdeJSON(event)">
+                </label>
               </div>
-              <div id="configResults"></div>
             </div>
           </div>
+
+          <!-- 3. Cierre de Periodo & Mantenimiento (Simplificación) -->
+          <div class="card">
+            <div class="card-header" style="display: flex; align-items: center; gap: 8px; color: #0f172a; font-weight: 700;">
+              <span>🔄</span> Cierre de Periodo & Mantenimiento
+            </div>
+            <div class="card-body">
+              <div class="config-note" style="margin-bottom: 15px; background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px 14px; border-radius: 6px; font-size: 0.9rem; color: #0369a1; font-weight: 600;">
+                💡 <b>Nota de seguridad:</b> Cada acción realiza una descarga de respaldo automática antes de modificar cualquier dato.
+              </div>
+              
+              <div class="actions" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1;">
+                  <div>
+                    <strong style="display:block; color:#0f172a; font-size:0.95rem;">Simplificar y Cierre (Recomendado)</strong>
+                    <span style="color:#475569; font-size:0.88rem; font-weight: 500;">Mantiene tu inventario, productos y pedidos pendientes. Limpia historial largo unificándolo en 1 solo movimiento de stock inicial.</span>
+                  </div>
+                  <button class="btn btn-warning" type="button" onclick="realizarCierreOResetPeriodico('simplificar_movimientos')">
+                    ⚡ Simplificar y Cerrar Periodo
+                  </button>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1;">
+                  <div>
+                    <strong style="display:block; color:#0f172a; font-size:0.95rem;">Reset Operacional de Transacciones</strong>
+                    <span style="color:#475569; font-size:0.88rem; font-weight: 500;">Borra historial de Ventas, Gastos y Cortes anteriores. Mantiene el catálogo de Productos, Stock y Pedidos pendientes.</span>
+                  </div>
+                  <button class="btn btn-warning" type="button" style="background: #d97706; color: #ffffff;" onclick="realizarCierreOResetPeriodico('reset_operativo')">
+                    🧹 Limpiar Transacciones
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Zona de Peligro -->
+          <div class="card" style="border: 1px solid #fca5a5; background: #fff5f5;">
+            <div class="card-header" style="background: #fee2e2; color: #991b1b; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+              <span>⚠️</span> Zona de Peligro
+            </div>
+            <div class="card-body">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <strong style="display:block; color:#991b1b; font-size:0.95rem;">Reset Total de la Base de Datos</strong>
+                  <span style="color:#7f1d1d; font-size:0.88rem; font-weight: 500;">Elimina absolutamente todos los datos (Productos, Ventas, Gastos y Ajustes). Genera respaldo previo.</span>
+                </div>
+                <button class="btn btn-danger" type="button" onclick="realizarCierreOResetPeriodico('reset_total')">
+                  🔥 Reset Total Sistema
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="configResults"></div>
         </div>
       </div>
 

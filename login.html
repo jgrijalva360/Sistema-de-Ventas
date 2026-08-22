@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión - Sistema de Ventas e Inventario</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="assets/favicon.ico" />
+  <!-- Firebase SDK Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="environment.js"></script>
+  <style>
+    body {
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .login-card {
+      background: #1e293b;
+      padding: 35px 30px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid #334155;
+      color: #f8fafc;
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .login-header h2 {
+      margin: 0 0 8px 0;
+      color: #38bdf8;
+      font-size: 1.6rem;
+    }
+
+    .login-header p {
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.88rem;
+      color: #cbd5e1;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      box-sizing: border-box;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #fff;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: #0284c7;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+
+    .btn-login:hover {
+      background: #0369a1;
+    }
+
+    .login-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 18px;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="login-card">
+    <div class="login-header">
+      <h2>🔑 Iniciar Sesión</h2>
+      <p>Acceso al Sistema de Ventas e Inventario</p>
+      <p style="font-size: 0.9rem;"><b>By. Dev-Mrsakate</b></p>
+    </div>
+
+    <div id="loginError" class="login-error"></div>
+
+    <form id="formLogin" onsubmit="realizarLogin(event)" autocomplete="on">
+      <div class="form-group">
+        <label for="loginEmail">Correo Electrónico</label>
+        <input type="email" id="loginEmail" placeholder="usuario@ejemplo.com" required autocomplete="email"
+          maxlength="100">
+      </div>
+
+      <div class="form-group">
+        <label for="loginPassword">Contraseña</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password"
+          minlength="6" maxlength="64">
+      </div>
+
+      <button type="submit" class="btn-login" id="btnLoginSubmit">Ingresar</button>
+    </form>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+
+</html>

@@ -53,29 +53,96 @@ const sonidoAgregarCarrito = new Audio("assets/ball-origin-beep.mp3");
 const sonidoVentaExitosa = new Audio("assets/apple-pay-original.mp3");
 const sonidoVentaFallida = new Audio("assets/apple-pay-failed.mp3");
 
-// ── Almacenamiento en Red Local (JSON Server) ─────────────────────────────
-// El servidor corre en el mismo origen que sirve el HTML.
-// Endpoint: GET /api/db  →  carga toda la BD
-//           PUT /api/db  →  guarda toda la BD
-// Fallback: si el servidor no responde, usa localStorage.
+// ── Persistencia y Sincronización (Firebase Cloud Firestore / Servidor Local / LocalStorage) ─────
 
 const API_DB = "/api/db";
+const FIREBASE_CONFIG_KEY = "firebase_config_v1";
 let _saveDebounceTimer = null;
 let _isPersisting = false;
 let _syncPollInterval = null;
 let _lastServerJsonString = "";
+let _dbFirestore = null;
+let _unsubscribeFirestore = null;
+
+function obtenerDocIdFirestore() {
+  if (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) {
+    const user = firebase.auth().currentUser;
+    // Retornamos el UID (o sanitizamos el email para usarlo de ID)
+    return user.uid || (user.email ? user.email.replace(/[^a-zA-Z0-9_-]/g, "_") : "main");
+  }
+  return "main";
+}
+
+function obtenerConfigFirebaseGuardada() {
+  try {
+    const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { }
+
+  // Si existe un archivo environment.js con datos válidos
+  if (typeof firebaseEnvironment !== "undefined" && firebaseEnvironment.apiKey && !firebaseEnvironment.apiKey.includes("TU_API_KEY")) {
+    return firebaseEnvironment;
+  }
+
+  return null;
+}
+
+function inicializarFirebaseSIEsPosible() {
+  const config = obtenerConfigFirebaseGuardada();
+  if (config && typeof firebase !== "undefined") {
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      _dbFirestore = firebase.firestore();
+      console.info("🔥 Firebase Firestore inicializado correctamente.");
+      return true;
+    } catch (err) {
+      console.error("Error al inicializar Firebase:", err);
+      _dbFirestore = null;
+      return false;
+    }
+  }
+  return false;
+}
 
 // ── initializeApp ─────────────────────────────────────────────
 async function initializeApp() {
   mostrarCargando(true);
+  inicializarFirebaseSIEsPosible();
   await cargarEstadoLocal();
   mostrarCargando(false);
   setDefaultDates();
   loadListas();
   cargarConfiguracionSistema();
   loadDashboard();
-  showTab("dashboard");
   iniciarSincronizacionAuto(3000);
+
+  // 🔒 Validación estricta de seguridad (Auth Guard y Carga Multi-usuario)
+  if (typeof firebase !== "undefined" && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) {
+        document.body.style.display = "none";
+        window.location.href = "login.html";
+      } else {
+        document.body.style.display = "block";
+        // Al confirmar usuario, recargamos el estado específico del documento de este usuario
+        await cargarEstadoLocal();
+        refrescarVistaActual();
+        iniciarSincronizacionAuto(3000);
+      }
+    });
+  } else {
+    document.body.style.display = "block";
+  }
+}
+
+async function cerrarSesionFirebase() {
+  if (!confirm("¿Deseas cerrar sesión en el sistema?")) return;
+  if (typeof firebase !== "undefined" && firebase.auth) {
+    await firebase.auth().signOut();
+  }
+  window.location.href = "login.html";
 }
 
 function mostrarCargando(visible) {
@@ -95,7 +162,7 @@ function mostrarCargando(visible) {
         <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.2);
           border-top-color:#6c63ff;border-radius:50%;
           animation:_spin 0.8s linear infinite;"></div>
-        <p style="margin:0;font-size:1rem;opacity:.85;">Conectando con el servidor...</p>
+        <p style="margin:0;font-size:1rem;opacity:.85;">Conectando con la base de datos...</p>
         <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
       document.body.appendChild(overlay);
     }
@@ -139,6 +206,30 @@ function guardarEstadoLocal() {
 async function _persistirEnServidor() {
   _isPersisting = true;
   actualizarBadgeSincronizacion("saving", "Guardando...");
+
+  // 1. Si Firebase Firestore está activo, guardamos en la nube
+  if (_dbFirestore) {
+    try {
+      const docId = obtenerDocIdFirestore();
+      const dataToSave = JSON.parse(JSON.stringify(localDB));
+      await _dbFirestore.collection("sistema").doc(docId).set(dataToSave);
+      _lastServerJsonString = JSON.stringify(localDB);
+      localStorage.removeItem(STORAGE_KEY + "_backup");
+      actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
+      return;
+    } catch (err) {
+      console.warn("🔥 Error al guardar en la Base de datos:", err);
+      actualizarBadgeSincronizacion("offline", "Base de datos Offline (Respaldo)");
+      try {
+        localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
+      } catch (e) { }
+      return;
+    } finally {
+      _isPersisting = false;
+    }
+  }
+
+  // 2. Fallback: Servidor Backend Local HTTP (/api/db)
   try {
     const rawBody = JSON.stringify(localDB);
     const res = await fetch(API_DB, {
@@ -149,9 +240,9 @@ async function _persistirEnServidor() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _lastServerJsonString = rawBody;
     localStorage.removeItem(STORAGE_KEY + "_backup");
-    actualizarBadgeSincronizacion("online", "Conectado en Red");
+    actualizarBadgeSincronizacion("online", "Conectado en Red Local");
   } catch (err) {
-    console.warn("Servidor no disponible, guardando en localStorage como respaldo:", err.message);
+    console.warn("Servidor local no disponible, guardando en localStorage como respaldo:", err.message);
     actualizarBadgeSincronizacion("offline", "Modo Local (Respaldo)");
     try {
       localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
@@ -163,46 +254,94 @@ async function _persistirEnServidor() {
   }
 }
 
-// ── Observable / Sincronización Automática entre Computadoras ──────
+// ── Observable / Sincronización Automática (Firestore Listener + Polling Fallback) ──────
 function iniciarSincronizacionAuto(intervalMs = 3000) {
-  if (_syncPollInterval) clearInterval(_syncPollInterval);
+  if (_unsubscribeFirestore) {
+    _unsubscribeFirestore();
+    _unsubscribeFirestore = null;
+  }
+  if (_syncPollInterval) {
+    clearInterval(_syncPollInterval);
+    _syncPollInterval = null;
+  }
 
-  _syncPollInterval = setInterval(async () => {
-    if (_saveDebounceTimer || _isPersisting) return;
-
-    try {
-      const res = await fetch(API_DB);
-      if (!res.ok) {
-        actualizarBadgeSincronizacion("offline", "Servidor Inaccesible");
-        return;
+  // Si Firestore está habilitado, usamos escuchador en Tiempo Real (onSnapshot)
+  if (_dbFirestore) {
+    const docId = obtenerDocIdFirestore();
+    actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
+    _unsubscribeFirestore = _dbFirestore.collection("sistema").doc(docId).onSnapshot(
+      (doc) => {
+        if (_saveDebounceTimer || _isPersisting) return;
+        if (doc.exists) {
+          const data = doc.data();
+          if (validarEstructuraEstado(data)) {
+            const serverJson = JSON.stringify(data);
+            if (!_lastServerJsonString) {
+              _lastServerJsonString = serverJson;
+              _aplicarDatosALocalDB(data);
+              refrescarVistaActual();
+              return;
+            }
+            if (serverJson !== _lastServerJsonString && serverJson !== JSON.stringify(localDB)) {
+              console.info("⚡ Cambio detectado en Base de datos desde otro dispositivo. Actualizando...");
+              _lastServerJsonString = serverJson;
+              _aplicarDatosALocalDB(data);
+              refrescarVistaActual();
+              actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde Base de datos!");
+              setTimeout(() => {
+                actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
+              }, 2500);
+            }
+          }
+        }
+      },
+      (err) => {
+        console.warn("🔥 Error en suscripción a Base de datos:", err);
+        actualizarBadgeSincronizacion("offline", "Base de datos Desconectada");
       }
-      const data = await res.json();
-      if (!validarEstructuraEstado(data)) return;
+    );
+    return;
+  }
 
-      const serverJson = JSON.stringify(data);
+  // Fallback Polling para servidor HTTP local (solo si estamos en red local)
+  if (window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    _syncPollInterval = setInterval(async () => {
+      if (_saveDebounceTimer || _isPersisting) return;
 
-      if (!_lastServerJsonString) {
-        _lastServerJsonString = serverJson;
-        actualizarBadgeSincronizacion("online", "Conectado en Red");
-        return;
+      try {
+        const res = await fetch(API_DB);
+        if (!res.ok) {
+          actualizarBadgeSincronizacion("offline", "Modo Local");
+          return;
+        }
+        const data = await res.json();
+        if (!validarEstructuraEstado(data)) return;
+
+        const serverJson = JSON.stringify(data);
+
+        if (!_lastServerJsonString) {
+          _lastServerJsonString = serverJson;
+          actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+          return;
+        }
+
+        if (serverJson !== _lastServerJsonString && serverJson !== JSON.stringify(localDB)) {
+          console.info("⚡ Cambio detectado en el servidor local desde otra computadora. Actualizando...");
+          _lastServerJsonString = serverJson;
+          _aplicarDatosALocalDB(data);
+          refrescarVistaActual();
+          actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde Red!");
+          setTimeout(() => {
+            actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+          }, 2500);
+        } else {
+          actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+        }
+      } catch (err) {
+        actualizarBadgeSincronizacion("offline", "Modo Local");
       }
-
-      if (serverJson !== _lastServerJsonString && serverJson !== JSON.stringify(localDB)) {
-        console.info("⚡ Cambio detectado en el servidor desde otra computadora. Actualizando cliente...");
-        _lastServerJsonString = serverJson;
-        _aplicarDatosALocalDB(data);
-        refrescarVistaActual();
-        actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde red!");
-        setTimeout(() => {
-          actualizarBadgeSincronizacion("online", "Conectado en Red");
-        }, 2500);
-      } else {
-        actualizarBadgeSincronizacion("online", "Conectado en Red");
-      }
-    } catch (err) {
-      actualizarBadgeSincronizacion("offline", "Modo Local (Respaldo)");
-    }
-  }, intervalMs);
+    }, intervalMs);
+  }
 }
 
 function refrescarVistaActual() {
@@ -257,42 +396,91 @@ function _aplicarDatosALocalDB(data) {
 }
 
 async function cargarEstadoLocal() {
-  // 1. Intentar cargar desde el servidor
-  try {
-    const res = await fetch(API_DB);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+  // 1. Intentar cargar desde Firebase Firestore si está activo
+  if (_dbFirestore) {
+    try {
+      const docId = obtenerDocIdFirestore();
+      const doc = await _dbFirestore.collection("sistema").doc(docId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (validarEstructuraEstado(data)) {
+          _aplicarDatosALocalDB(data);
+          _lastServerJsonString = JSON.stringify(data);
+          console.info(`🔥 Datos iniciales cargados con éxito desde Firestore (Documento: ${docId}).`);
 
-    // Si el servidor tiene datos válidos, los usamos
-    if (validarEstructuraEstado(data)) {
-      _aplicarDatosALocalDB(data);
-      _lastServerJsonString = JSON.stringify(data);
-
-      // Migración: si había datos en localStorage los subimos al servidor
-      const rawLocal = localStorage.getItem(STORAGE_KEY);
-      if (rawLocal) {
-        try {
-          const dataLocal = JSON.parse(rawLocal);
-          if (
-            validarEstructuraEstado(dataLocal) &&
-            dataLocal.productos.length > 0 &&
-            data.productos.length === 0
-          ) {
-            console.info("Migrando datos de localStorage al servidor...");
-            _aplicarDatosALocalDB(dataLocal);
-            await _persistirEnServidor();
-            localStorage.removeItem(STORAGE_KEY);
-            console.info("Migración completada.");
+          // Migración: si hay backup local o datos locales sin subir a Firestore, subirlos
+          const claves = [STORAGE_KEY + "_backup", STORAGE_KEY];
+          for (const clave of claves) {
+            const rawLocal = localStorage.getItem(clave);
+            if (rawLocal) {
+              try {
+                const dataLocal = JSON.parse(rawLocal);
+                if (validarEstructuraEstado(dataLocal) && dataLocal.productos.length > 0 && data.productos.length === 0) {
+                  console.info("Migrando datos de localStorage a Firestore...");
+                  _aplicarDatosALocalDB(dataLocal);
+                  await _persistirEnServidor();
+                  localStorage.removeItem(clave);
+                  console.info("Migración a Firestore completada.");
+                }
+              } catch (_) { }
+            }
           }
-        } catch (_) { }
+          return;
+        }
+      } else {
+        // Documento no existe aún en Firestore, intentar subir datos de localStorage o array por defecto
+        console.info("🔥 Colección main no existe en Firestore. Inicializando con datos locales o por defecto...");
+        const rawLocal = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY + "_backup");
+        if (rawLocal) {
+          try {
+            const dataLocal = JSON.parse(rawLocal);
+            if (validarEstructuraEstado(dataLocal)) {
+              _aplicarDatosALocalDB(dataLocal);
+            }
+          } catch (_) { }
+        }
+        await _persistirEnServidor();
+        return;
       }
-      return;
+    } catch (err) {
+      console.warn("🔥 Error al leer datos de Firestore, usando respaldo local:", err.message);
     }
-  } catch (err) {
-    console.warn("No se pudo conectar al servidor, usando respaldo local:", err.message);
   }
 
-  // 2. Fallback: intentar localStorage (backup de emergencia o datos previos)
+  // 2. Intentar cargar desde servidor local HTTP (/api/db) si estamos en red local
+  if (window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    try {
+      const res = await fetch(API_DB);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (validarEstructuraEstado(data)) {
+        _aplicarDatosALocalDB(data);
+        _lastServerJsonString = JSON.stringify(data);
+
+        const rawLocal = localStorage.getItem(STORAGE_KEY);
+        if (rawLocal) {
+          try {
+            const dataLocal = JSON.parse(rawLocal);
+            if (
+              validarEstructuraEstado(dataLocal) &&
+              dataLocal.productos.length > 0 &&
+              data.productos.length === 0
+            ) {
+              _aplicarDatosALocalDB(dataLocal);
+              await _persistirEnServidor();
+              localStorage.removeItem(STORAGE_KEY);
+            }
+          } catch (_) { }
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn("No se pudo conectar al servidor local, usando respaldo localStorage:", err.message);
+    }
+  }
+
+  // 3. Fallback: intentar localStorage
   const claves = [STORAGE_KEY + "_backup", STORAGE_KEY];
   for (const clave of claves) {
     try {
@@ -2318,7 +2506,7 @@ function construirHtmlTicket(venta) {
 
             <div class="space">
               <p><span class="strong">FOLIO:</span> ${venta.id}</p>
-              <p><span class="strong">FECHA:</span> ${fecha} ${hora}</p>
+              <p><span class="strong">FECHA:</span> ${fecha}</p>
               <p><span class="strong">ARTICULOS:</span> ${roundTo(totalItems, 2)}</p>
             </div>
 
@@ -4619,36 +4807,154 @@ function showMessage(containerId, message, type) {
   }
 }
 
-function confirmarReset() {
-  if (
-    confirm(
-      "ADVERTENCIA: Esta accion eliminara TODOS los datos locales en memoria.\n\n¿Desea continuar?",
-    )
-  ) {
-    if (confirm("Ultima confirmacion. ¿Proceder con reset local?")) {
-      localDB.productos = [];
-      localDB.movimientos = [];
-      localDB.ventas = [];
-      localDB.gastos = [];
-      localDB.cortes = [];
-      localDB.corteActivo = null;
-      localDB.carritosPendientes = [];
-      localDB.pedidosPersonalizados = [];
-      localDB.config = { ...DEFAULT_CONFIG };
-      guardarEstadoLocal();
-      loadDashboard();
-      mostrarStock();
-      cargarConfiguracionSistema();
-      if (currentTab === "gastos") {
-        renderGastosRecientes();
-      }
-      showMessage(
-        "configResults",
-        "Datos locales reiniciados correctamente.",
-        "success",
-      );
+function descargarBackupBaseDeDatos() {
+  try {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(localDB, null, 2));
+    const downloadAnchor = document.createElement("a");
+    const fecha = new Date().toISOString().slice(0, 10);
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `backup_inventario_${fecha}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    return true;
+  } catch (e) {
+    console.error("Error al descargar backup:", e);
+    return false;
+  }
+}
+
+async function respaldarEnFirestoreColeccionBackup() {
+  if (_dbFirestore) {
+    try {
+      const docId = obtenerDocIdFirestore();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const backupDocId = `${docId}_backup_${timestamp}`;
+      await _dbFirestore.collection("backups").doc(backupDocId).set({
+        fecha: new Date().toISOString(),
+        usuarioDocId: docId,
+        datos: JSON.parse(JSON.stringify(localDB))
+      });
+      console.info("📦 Copia de respaldo guardada en Firestore en la colección 'backups'.");
+    } catch (err) {
+      console.warn("⚠️ No se pudo guardar la copia adicional en Firestore:", err);
     }
   }
+}
+
+async function realizarCierreOResetPeriodico(modo) {
+  // MODO: 'reset_operativo' (mantiene productos e inventario), 'simplificar_movimientos' (unifica historial), 'reset_total' (vacia todo)
+  let titulo = "";
+  let descripcion = "";
+
+  if (modo === "reset_operativo") {
+    titulo = "Reset de Operaciones (Mensual / Periódico)";
+    descripcion = "Se descargar un BACKUP automático de seguridad.\nSe BORRARÁN: Ventas, Gastos, Pedidos, Cortes de Caja y Carritos pendientes.\nSe CONSERVARÁN: Productos, Stock actual y Configuración.";
+  } else if (modo === "simplificar_movimientos") {
+    titulo = "Simplificación de Movimientos del Historial";
+    descripcion = "Se descargará un BACKUP automático de seguridad.\nSe UNIFICARÁ el historial de movimientos reemplazándolos por un único movimiento de 'Ajuste / Cierre' con el stock actual de cada producto.\nSe conservará el catálogo de Productos e Inventario intacto.";
+  } else if (modo === "reset_total") {
+    titulo = "Reset TOTAL del Sistema";
+    descripcion = "ADVERTENCIA: Se descargará un BACKUP automático de seguridad.\nSe BORRARÁN TODOS los productos, inventario, ventas, gastos y configuraciones.";
+  }
+
+  if (!confirm(`⚠️ ¿Deseas proceder con: ${titulo}?\n\n${descripcion}`)) return;
+
+  // 1. Crear backup automático antes de realizar cualquier cambio
+  const backupDescargado = descargarBackupBaseDeDatos();
+  await respaldarEnFirestoreColeccionBackup();
+
+  if (!backupDescargado) {
+    if (!confirm("⚠️ No se pudo descargar automáticamente el archivo de respaldo JSON local. ¿Deseas continuar de todos modos?")) {
+      return;
+    }
+  } else {
+    alert("✅ Se ha descargado exitosamente un respaldo (Backup JSON) en tu computadora.");
+  }
+
+  // 2. Ejecutar la acción según el modo seleccionado
+  if (modo === "reset_operativo" || modo === "simplificar_movimientos") {
+    const fechaHoraActual = new Date().toISOString();
+    const nuevosMovimientos = [];
+
+    // Calcular y preservar el stock actual exacto de cada producto
+    (localDB.productos || []).forEach(p => {
+      const stockActual = calcularStock(p.codigo);
+      if (stockActual > 0) {
+        nuevosMovimientos.push({
+          codigo: normalizeCode(p.codigo),
+          fecha: fechaHoraActual,
+          tipo: TIPOS_MOVIMIENTO.INGRESO,
+          cantidad: roundTo(stockActual, 4),
+          usuario: "Sistema",
+          timestamp: fechaHoraActual,
+          observaciones: "Stock inicial / Cierre de periodo anterior",
+          unidadCompra: p.unidad || "PIEZA"
+        });
+      }
+    });
+
+    // Conservar únicamente los pedidos personalizados que AÚN NO estén entregados (PENDIENTE, EN_PROCESO, TERMINADO)
+    const pedidosNoEntregados = (localDB.pedidosPersonalizados || []).filter(
+      (pedido) => pedido.estado !== "ENTREGADO"
+    );
+
+    localDB.movimientos = nuevosMovimientos;
+    localDB.ventas = [];
+    localDB.gastos = [];
+    localDB.cortes = [];
+    localDB.corteActivo = null;
+    localDB.carritosPendientes = [];
+    localDB.pedidosPersonalizados = pedidosNoEntregados;
+  } else if (modo === "reset_total") {
+    localDB.productos = [];
+    localDB.movimientos = [];
+    localDB.ventas = [];
+    localDB.gastos = [];
+    localDB.cortes = [];
+    localDB.corteActivo = null;
+    localDB.carritosPendientes = [];
+    localDB.pedidosPersonalizados = [];
+    localDB.config = { ...DEFAULT_CONFIG };
+  }
+
+  // 3. Persistir y refrescar vistas
+  await _persistirEnServidor();
+  refrescarVistaActual();
+  cargarConfiguracionSistema();
+
+  showMessage(
+    "configResults",
+    `✅ Operación "${titulo}" ejecutada correctamente. Backup creado previa acción.`,
+    "success"
+  );
+}
+
+function restaurarBackupDesdeJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function (e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (validarEstructuraEstado(data)) {
+        if (confirm("⚠️ ¿Estás seguro de restaurar este respaldo? Se sobrescribirán todos los datos actuales del sistema.")) {
+          _aplicarDatosALocalDB(data);
+          await _persistirEnServidor();
+          refrescarVistaActual();
+          cargarConfiguracionSistema();
+          alert("✅ Base de datos restaurada con éxito.");
+        }
+      } else {
+        alert("❌ El archivo seleccionado no contiene una estructura válida de respaldo.");
+      }
+    } catch (err) {
+      alert("❌ Error al leer el archivo JSON: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ""; // reset input
 }
 
 function exportarReporte() {
@@ -6388,7 +6694,8 @@ function construirHtmlTicketPedido(pedido) {
 
         <div class="space">
           <p><span class="strong">FOLIO:</span> ${pedido.folio}</p>
-          <p><span class="strong">FECHA:</span> ${fecha}</p>
+          <p><span class="strong">FECHA REGISTRO:</span> ${fecha}</p>
+          ${pedido.fechaEntregaEstimada ? `<p><span class="strong">ENTREGA ESTIMADA:</span> ${formatDate(pedido.fechaEntregaEstimada)}</p>` : ""}
           <p><span class="strong">CLIENTE:</span> ${escapeXml(clienteNombre)}</p>
           ${clienteTel ? `<p><span class="strong">TELÉFONO:</span> ${escapeXml(clienteTel)}</p>` : ""}
           <p><span class="strong">ESTADO:</span> ${pedido.estado}</p>
@@ -6739,5 +7046,82 @@ window.addEventListener("load", () => {
     });
   }
 });
+
+// ── Funciones de Gestión de Configuración de Firebase ─────────────────────────
+function cargarFormularioConfigFirebase() {
+  const config = obtenerConfigFirebaseGuardada();
+  if (!config) return;
+  const fields = ["fbApiKey", "fbAuthDomain", "fbProjectId", "fbStorageBucket", "fbMessagingSenderId", "fbAppId"];
+  const keys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
+
+  fields.forEach((fieldId, idx) => {
+    const el = document.getElementById(fieldId);
+    if (el && config[keys[idx]]) {
+      el.value = config[keys[idx]];
+    }
+  });
+
+  const msg = document.getElementById("msgConfigFirebase");
+  if (msg && _dbFirestore) {
+    msg.innerHTML = '<span style="color:#10b981; font-weight:600;">✅ Conectado exitosamente a Firebase Cloud Firestore.</span>';
+  }
+}
+
+function guardarConfiguracionFirebase(event) {
+  event.preventDefault();
+  const config = {
+    apiKey: document.getElementById("fbApiKey")?.value.trim() || "",
+    authDomain: document.getElementById("fbAuthDomain")?.value.trim() || "",
+    projectId: document.getElementById("fbProjectId")?.value.trim() || "",
+    storageBucket: document.getElementById("fbStorageBucket")?.value.trim() || "",
+    messagingSenderId: document.getElementById("fbMessagingSenderId")?.value.trim() || "",
+    appId: document.getElementById("fbAppId")?.value.trim() || "",
+  };
+
+  if (!config.apiKey || !config.projectId || !config.appId) {
+    alert("Por favor completa los campos obligatorios: apiKey, projectId y appId.");
+    return;
+  }
+
+  localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
+  const exito = inicializarFirebaseSIEsPosible();
+  const msg = document.getElementById("msgConfigFirebase");
+
+  if (exito) {
+    if (msg) {
+      msg.innerHTML = '<span style="color:#10b981; font-weight:600;">✅ ¡Credenciales guardadas! Conectando y sincronizando con Firestore...</span>';
+    }
+    iniciarSincronizacionAuto();
+    cargarEstadoLocal().then(() => {
+      refrescarVistaActual();
+    });
+  } else {
+    if (msg) {
+      msg.innerHTML = '<span style="color:#ef4444; font-weight:600;">❌ Error al conectar a Firebase. Revisa los datos ingresados.</span>';
+    }
+  }
+}
+
+function desconectarFirebase() {
+  if (!confirm("¿Seguro que deseas desconectar Firebase y volver al modo local?")) return;
+  localStorage.removeItem(FIREBASE_CONFIG_KEY);
+  if (_unsubscribeFirestore) {
+    _unsubscribeFirestore();
+    _unsubscribeFirestore = null;
+  }
+  _dbFirestore = null;
+
+  const fields = ["fbApiKey", "fbAuthDomain", "fbProjectId", "fbStorageBucket", "fbMessagingSenderId", "fbAppId"];
+  fields.forEach((fieldId) => {
+    const el = document.getElementById(fieldId);
+    if (el) el.value = "";
+  });
+
+  const msg = document.getElementById("msgConfigFirebase");
+  if (msg) {
+    msg.innerHTML = '<span style="color:#eab308; font-weight:600;">⚠️ Firebase desconectado. Usando modo de red local / localStorage.</span>';
+  }
+  iniciarSincronizacionAuto();
+}
 
 document.addEventListener("DOMContentLoaded", initializeApp);
