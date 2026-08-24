@@ -87,6 +87,22 @@ function obtenerConfigFirebaseGuardada() {
   return null;
 }
 
+function obtenerDocIdEmpresa() {
+  return obtenerDocIdFirestore();
+}
+
+function obtenerRefColeccion(nombreColeccion) {
+  if (!_dbFirestore) return null;
+  const tenantId = obtenerDocIdEmpresa();
+  return _dbFirestore.collection("sistema").doc(tenantId).collection(nombreColeccion);
+}
+
+function obtenerRefDocConfig(docName) {
+  if (!_dbFirestore) return null;
+  const tenantId = obtenerDocIdEmpresa();
+  return _dbFirestore.collection("sistema").doc(tenantId).collection("config").doc(docName);
+}
+
 function inicializarFirebaseSIEsPosible() {
   const config = obtenerConfigFirebaseGuardada();
   if (config && typeof firebase !== "undefined") {
@@ -95,15 +111,92 @@ function inicializarFirebaseSIEsPosible() {
         firebase.initializeApp(config);
       }
       _dbFirestore = firebase.firestore();
-      console.info("🔥 Firebase Firestore inicializado correctamente.");
+
+      // Habilitar la persistencia offline de Firestore en IndexedDB
+      try {
+        _dbFirestore.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+          if (err.code === "failed-precondition") {
+            console.warn("Aviso de persistencia Firestore: Múltiples pestañas abiertas.");
+          } else if (err.code === "unimplemented") {
+            console.warn("Aviso de persistencia Firestore: Navegador sin soporte offline.");
+          }
+        });
+      } catch (e) { }
+
+      console.info("🔥 Base de datos Firestore inicializada con soporte offline (IndexedDB).");
       return true;
     } catch (err) {
-      console.error("Error al inicializar Firebase:", err);
+      console.error("Error al inicializar la base de datos:", err);
       _dbFirestore = null;
       return false;
     }
   }
   return false;
+}
+
+// ── Script de Migración Automática ──────────────────────────────
+async function migrarMonolitoAColeccionesSiEsNecesario() {
+  if (!_dbFirestore) return;
+  const tenantId = obtenerDocIdEmpresa();
+  try {
+    const docAntiguoRef = _dbFirestore.collection("sistema").doc(tenantId);
+    const docAntiguoSnap = await docAntiguoRef.get();
+
+    if (docAntiguoSnap.exists) {
+      const dataAntigua = docAntiguoSnap.data();
+      if (dataAntigua && !dataAntigua.migradoAColecciones) {
+        console.info("⚡ Migrando datos del documento monolítico a Colecciones Firestore...");
+
+        if (Array.isArray(dataAntigua.productos)) {
+          for (const p of dataAntigua.productos) {
+            const id = (p.id || p.codigo || `P-${Date.now()}`).toString();
+            await obtenerRefColeccion("productos").doc(id).set(p, { merge: true });
+          }
+        }
+        if (Array.isArray(dataAntigua.ventas)) {
+          for (const v of dataAntigua.ventas) {
+            const id = (v.id || `V-${Date.now()}`).toString();
+            await obtenerRefColeccion("ventas").doc(id).set(v, { merge: true });
+          }
+        }
+        if (Array.isArray(dataAntigua.gastos)) {
+          for (const g of dataAntigua.gastos) {
+            const id = (g.id || `G-${Date.now()}`).toString();
+            await obtenerRefColeccion("gastos").doc(id).set(g, { merge: true });
+          }
+        }
+        if (Array.isArray(dataAntigua.movimientos)) {
+          for (const m of dataAntigua.movimientos) {
+            const id = (m.id || `M-${Date.now()}`).toString();
+            await obtenerRefColeccion("movimientos").doc(id).set(m, { merge: true });
+          }
+        }
+        if (Array.isArray(dataAntigua.cortes)) {
+          for (const c of dataAntigua.cortes) {
+            const id = (c.id || `CC-${Date.now()}`).toString();
+            await obtenerRefColeccion("cortes").doc(id).set(c, { merge: true });
+          }
+        }
+
+        await obtenerRefDocConfig("corteActivo").set(dataAntigua.corteActivo || {}, { merge: true });
+        await obtenerRefDocConfig("general").set({
+          config: dataAntigua.config || DEFAULT_CONFIG,
+          listas: dataAntigua.listas || DEFAULT_LISTAS,
+        }, { merge: true });
+        await obtenerRefDocConfig("carritosPendientes").set({
+          items: dataAntigua.carritosPendientes || [],
+        }, { merge: true });
+        await obtenerRefDocConfig("pedidosPersonalizados").set({
+          items: dataAntigua.pedidosPersonalizados || [],
+        }, { merge: true });
+
+        await docAntiguoRef.set({ migradoAColecciones: true, fechaMigracion: new Date().toISOString() }, { merge: true });
+        console.info("🎉 Migración a Colecciones Firestore finalizada con éxito.");
+      }
+    }
+  } catch (err) {
+    console.warn("Aviso en verificación de migración de Firestore:", err);
+  }
 }
 
 // ── initializeApp ─────────────────────────────────────────────
@@ -207,19 +300,24 @@ async function _persistirEnServidor() {
   _isPersisting = true;
   actualizarBadgeSincronizacion("saving", "Guardando...");
 
-  // 1. Si Firebase Firestore está activo, guardamos en la nube
   if (_dbFirestore) {
     try {
-      const docId = obtenerDocIdFirestore();
-      const dataToSave = JSON.parse(JSON.stringify(localDB));
-      await _dbFirestore.collection("sistema").doc(docId).set(dataToSave);
-      _lastServerJsonString = JSON.stringify(localDB);
+      await Promise.all([
+        obtenerRefDocConfig("corteActivo").set(localDB.corteActivo || {}),
+        obtenerRefDocConfig("general").set({
+          config: localDB.config || DEFAULT_CONFIG,
+          listas: localDB.listas || DEFAULT_LISTAS,
+        }),
+        obtenerRefDocConfig("carritosPendientes").set({ items: localDB.carritosPendientes || [] }),
+        obtenerRefDocConfig("pedidosPersonalizados").set({ items: localDB.pedidosPersonalizados || [] }),
+      ]);
+
       localStorage.removeItem(STORAGE_KEY + "_backup");
-      actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
+      actualizarBadgeSincronizacion("online", "Firestore Colecciones (En Vivo)");
       return;
     } catch (err) {
-      console.warn("🔥 Error al guardar en la Base de datos:", err);
-      actualizarBadgeSincronizacion("offline", "Base de datos Offline (Respaldo)");
+      console.warn("🔥 Error al guardar estado en Firestore:", err);
+      actualizarBadgeSincronizacion("offline", "Modo Offline (Respaldo)");
       try {
         localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
       } catch (e) { }
@@ -229,7 +327,7 @@ async function _persistirEnServidor() {
     }
   }
 
-  // 2. Fallback: Servidor Backend Local HTTP (/api/db)
+  // Fallback: Servidor Backend Local HTTP (/api/db)
   try {
     const rawBody = JSON.stringify(localDB);
     const res = await fetch(API_DB, {
@@ -254,10 +352,14 @@ async function _persistirEnServidor() {
   }
 }
 
-// ── Observable / Sincronización Automática (Firestore Listener + Polling Fallback) ──────
+// ── Observable / Sincronización Automática (Firestore Listener por Colecciones) ──────
 function iniciarSincronizacionAuto(intervalMs = 3000) {
   if (_unsubscribeFirestore) {
-    _unsubscribeFirestore();
+    if (Array.isArray(_unsubscribeFirestore)) {
+      _unsubscribeFirestore.forEach((u) => u && u());
+    } else {
+      _unsubscribeFirestore();
+    }
     _unsubscribeFirestore = null;
   }
   if (_syncPollInterval) {
@@ -265,41 +367,52 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
     _syncPollInterval = null;
   }
 
-  // Si Firestore está habilitado, usamos escuchador en Tiempo Real (onSnapshot)
+  // Si Firestore está habilitado, usamos escuchadores específicos en Tiempo Real
   if (_dbFirestore) {
-    const docId = obtenerDocIdFirestore();
-    actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
-    _unsubscribeFirestore = _dbFirestore.collection("sistema").doc(docId).onSnapshot(
-      (doc) => {
-        if (_saveDebounceTimer || _isPersisting) return;
-        if (doc.exists) {
-          const data = doc.data();
-          if (validarEstructuraEstado(data)) {
-            const serverJson = JSON.stringify(data);
-            if (!_lastServerJsonString) {
-              _lastServerJsonString = serverJson;
-              _aplicarDatosALocalDB(data);
-              refrescarVistaActual();
-              return;
-            }
-            if (serverJson !== _lastServerJsonString && serverJson !== JSON.stringify(localDB)) {
-              console.info("⚡ Cambio detectado en Base de datos desde otro dispositivo. Actualizando...");
-              _lastServerJsonString = serverJson;
-              _aplicarDatosALocalDB(data);
-              refrescarVistaActual();
-              actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde Base de datos!");
-              setTimeout(() => {
-                actualizarBadgeSincronizacion("online", "Base de datos En Vivo");
-              }, 2500);
-            }
-          }
-        }
-      },
-      (err) => {
-        console.warn("🔥 Error en suscripción a Base de datos:", err);
-        actualizarBadgeSincronizacion("offline", "Base de datos Desconectada");
-      }
+    actualizarBadgeSincronizacion("online", "Firestore Colecciones (En Vivo)");
+    const unsubs = [];
+
+    // Escuchador en Tiempo Real para el catálogo de Productos (inventario en vivo)
+    unsubs.push(
+      obtenerRefColeccion("productos").onSnapshot(
+        (snapshot) => {
+          if (_isPersisting) return;
+          localDB.productos = snapshot.docs.map((doc) => doc.data());
+          refrescarVistaActual();
+        },
+        (err) => console.warn("Suscripción a productos:", err)
+      )
     );
+
+    // Escuchador en Tiempo Real para el Corte Activo
+    unsubs.push(
+      obtenerRefDocConfig("corteActivo").onSnapshot(
+        (doc) => {
+          if (_isPersisting) return;
+          localDB.corteActivo = doc.exists && doc.data().id ? doc.data() : null;
+          renderEstadoCorteActual();
+        },
+        (err) => console.warn("Suscripción a corte activo:", err)
+      )
+    );
+
+    // Escuchador en Tiempo Real para Configuración General (nombre negocio, teléfono, listas)
+    unsubs.push(
+      obtenerRefDocConfig("general").onSnapshot(
+        (doc) => {
+          if (_isPersisting) return;
+          if (doc.exists) {
+            const d = doc.data();
+            if (d.config) localDB.config = { ...DEFAULT_CONFIG, ...d.config };
+            if (d.listas) localDB.listas = d.listas;
+            cargarConfiguracionSistema();
+          }
+        },
+        (err) => console.warn("Suscripción a config general:", err)
+      )
+    );
+
+    _unsubscribeFirestore = unsubs;
     return;
   }
 
@@ -396,56 +509,55 @@ function _aplicarDatosALocalDB(data) {
 }
 
 async function cargarEstadoLocal() {
-  // 1. Intentar cargar desde Firebase Firestore si está activo
   if (_dbFirestore) {
     try {
-      const docId = obtenerDocIdFirestore();
-      const doc = await _dbFirestore.collection("sistema").doc(docId).get();
-      if (doc.exists) {
-        const data = doc.data();
-        if (validarEstructuraEstado(data)) {
-          _aplicarDatosALocalDB(data);
-          _lastServerJsonString = JSON.stringify(data);
-          console.info(`🔥 Datos iniciales cargados con éxito desde Firestore (Documento: ${docId}).`);
+      await migrarMonolitoAColeccionesSiEsNecesario();
 
-          // Migración: si hay backup local o datos locales sin subir a Firestore, subirlos
-          const claves = [STORAGE_KEY + "_backup", STORAGE_KEY];
-          for (const clave of claves) {
-            const rawLocal = localStorage.getItem(clave);
-            if (rawLocal) {
-              try {
-                const dataLocal = JSON.parse(rawLocal);
-                if (validarEstructuraEstado(dataLocal) && dataLocal.productos.length > 0 && data.productos.length === 0) {
-                  console.info("Migrando datos de localStorage a Firestore...");
-                  _aplicarDatosALocalDB(dataLocal);
-                  await _persistirEnServidor();
-                  localStorage.removeItem(clave);
-                  console.info("Migración a Firestore completada.");
-                }
-              } catch (_) { }
-            }
-          }
-          return;
-        }
-      } else {
-        // Documento no existe aún en Firestore, intentar subir datos de localStorage o array por defecto
-        console.info("🔥 Colección main no existe en Firestore. Inicializando con datos locales o por defecto...");
-        const rawLocal = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY + "_backup");
-        if (rawLocal) {
-          try {
-            const dataLocal = JSON.parse(rawLocal);
-            if (validarEstructuraEstado(dataLocal)) {
-              _aplicarDatosALocalDB(dataLocal);
-            }
-          } catch (_) { }
-        }
-        await _persistirEnServidor();
-        return;
+      const prodSnap = await obtenerRefColeccion("productos").get();
+      localDB.productos = prodSnap.docs.map((d) => d.data());
+
+      const corteActivoSnap = await obtenerRefDocConfig("corteActivo").get();
+      localDB.corteActivo = corteActivoSnap.exists && corteActivoSnap.data().id ? corteActivoSnap.data() : null;
+
+      const genSnap = await obtenerRefDocConfig("general").get();
+      if (genSnap.exists) {
+        const d = genSnap.data();
+        localDB.config = { ...DEFAULT_CONFIG, ...(d.config || {}) };
+        if (d.listas) localDB.listas = d.listas;
       }
+
+      const carritosSnap = await obtenerRefDocConfig("carritosPendientes").get();
+      localDB.carritosPendientes = carritosSnap.exists && Array.isArray(carritosSnap.data().items) ? carritosSnap.data().items : [];
+
+      const pedidosSnap = await obtenerRefDocConfig("pedidosPersonalizados").get();
+      localDB.pedidosPersonalizados = pedidosSnap.exists && Array.isArray(pedidosSnap.data().items) ? pedidosSnap.data().items : [];
+
+      // Carga acotada de las operaciones recientes (últimos 30 días o del corte activo)
+      let fechaDesdeIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      if (localDB.corteActivo && localDB.corteActivo.fechaApertura) {
+        fechaDesdeIso = localDB.corteActivo.fechaApertura;
+      }
+
+      const [ventasSnap, gastosSnap, movSnap, cortesSnap] = await Promise.all([
+        obtenerRefColeccion("ventas").where("fecha", ">=", fechaDesdeIso).get(),
+        obtenerRefColeccion("gastos").where("fecha", ">=", fechaDesdeIso).get(),
+        obtenerRefColeccion("movimientos").where("fecha", ">=", fechaDesdeIso).get(),
+        obtenerRefColeccion("cortes").get()
+      ]);
+
+      localDB.ventas = ventasSnap.docs.map((d) => d.data());
+      localDB.gastos = gastosSnap.docs.map((d) => d.data());
+      localDB.movimientos = movSnap.docs.map((d) => d.data());
+      localDB.cortes = cortesSnap.docs.map((d) => d.data());
+
+      actualizarBadgeSincronizacion("online", "Firestore Colecciones (Offline Ready)");
+      return;
     } catch (err) {
-      console.warn("🔥 Error al leer datos de Firestore, usando respaldo local:", err.message);
+      console.warn("🔥 Error al leer colecciones de Firestore, usando respaldo local:", err);
     }
   }
+
+
 
   // 2. Intentar cargar desde servidor local HTTP (/api/db) si estamos en red local
   if (window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
@@ -1055,7 +1167,7 @@ function obtenerDetalleCajaDashboard() {
   const corteActivo = obtenerCorteActivo();
   if (corteActivo) {
     const resumen = obtenerResumenFinancieroEnRango(corteActivo.fechaApertura, new Date().toISOString());
-    const cajaEstimada = roundTo(parseNumber(corteActivo.cajaInicial, 0) + resumen.pagosEfectivo - resumen.totalGastos, 2);
+    const cajaEstimada = roundTo(parseNumber(corteActivo.cajaInicial, 0) + resumen.pagosEfectivo - resumen.gastosEfectivo, 2);
     return {
       valor: cajaEstimada,
       estado: "ABIERTO",
@@ -1078,7 +1190,7 @@ function obtenerDetalleCajaDashboard() {
     }
 
     const resumen = obtenerResumenFinancieroEnRango(fechaInicioIso, new Date().toISOString());
-    const cajaEstimada = roundTo(baseCash + resumen.pagosEfectivo - resumen.totalGastos, 2);
+    const cajaEstimada = roundTo(baseCash + resumen.pagosEfectivo - resumen.gastosEfectivo, 2);
     return {
       valor: cajaEstimada,
       estado: "CERRADO",
@@ -1125,9 +1237,17 @@ function obtenerResumen() {
   const resumenPagos = acumularPagosNetos(localDB.ventas);
   const totalVentas =
     resumenPagos.efectivo + resumenPagos.tarjeta + resumenPagos.transferencia;
-  const totalGastos = localDB.gastos.reduce((acumulado, gasto) => {
-    return acumulado + parseNumber(gasto.monto, 0);
-  }, 0);
+  let totalGastosEfectivo = 0;
+  let totalGastosTarjeta = 0;
+  let totalGastosTransferencia = 0;
+  localDB.gastos.forEach((gasto) => {
+    const m = (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().trim().toUpperCase();
+    const monto = parseNumber(gasto.monto, 0);
+    if (m === "TARJETA") totalGastosTarjeta += monto;
+    else if (m === "TRANSFERENCIA") totalGastosTransferencia += monto;
+    else totalGastosEfectivo += monto;
+  });
+  const totalGastos = totalGastosEfectivo + totalGastosTarjeta + totalGastosTransferencia;
 
   // Total retiros de caja acumulados de todos los cortes cerrados
   const totalRetiros = (localDB.cortes || []).reduce((acumulado, corte) => {
@@ -1168,7 +1288,7 @@ function obtenerResumen() {
   });
 
   const dineroEnCaja = obtenerDetalleCajaDashboard().valor;
-  const cajaEsperada = roundTo(resumenPagos.efectivo - totalGastos - totalRetiros, 2);
+  const cajaEsperada = roundTo(resumenPagos.efectivo - totalGastosEfectivo - totalRetiros, 2);
   const diferenciaCaja = roundTo(dineroEnCaja - cajaEsperada, 2);
 
   return {
@@ -1177,6 +1297,9 @@ function obtenerResumen() {
     totalVentas: roundTo(totalVentas, 2),
     cantidadVentas: localDB.ventas.length,
     totalGastos: roundTo(totalGastos, 2),
+    totalGastosEfectivo: roundTo(totalGastosEfectivo, 2),
+    totalGastosTarjeta: roundTo(totalGastosTarjeta, 2),
+    totalGastosTransferencia: roundTo(totalGastosTransferencia, 2),
     totalRetiros: roundTo(totalRetiros, 2),
     sinStock,
     stockBajo,
@@ -1495,6 +1618,8 @@ function registrarGastoLocal(gasto) {
     : now;
   const concepto = (gasto.concepto || "").toString().trim();
   const categoria = (gasto.categoria || "General").toString().trim();
+  const metodoInput = (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().trim().toUpperCase();
+  const metodoPago = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"].includes(metodoInput) ? metodoInput : "EFECTIVO";
   const monto = parseNumber(gasto.monto, 0);
 
   if (
@@ -1506,16 +1631,24 @@ function registrarGastoLocal(gasto) {
     return "Datos del gasto incompletos.";
   }
 
-  localDB.gastos.push({
+  const nuevoGasto = {
     id: `G-${Date.now()}`,
     fecha: fecha.toISOString(),
     concepto,
     categoria: categoria || "General",
+    metodoPago,
+    persona: (gasto.persona || gasto.responsable || "").toString().trim(),
     monto: roundTo(monto, 2),
     usuario: "Local",
     timestamp: new Date().toISOString(),
     observaciones: gasto.observaciones || "",
-  });
+  };
+
+  localDB.gastos.push(nuevoGasto);
+
+  if (_dbFirestore) {
+    obtenerRefColeccion("gastos").doc(nuevoGasto.id).set(nuevoGasto).catch((e) => console.warn("Firestore gasto error:", e));
+  }
 
   guardarEstadoLocal();
 
@@ -2048,8 +2181,10 @@ function renderGastosRecientes() {
             <tr>
               <th>Folio</th>
               <th>Fecha</th>
-              <th>Categoria</th>
+              <th>Categoría</th>
               <th>Concepto</th>
+              <th>Realizado por</th>
+              <th>Método</th>
               <th>Monto</th>
               <th>Observaciones</th>
             </tr>
@@ -2058,12 +2193,16 @@ function renderGastosRecientes() {
       `;
 
   recientes.forEach((gasto) => {
+    const metodo = (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().toUpperCase();
+    const persona = gasto.persona || gasto.responsable || "-";
     html += `
           <tr>
             <td>${gasto.id}</td>
             <td>${formatDate(gasto.fecha)}</td>
             <td>${gasto.categoria || "General"}</td>
             <td>${gasto.concepto || "-"}</td>
+            <td>${escapeXml(persona)}</td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">${escapeXml(metodo)}</span></td>
             <td>${formatMoney(gasto.monto)}</td>
             <td>${gasto.observaciones || ""}</td>
           </tr>
@@ -3119,6 +3258,8 @@ function registrarGasto(event) {
     fecha: document.getElementById("fechaGasto").value,
     concepto: document.getElementById("conceptoGasto").value.trim(),
     categoria: document.getElementById("categoriaGasto").value,
+    metodoPago: document.getElementById("metodoGasto") ? document.getElementById("metodoGasto").value : "EFECTIVO",
+    persona: document.getElementById("personaGasto") ? document.getElementById("personaGasto").value.trim() : "",
     monto: parseFloat(document.getElementById("montoGasto").value) || 0,
     observaciones: document.getElementById("obsGasto").value.trim(),
   };
@@ -3130,6 +3271,12 @@ function registrarGasto(event) {
   if (ok) {
     document.getElementById("formGasto").reset();
     document.getElementById("fechaGasto").valueAsDate = new Date();
+    if (document.getElementById("metodoGasto")) {
+      document.getElementById("metodoGasto").value = "EFECTIVO";
+    }
+    if (document.getElementById("personaGasto")) {
+      document.getElementById("personaGasto").value = "";
+    }
     renderGastosRecientes();
     loadDashboard();
   }
@@ -3449,7 +3596,7 @@ function obtenerReporteVentas(filtros) {
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
 
-function mostrarReporteVentas() {
+async function mostrarReporteVentas() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeVentas").value,
     fechaHasta: document.getElementById("fechaHastaVentas").value,
@@ -3462,6 +3609,25 @@ function mostrarReporteVentas() {
       "warning",
     );
     return;
+  }
+
+  if (_dbFirestore) {
+    try {
+      const desdeIso = `${filtros.fechaDesde}T00:00:00`;
+      const hastaIso = `${filtros.fechaHasta}T23:59:59`;
+      const snap = await obtenerRefColeccion("ventas")
+        .where("fecha", ">=", desdeIso)
+        .where("fecha", "<=", hastaIso)
+        .get();
+
+      const ventasConsulta = snap.docs.map((d) => d.data());
+      const idsExistentes = new Set(localDB.ventas.map((v) => v.id));
+      ventasConsulta.forEach((v) => {
+        if (!idsExistentes.has(v.id)) localDB.ventas.push(v);
+      });
+    } catch (e) {
+      console.warn("Consulta Firestore ventas:", e);
+    }
   }
 
   const data = obtenerReporteVentas(filtros);
@@ -3695,13 +3861,15 @@ function obtenerReporteGastos(filtros) {
       fechaTexto: formatDate(gasto.fecha),
       categoria: gasto.categoria || "General",
       concepto: gasto.concepto || "Sin concepto",
+      persona: gasto.persona || gasto.responsable || "-",
+      metodoPago: (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().toUpperCase(),
       monto: roundTo(parseNumber(gasto.monto, 0), 2),
       observaciones: gasto.observaciones || "",
     }))
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
 
-function mostrarReporteGastos() {
+async function mostrarReporteGastos() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeGastos").value,
     fechaHasta: document.getElementById("fechaHastaGastos").value,
@@ -3714,6 +3882,25 @@ function mostrarReporteGastos() {
       "warning",
     );
     return;
+  }
+
+  if (_dbFirestore) {
+    try {
+      const desdeIso = `${filtros.fechaDesde}T00:00:00`;
+      const hastaIso = `${filtros.fechaHasta}T23:59:59`;
+      const snap = await obtenerRefColeccion("gastos")
+        .where("fecha", ">=", desdeIso)
+        .where("fecha", "<=", hastaIso)
+        .get();
+
+      const gastosConsulta = snap.docs.map((d) => d.data());
+      const idsExistentes = new Set(localDB.gastos.map((g) => g.id));
+      gastosConsulta.forEach((g) => {
+        if (!idsExistentes.has(g.id)) localDB.gastos.push(g);
+      });
+    } catch (e) {
+      console.warn("Consulta Firestore gastos:", e);
+    }
   }
 
   const data = obtenerReporteGastos(filtros);
@@ -3744,6 +3931,8 @@ function displayReporteGastosTable(data) {
               <th>Folio</th>
               <th>Categoría</th>
               <th>Concepto</th>
+              <th>Realizado por</th>
+              <th>Método</th>
               <th>Monto</th>
               <th>Observaciones</th>
             </tr>
@@ -3758,6 +3947,8 @@ function displayReporteGastosTable(data) {
             <td>${row.id}</td>
             <td>${row.categoria}</td>
             <td>${row.concepto}</td>
+            <td>${escapeXml(row.persona)}</td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">${escapeXml(row.metodoPago)}</span></td>
             <td>${formatMoney(row.monto)}</td>
             <td>${row.observaciones}</td>
           </tr>
@@ -3793,9 +3984,9 @@ function exportarReporteGastos() {
     return;
   }
 
-  let csv = "Fecha,Folio,Categoria,Concepto,Monto,Observaciones\n";
+  let csv = "Fecha,Folio,Categoria,Concepto,RealizadoPor,Metodo,Monto,Observaciones\n";
   data.forEach((row) => {
-    csv += `"${row.fechaTexto}","${row.id}","${row.categoria}","${row.concepto}","${row.monto}","${row.observaciones}"\n`;
+    csv += `"${row.fechaTexto}","${row.id}","${row.categoria}","${row.concepto}","${row.persona}","${row.metodoPago}","${row.monto}","${row.observaciones}"\n`;
   });
 
   descargarArchivo(
@@ -3838,9 +4029,15 @@ function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
 
   const totalIngresos = resumen.totalVentasNetas;
   const totalGastos = resumen.totalGastos;
+  const gastosEfectivo = resumen.gastosEfectivo;
+  const gastosTarjeta = resumen.gastosTarjeta;
+  const gastosTransferencia = resumen.gastosTransferencia;
+  const gastosBancarios = resumen.gastosBancarios;
   const totalEgresos = totalGastos;
   const gananciasBrutas = roundTo(totalIngresos - totalGastos, 2);
-  const efectivoEnCajaPeriodo = roundTo(resumen.pagosEfectivo - totalGastos - retirosPeriodo, 2);
+  const efectivoEnCajaPeriodo = roundTo(resumen.pagosEfectivo - gastosEfectivo - retirosPeriodo, 2);
+  const cobrosBancariosBrutos = roundTo(resumen.pagosTarjeta + resumen.pagosTransferencia, 2);
+  const cobrosBancariosNetos = roundTo(cobrosBancariosBrutos - gastosBancarios, 2);
 
   return {
     fechaDesde,
@@ -3852,22 +4049,51 @@ function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
     pagosTransferencia: roundTo(resumen.pagosTransferencia, 2),
     totalVentas: roundTo(resumen.totalVentasNetas, 2),
     totalGastos: roundTo(totalGastos, 2),
+    gastosEfectivo: roundTo(gastosEfectivo, 2),
+    gastosTarjeta: roundTo(gastosTarjeta, 2),
+    gastosTransferencia: roundTo(gastosTransferencia, 2),
+    gastosBancarios: roundTo(gastosBancarios, 2),
     retiros: roundTo(retirosPeriodo, 2),
     totalIngresos: roundTo(totalIngresos, 2),
     totalEgresos: roundTo(totalEgresos, 2),
     gananciasBrutas,
     efectivoEnCajaPeriodo,
-    cobrosBancarios: roundTo(resumen.pagosTarjeta + resumen.pagosTransferencia, 2),
+    cobrosBancariosBrutos,
+    cobrosBancariosNetos,
   };
 }
 
-function generarResumenFinanciero() {
+async function generarResumenFinanciero() {
   const fechaDesde = document.getElementById("fechaDesdeResumen").value;
   const fechaHasta = document.getElementById("fechaHastaResumen").value;
 
   if (!fechaDesde || !fechaHasta) {
     showMessage("msgResumenFinanciero", "Seleccione las fechas para generar el resumen.", "warning");
     return;
+  }
+
+  if (_dbFirestore) {
+    try {
+      const desdeIso = `${fechaDesde}T00:00:00`;
+      const hastaIso = `${fechaHasta}T23:59:59`;
+
+      const [ventasSnap, gastosSnap] = await Promise.all([
+        obtenerRefColeccion("ventas").where("fecha", ">=", desdeIso).where("fecha", "<=", hastaIso).get(),
+        obtenerRefColeccion("gastos").where("fecha", ">=", desdeIso).where("fecha", "<=", hastaIso).get()
+      ]);
+
+      const idsVentas = new Set(localDB.ventas.map((v) => v.id));
+      ventasSnap.docs.forEach((d) => {
+        if (!idsVentas.has(d.id)) localDB.ventas.push(d.data());
+      });
+
+      const idsGastos = new Set(localDB.gastos.map((g) => g.id));
+      gastosSnap.docs.forEach((d) => {
+        if (!idsGastos.has(d.id)) localDB.gastos.push(d.data());
+      });
+    } catch (e) {
+      console.warn("Consulta Firestore resumen:", e);
+    }
   }
 
   const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta);
@@ -3901,6 +4127,9 @@ function generarResumenFinanciero() {
           <div class="table-responsive">
             <table class="resumen-table">
               <tr><td>Gastos Registrados</td><td class="text-right text-danger">${formatMoney(data.totalGastos)}</td></tr>
+              <tr class="sub-row"><td>  └ Pagados en Efectivo</td><td class="text-right">${formatMoney(data.gastosEfectivo)}</td></tr>
+              <tr class="sub-row"><td>  └ Pagados con Tarjeta</td><td class="text-right">${formatMoney(data.gastosTarjeta)}</td></tr>
+              <tr class="sub-row"><td>  └ Pagados por Transferencia</td><td class="text-right">${formatMoney(data.gastosTransferencia)}</td></tr>
               <tr class="total-row"><td><strong>Total Egresos</strong></td><td class="text-right text-danger"><strong>${formatMoney(data.totalGastos)}</strong></td></tr>
               <tr><td>Cantidad de Gastos</td><td class="text-right">${data.gastosCount}</td></tr>
             </table>
@@ -3915,9 +4144,20 @@ function generarResumenFinanciero() {
           <div class="table-responsive">
             <table class="resumen-table">
               <tr><td>Efectivo Ingresado por Ventas</td><td class="text-right">${formatMoney(data.pagosEfectivo)}</td></tr>
-              <tr><td>(-) Gastos Pagados en Efectivo</td><td class="text-right text-danger">${formatMoney(data.totalGastos)}</td></tr>
+              <tr><td>(-) Gastos Pagados en Efectivo</td><td class="text-right text-danger">${formatMoney(data.gastosEfectivo)}</td></tr>
               <tr><td>(-) Retiros (Resguardo a Bóveda/Banco)</td><td class="text-right text-danger">${formatMoney(data.retiros)}</td></tr>
               <tr class="total-row"><td><strong>Efectivo Restante en Caja</strong></td><td class="text-right"><strong>${formatMoney(data.efectivoEnCajaPeriodo)}</strong></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="resumen-financiero-card" style="margin-top: 15px;">
+          <h4>💳 Resumen de Pagos Bancarios</h4>
+          <div class="table-responsive">
+            <table class="resumen-table">
+              <tr><td>Ventas con Tarjeta / Transferencia</td><td class="text-right text-success">${formatMoney(data.cobrosBancariosBrutos)}</td></tr>
+              <tr><td>(-) Gastos con Tarjeta / Banco</td><td class="text-right text-danger">${formatMoney(data.gastosBancarios)}</td></tr>
+              <tr class="total-row"><td><strong>Saldo Neto Bancario</strong></td><td class="text-right"><strong>${formatMoney(data.cobrosBancariosNetos)}</strong></td></tr>
             </table>
           </div>
         </div>
@@ -4047,9 +4287,19 @@ function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso) {
     );
   });
 
-  const totalGastos = gastosPeriodo.reduce((acumulado, gasto) => {
-    return acumulado + parseNumber(gasto.monto, 0);
-  }, 0);
+  let gastosEfectivo = 0;
+  let gastosTarjeta = 0;
+  let gastosTransferencia = 0;
+
+  gastosPeriodo.forEach((gasto) => {
+    const m = (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().trim().toUpperCase();
+    const monto = parseNumber(gasto.monto, 0);
+    if (m === "TARJETA") gastosTarjeta += monto;
+    else if (m === "TRANSFERENCIA") gastosTransferencia += monto;
+    else gastosEfectivo += monto;
+  });
+
+  const totalGastos = gastosEfectivo + gastosTarjeta + gastosTransferencia;
 
   return {
     ventasCount: ventasPeriodo.length,
@@ -4059,6 +4309,10 @@ function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso) {
     pagosTransferencia: roundTo(pagos.transferencia, 2),
     totalVentasNetas: roundTo(totalVentasNetas, 2),
     totalGastos: roundTo(totalGastos, 2),
+    gastosEfectivo: roundTo(gastosEfectivo, 2),
+    gastosTarjeta: roundTo(gastosTarjeta, 2),
+    gastosTransferencia: roundTo(gastosTransferencia, 2),
+    gastosBancarios: roundTo(gastosTarjeta + gastosTransferencia, 2),
   };
 }
 
@@ -4118,7 +4372,7 @@ function actualizarResumenCorteActual() {
   const cajaEsperada = roundTo(
     parseNumber(corteActivo.cajaInicial, 0) +
     resumen.pagosEfectivo -
-    resumen.totalGastos -
+    resumen.gastosEfectivo -
     retiros +
     ingresosCaja,
     2,
@@ -4131,7 +4385,8 @@ function actualizarResumenCorteActual() {
           <div class="corte-kpi"><span>Efectivo neto</span><strong>${formatMoney(resumen.pagosEfectivo)}</strong></div>
           <div class="corte-kpi"><span>Tarjeta</span><strong>${formatMoney(resumen.pagosTarjeta)}</strong></div>
           <div class="corte-kpi"><span>Transferencia</span><strong>${formatMoney(resumen.pagosTransferencia)}</strong></div>
-          <div class="corte-kpi"><span>Gastos</span><strong>${formatMoney(resumen.totalGastos)}</strong></div>
+          <div class="corte-kpi"><span>Gastos Efectivo</span><strong>${formatMoney(resumen.gastosEfectivo)}</strong></div>
+          <div class="corte-kpi"><span>Gastos Tarjeta/Banco</span><strong>${formatMoney(resumen.gastosBancarios)}</strong></div>
           <div class="corte-kpi"><span>Caja esperada</span><strong>${formatMoney(cajaEsperada)}</strong></div>
           <div class="corte-kpi ${diferencia === 0 ? "" : diferencia > 0 ? "corte-kpi--up" : "corte-kpi--down"}"><span>Diferencia estimada</span><strong>${formatMoney(diferencia)}</strong></div>
         </div>
@@ -4390,7 +4645,7 @@ function cerrarCorteCaja() {
   const cajaEsperada = roundTo(
     parseNumber(corteActivo.cajaInicial, 0) +
     resumen.pagosEfectivo -
-    resumen.totalGastos -
+    resumen.gastosEfectivo -
     retiros +
     ingresosCaja,
     2,
@@ -4415,6 +4670,10 @@ function cerrarCorteCaja() {
     pagosTransferencia: resumen.pagosTransferencia,
     totalVentasNetas: resumen.totalVentasNetas,
     totalGastos: resumen.totalGastos,
+    gastosEfectivo: resumen.gastosEfectivo,
+    gastosTarjeta: resumen.gastosTarjeta,
+    gastosTransferencia: resumen.gastosTransferencia,
+    gastosBancarios: resumen.gastosBancarios,
     retiros,
     ingresosCaja,
     cajaEsperada,
