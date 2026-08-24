@@ -37,6 +37,53 @@ body {
   text-align: center;
 }
 
+.sucursal-selector-container {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.sucursal-select {
+  width: 100%;
+  background: #0f2b38;
+  color: #ffffff;
+  border: 1px solid rgba(93, 173, 226, 0.4);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.sucursal-select:focus {
+  border-color: #5dade2;
+  box-shadow: 0 0 0 2px rgba(93, 173, 226, 0.25);
+}
+
+.badge-matriz {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.badge-sucursal {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
 .nav-menu {
   list-style: none;
   padding: 20px 0;

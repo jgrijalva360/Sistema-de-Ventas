@@ -13,7 +13,19 @@ const DEFAULT_CONFIG = {
   fiscalLegend: "Venta al público en general",
 };
 
+const DEFAULT_SUCURSALES = [
+  {
+    id: "SUC-MAIN",
+    nombre: "Matriz (Principal)",
+    direccion: "",
+    telefono: "",
+    esMatriz: true,
+  },
+];
+
 const localDB = {
+  sucursales: [...DEFAULT_SUCURSALES],
+  sucursalActivaId: "SUC-MAIN",
   productos: [],
   movimientos: [],
   ventas: [],
@@ -101,6 +113,248 @@ function obtenerRefDocConfig(docName) {
   if (!_dbFirestore) return null;
   const tenantId = obtenerDocIdEmpresa();
   return _dbFirestore.collection("sistema").doc(tenantId).collection("config").doc(docName);
+}
+
+// ── Gestión Multi-Sucursal (Puntos de Venta) ────────────────────
+function obtenerSucursales() {
+  if (!Array.isArray(localDB.sucursales) || localDB.sucursales.length === 0) {
+    localDB.sucursales = [...DEFAULT_SUCURSALES];
+  }
+  return localDB.sucursales;
+}
+
+function obtenerSucursalActivaId() {
+  const guardada = localStorage.getItem("sucursal_activa_id");
+  const sucursales = obtenerSucursales();
+  if (guardada && sucursales.some((s) => s.id === guardada)) {
+    localDB.sucursalActivaId = guardada;
+    return guardada;
+  }
+  const matriz = sucursales.find((s) => s.esMatriz) || sucursales[0];
+  localDB.sucursalActivaId = matriz ? matriz.id : "SUC-MAIN";
+  return localDB.sucursalActivaId;
+}
+
+function obtenerSucursalActiva() {
+  const idActiva = obtenerSucursalActivaId();
+  const sucursales = obtenerSucursales();
+  return (
+    sucursales.find((s) => s.id === idActiva) ||
+    sucursales[0] ||
+    DEFAULT_SUCURSALES[0]
+  );
+}
+
+function cambiarSucursalActiva(sucursalId) {
+  const sucursales = obtenerSucursales();
+  const encontrada = sucursales.find((s) => s.id === sucursalId);
+  if (!encontrada) return;
+
+  localDB.sucursalActivaId = sucursalId;
+  localStorage.setItem("sucursal_activa_id", sucursalId);
+
+  const selector = document.getElementById("selectorSucursal");
+  if (selector) selector.value = sucursalId;
+
+  refrescarVistaActual();
+  cargarModuloCortes();
+  renderizarTablaSucursales();
+}
+
+function renderSelectorSucursal() {
+  const selector = document.getElementById("selectorSucursal");
+  const sucursales = obtenerSucursales();
+  const activaId = obtenerSucursalActivaId();
+
+  if (selector) {
+    selector.innerHTML = sucursales
+      .map(
+        (s) =>
+          `<option value="${s.id}" ${s.id === activaId ? "selected" : ""}>🏢 ${s.nombre}${s.esMatriz ? " (Matriz)" : ""}</option>`
+      )
+      .join("");
+  }
+
+  ["filtroSucursalResumen", "filtroSucursalVentas", "filtroSucursalGastos", "filtroSucursalCortes", "filtroSucursalInventario"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const valorActual = el.value || "TODAS";
+      el.innerHTML =
+        `<option value="TODAS">🏢 Todas las Sucursales (Consolidado)</option>` +
+        sucursales
+          .map(
+            (s) =>
+              `<option value="${s.id}" ${s.id === valorActual ? "selected" : ""}>🏢 ${s.nombre}${s.esMatriz ? " (Matriz)" : ""}</option>`
+          )
+          .join("");
+      if (valorActual && (valorActual === "TODAS" || sucursales.some((s) => s.id === valorActual))) {
+        el.value = valorActual;
+      }
+    }
+  });
+
+  const sucursalMovimientoEl = document.getElementById("sucursalMovimiento");
+  if (sucursalMovimientoEl) {
+    const valorActual = sucursalMovimientoEl.value || activaId;
+    sucursalMovimientoEl.innerHTML = sucursales
+      .map(
+        (s) =>
+          `<option value="${s.id}" ${s.id === valorActual ? "selected" : ""}>🏢 ${s.nombre}${s.esMatriz ? " (Matriz)" : ""}</option>`
+      )
+      .join("");
+    if (sucursales.some((s) => s.id === valorActual)) {
+      sucursalMovimientoEl.value = valorActual;
+    }
+  }
+}
+
+function renderizarTablaSucursales() {
+  const tbody = document.getElementById("tablaSucursalesBody");
+  if (!tbody) return;
+
+  const sucursales = obtenerSucursales();
+  const activaId = obtenerSucursalActivaId();
+
+  if (sucursales.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">No hay sucursales registradas.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = sucursales
+    .map((s) => {
+      const esActiva = s.id === activaId;
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0; ${esActiva ? "background: #f0fdf4;" : ""}">
+          <td style="padding: 10px; font-weight: 600; color: #64748b;">${s.id}</td>
+          <td style="padding: 10px; font-weight: 600; color: #0f172a;">
+            ${s.nombre} ${esActiva ? '<span style="font-size:0.75rem; color:#16a34a; font-weight:bold; margin-left:4px;">(Activa en esta PC)</span>' : ""}
+          </td>
+          <td style="padding: 10px; color: #475569;">${s.direccion || '<span style="color:#94a3b8;">-</span>'}</td>
+          <td style="padding: 10px; color: #475569;">${s.telefono || '<span style="color:#94a3b8;">-</span>'}</td>
+          <td style="padding: 10px; text-align: center;">
+            ${s.esMatriz ? '<span class="badge-matriz">Matriz</span>' : '<span class="badge-sucursal">Sucursal</span>'}
+          </td>
+          <td style="padding: 10px; text-align: center;">
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editarSucursal('${s.id}')">✏️ Editar</button>
+            ${!s.esMatriz ? `<button type="button" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.8rem; margin-left:4px;" onclick="eliminarSucursal('${s.id}')">🗑️</button>` : ""}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function abrirModalNuevaSucursal() {
+  const modal = document.getElementById("modalSucursal");
+  if (!modal) return;
+  document.getElementById("tituloModalSucursal").textContent = "🏢 Nueva Sucursal";
+  document.getElementById("sucursalEditId").value = "";
+  document.getElementById("nombreSucursalInput").value = "";
+  document.getElementById("direccionSucursalInput").value = "";
+  document.getElementById("telefonoSucursalInput").value = "";
+  document.getElementById("esMatrizSucursalInput").checked = false;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("nombreSucursalInput").focus();
+}
+
+function editarSucursal(id) {
+  const sucursales = obtenerSucursales();
+  const s = sucursales.find((item) => item.id === id);
+  if (!s) return;
+
+  const modal = document.getElementById("modalSucursal");
+  if (!modal) return;
+  document.getElementById("tituloModalSucursal").textContent = "✏️ Editar Sucursal";
+  document.getElementById("sucursalEditId").value = s.id;
+  document.getElementById("nombreSucursalInput").value = s.nombre || "";
+  document.getElementById("direccionSucursalInput").value = s.direccion || "";
+  document.getElementById("telefonoSucursalInput").value = s.telefono || "";
+  document.getElementById("esMatrizSucursalInput").checked = !!s.esMatriz;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("nombreSucursalInput").focus();
+}
+
+function cerrarModalSucursal() {
+  const modal = document.getElementById("modalSucursal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function guardarSucursal(event) {
+  event.preventDefault();
+  const idEdit = document.getElementById("sucursalEditId").value.trim();
+  const nombre = document.getElementById("nombreSucursalInput").value.trim();
+  const direccion = document.getElementById("direccionSucursalInput").value.trim();
+  const telefono = document.getElementById("telefonoSucursalInput").value.trim();
+  const esMatriz = document.getElementById("esMatrizSucursalInput").checked;
+
+  if (!nombre) {
+    alert("El nombre de la sucursal es obligatorio.");
+    return;
+  }
+
+  const sucursales = obtenerSucursales();
+
+  if (esMatriz) {
+    sucursales.forEach((s) => (s.esMatriz = false));
+  }
+
+  if (idEdit) {
+    const index = sucursales.findIndex((s) => s.id === idEdit);
+    if (index !== -1) {
+      sucursales[index] = {
+        ...sucursales[index],
+        nombre,
+        direccion,
+        telefono,
+        esMatriz: esMatriz || sucursales[index].esMatriz,
+      };
+    }
+  } else {
+    const nuevoId = `SUC-${Date.now().toString(36).toUpperCase()}`;
+    sucursales.push({
+      id: nuevoId,
+      nombre,
+      direccion,
+      telefono,
+      esMatriz: sucursales.length === 0 ? true : esMatriz,
+    });
+  }
+
+  if (!sucursales.some((s) => s.esMatriz) && sucursales.length > 0) {
+    sucursales[0].esMatriz = true;
+  }
+
+  localDB.sucursales = sucursales;
+  guardarEstadoLocal();
+  renderSelectorSucursal();
+  renderizarTablaSucursales();
+  cerrarModalSucursal();
+}
+
+function eliminarSucursal(id) {
+  const sucursales = obtenerSucursales();
+  const s = sucursales.find((item) => item.id === id);
+  if (!s) return;
+  if (s.esMatriz) {
+    alert("No se puede eliminar la sucursal Matriz (Principal).");
+    return;
+  }
+  if (!confirm(`¿Estás seguro de eliminar la sucursal "${s.nombre}"?`)) return;
+
+  localDB.sucursales = sucursales.filter((item) => item.id !== id);
+  if (obtenerSucursalActivaId() === id) {
+    const matriz = localDB.sucursales.find((item) => item.esMatriz) || localDB.sucursales[0];
+    if (matriz) cambiarSucursalActiva(matriz.id);
+  }
+
+  guardarEstadoLocal();
+  renderSelectorSucursal();
+  renderizarTablaSucursales();
 }
 
 function inicializarFirebaseSIEsPosible() {
@@ -308,6 +562,7 @@ async function _persistirEnServidor() {
           config: localDB.config || DEFAULT_CONFIG,
           listas: localDB.listas || DEFAULT_LISTAS,
         }),
+        obtenerRefDocConfig("sucursales").set({ items: localDB.sucursales || DEFAULT_SUCURSALES }),
         obtenerRefDocConfig("carritosPendientes").set({ items: localDB.carritosPendientes || [] }),
         obtenerRefDocConfig("pedidosPersonalizados").set({ items: localDB.pedidosPersonalizados || [] }),
       ]);
@@ -412,6 +667,21 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
       )
     );
 
+    // Escuchador en Tiempo Real para Sucursales
+    unsubs.push(
+      obtenerRefDocConfig("sucursales").onSnapshot(
+        (doc) => {
+          if (_isPersisting) return;
+          if (doc.exists && Array.isArray(doc.data().items)) {
+            localDB.sucursales = doc.data().items;
+            renderSelectorSucursal();
+            renderizarTablaSucursales();
+          }
+        },
+        (err) => console.warn("Suscripción a sucursales:", err)
+      )
+    );
+
     _unsubscribeFirestore = unsubs;
     return;
   }
@@ -467,10 +737,12 @@ function refrescarVistaActual() {
   if (currentTab === "pedidos") renderizarModuloPedidos();
   if (currentTab === "gastos") renderGastosRecientes();
   if (currentTab === "cortes") cargarModuloCortes();
+  renderSelectorSucursal();
 }
 
 // ── cargarEstadoLocal ─────────────────────────────────────────
 function _aplicarDatosALocalDB(data) {
+  localDB.sucursales = Array.isArray(data.sucursales) && data.sucursales.length > 0 ? data.sucursales : [...DEFAULT_SUCURSALES];
   localDB.productos = Array.isArray(data.productos) ? data.productos : [];
   localDB.movimientos = Array.isArray(data.movimientos) ? data.movimientos : [];
   localDB.ventas = Array.isArray(data.ventas) ? data.ventas : [];
@@ -526,6 +798,13 @@ async function cargarEstadoLocal() {
         if (d.listas) localDB.listas = d.listas;
       }
 
+      const sucursalesSnap = await obtenerRefDocConfig("sucursales").get();
+      if (sucursalesSnap.exists && Array.isArray(sucursalesSnap.data().items) && sucursalesSnap.data().items.length > 0) {
+        localDB.sucursales = sucursalesSnap.data().items;
+      } else {
+        localDB.sucursales = [...DEFAULT_SUCURSALES];
+      }
+
       const carritosSnap = await obtenerRefDocConfig("carritosPendientes").get();
       localDB.carritosPendientes = carritosSnap.exists && Array.isArray(carritosSnap.data().items) ? carritosSnap.data().items : [];
 
@@ -550,14 +829,14 @@ async function cargarEstadoLocal() {
       localDB.movimientos = movSnap.docs.map((d) => d.data());
       localDB.cortes = cortesSnap.docs.map((d) => d.data());
 
+      renderSelectorSucursal();
+      renderizarTablaSucursales();
       actualizarBadgeSincronizacion("online", "En Línea");
       return;
     } catch (err) {
       console.warn("🔥 Error al leer colecciones de Firestore, usando respaldo local:", err);
     }
   }
-
-
 
   // 2. Intentar cargar desde servidor local HTTP (/api/db) si estamos en red local
   if (window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
@@ -585,6 +864,8 @@ async function cargarEstadoLocal() {
             }
           } catch (_) { }
         }
+        renderSelectorSucursal();
+        renderizarTablaSucursales();
         return;
       }
     } catch (err) {
@@ -602,10 +883,14 @@ async function cargarEstadoLocal() {
       if (validarEstructuraEstado(data)) {
         _aplicarDatosALocalDB(data);
         console.info(`Datos cargados desde localStorage (${clave}).`);
+        renderSelectorSucursal();
+        renderizarTablaSucursales();
         return;
       }
     } catch (_) { }
   }
+  renderSelectorSucursal();
+  renderizarTablaSucursales();
 }
 
 function validarEstructuraEstado(data) {
@@ -1040,12 +1325,23 @@ function showReporteTab(panelName, clickedBtn) {
   if (clickedBtn) clickedBtn.classList.add("active");
 }
 
-function calcularStock(codigo) {
+function calcularStock(codigo, sucursalId = null) {
   const codigoNormalizado = normalizeCode(codigo);
   let cantidad = 0;
 
+  let targetSucursal = sucursalId;
+  if (targetSucursal === null) {
+    targetSucursal = obtenerSucursalActivaId();
+  }
+
   localDB.movimientos.forEach((mov) => {
     if (normalizeCode(mov.codigo) !== codigoNormalizado) return;
+
+    if (targetSucursal && targetSucursal !== "TODAS") {
+      const movSuc = mov.sucursalId || "SUC-MAIN";
+      if (movSuc !== targetSucursal) return;
+    }
+
     const valor = parseNumber(mov.cantidad, 0);
 
     switch (mov.tipo) {
@@ -1066,16 +1362,31 @@ function calcularStock(codigo) {
   return Math.max(0, Math.round(cantidad * 100) / 100);
 }
 
-function obtenerStock() {
+function obtenerStock(sucursalId = null) {
+  const sucursales = obtenerSucursales();
+  const filtroSuc = sucursalId !== null
+    ? sucursalId
+    : (document.getElementById("filtroSucursalInventario") ? document.getElementById("filtroSucursalInventario").value : "TODAS");
+
   return localDB.productos
     .map((p) => {
+      const stockPorSucursal = {};
+      sucursales.forEach((s) => {
+        stockPorSucursal[s.id] = calcularStock(p.codigo, s.id);
+      });
+
+      const cantidadTotal = Object.values(stockPorSucursal).reduce((a, b) => a + b, 0);
+      const cantidad = filtroSuc === "TODAS" ? cantidadTotal : (stockPorSucursal[filtroSuc] || 0);
       const costoPromedioPieza = calcularCostoPromedioPorPieza(p.codigo);
       const precioVenta = Math.max(0, parseNumber(p.precioVenta, 0));
+
       return {
         codigo: p.codigo,
         nombre: p.nombre,
         stockMin: p.stockMin,
-        cantidad: calcularStock(p.codigo),
+        cantidad: Math.round(cantidad * 100) / 100,
+        cantidadTotal: Math.round(cantidadTotal * 100) / 100,
+        stockPorSucursal,
         costoPromedioPieza,
         precioVenta,
         precioVariable: parseBoolean(p.precioVariable),
@@ -1164,9 +1475,10 @@ function acumularPagosNetos(ventas) {
 }
 
 function obtenerDetalleCajaDashboard() {
+  const sucursalActivaId = obtenerSucursalActivaId();
   const corteActivo = obtenerCorteActivo();
-  if (corteActivo) {
-    const resumen = obtenerResumenFinancieroEnRango(corteActivo.fechaApertura, new Date().toISOString());
+  if (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalActivaId)) {
+    const resumen = obtenerResumenFinancieroEnRango(corteActivo.fechaApertura, new Date().toISOString(), sucursalActivaId);
     const cajaEstimada = roundTo(parseNumber(corteActivo.cajaInicial, 0) + resumen.pagosEfectivo - resumen.gastosEfectivo, 2);
     return {
       valor: cajaEstimada,
@@ -1175,7 +1487,7 @@ function obtenerDetalleCajaDashboard() {
     };
   } else {
     const cortesOrdenados = (localDB.cortes || [])
-      .filter(c => c.estado === "CERRADO" && c.fechaCierre)
+      .filter(c => c.estado === "CERRADO" && c.fechaCierre && (!c.sucursalId || c.sucursalId === sucursalActivaId))
       .sort((a, b) => new Date(b.fechaCierre) - new Date(a.fechaCierre));
 
     let baseCash = 0;
@@ -1189,7 +1501,7 @@ function obtenerDetalleCajaDashboard() {
       label = `Último cierre: ${formatMoney(baseCash)}`;
     }
 
-    const resumen = obtenerResumenFinancieroEnRango(fechaInicioIso, new Date().toISOString());
+    const resumen = obtenerResumenFinancieroEnRango(fechaInicioIso, new Date().toISOString(), sucursalActivaId);
     const cajaEstimada = roundTo(baseCash + resumen.pagosEfectivo - resumen.gastosEfectivo, 2);
     return {
       valor: cajaEstimada,
@@ -1208,6 +1520,12 @@ function obtenerResumen() {
     now.getDate(),
   );
 
+  const sucursalActivaId = obtenerSucursalActivaId();
+  const ventasSucursal = localDB.ventas.filter(v => !v.sucursalId || v.sucursalId === sucursalActivaId);
+  const gastosSucursal = localDB.gastos.filter(g => !g.sucursalId || g.sucursalId === sucursalActivaId);
+  const movimientosSucursal = localDB.movimientos.filter(m => !m.sucursalId || m.sucursalId === sucursalActivaId);
+  const cortesSucursal = (localDB.cortes || []).filter(c => !c.sucursalId || c.sucursalId === sucursalActivaId);
+
   let sinStock = 0;
   let stockBajo = 0;
   let valorTotalInventario = 0;
@@ -1222,25 +1540,25 @@ function obtenerResumen() {
     valorTotalInventario += item.cantidad;
   });
 
-  localDB.movimientos.forEach((mov) => {
+  movimientosSucursal.forEach((mov) => {
     const fecha = new Date(mov.fecha);
     if (!Number.isNaN(fecha.getTime()) && fecha >= mesAtras) {
       movimientosUltimoMes += 1;
     }
   });
 
-  const ventasUltimoMes = localDB.ventas.filter((venta) => {
+  const ventasUltimoMes = ventasSucursal.filter((venta) => {
     const fechaVenta = new Date(venta.fecha);
     return !Number.isNaN(fechaVenta.getTime()) && fechaVenta >= mesAtras;
   }).length;
 
-  const resumenPagos = acumularPagosNetos(localDB.ventas);
+  const resumenPagos = acumularPagosNetos(ventasSucursal);
   const totalVentas =
     resumenPagos.efectivo + resumenPagos.tarjeta + resumenPagos.transferencia;
   let totalGastosEfectivo = 0;
   let totalGastosTarjeta = 0;
   let totalGastosTransferencia = 0;
-  localDB.gastos.forEach((gasto) => {
+  gastosSucursal.forEach((gasto) => {
     const m = (gasto.metodoPago || gasto.metodo || "EFECTIVO").toString().trim().toUpperCase();
     const monto = parseNumber(gasto.monto, 0);
     if (m === "TARJETA") totalGastosTarjeta += monto;
@@ -1249,13 +1567,13 @@ function obtenerResumen() {
   });
   const totalGastos = totalGastosEfectivo + totalGastosTarjeta + totalGastosTransferencia;
 
-  // Total retiros de caja acumulados de todos los cortes cerrados
-  const totalRetiros = (localDB.cortes || []).reduce((acumulado, corte) => {
+  // Total retiros de caja acumulados de los cortes de esta sucursal
+  const totalRetiros = cortesSucursal.reduce((acumulado, corte) => {
     return acumulado + parseNumber(corte.retiros, 0);
   }, 0);
 
   // Estadísticas de Pedidos Personalizados
-  const pedidos = localDB.pedidosPersonalizados || [];
+  const pedidos = (localDB.pedidosPersonalizados || []).filter(p => !p.sucursalId || p.sucursalId === sucursalActivaId);
   const proximaFechaLimit = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   let totalPedidos = pedidos.length;
@@ -1293,9 +1611,9 @@ function obtenerResumen() {
 
   return {
     totalProductos: localDB.productos.length,
-    totalMovimientos: localDB.movimientos.length,
+    totalMovimientos: movimientosSucursal.length,
     totalVentas: roundTo(totalVentas, 2),
-    cantidadVentas: localDB.ventas.length,
+    cantidadVentas: ventasSucursal.length,
     totalGastos: roundTo(totalGastos, 2),
     totalGastosEfectivo: roundTo(totalGastosEfectivo, 2),
     totalGastosTarjeta: roundTo(totalGastosTarjeta, 2),
@@ -1561,13 +1879,17 @@ function registrarMovimientoLocal(mov) {
 
   const cantidadProcesada = cantidad;
 
-  const stockActual = calcularStock(codigo);
+  const sucursales = obtenerSucursales();
+  const sucursalTargetId = mov.sucursalId || obtenerSucursalActivaId();
+  const sucursalTarget = sucursales.find((s) => s.id === sucursalTargetId) || obtenerSucursalActiva();
+
+  const stockActual = calcularStock(codigo, sucursalTarget.id);
   if (
     (tipo === TIPOS_MOVIMIENTO.SALIDA ||
       tipo === TIPOS_MOVIMIENTO.AJUSTE_NEGATIVO) &&
     stockActual < cantidadProcesada
   ) {
-    return `Stock insuficiente. Disponible: ${stockActual}, Solicitado: ${cantidadProcesada}`;
+    return `Stock insuficiente en ${sucursalTarget.nombre}. Disponible: ${stockActual}, Solicitado: ${cantidadProcesada}`;
   }
 
   const now = new Date();
@@ -1592,19 +1914,28 @@ function registrarMovimientoLocal(mov) {
       ? roundTo(costoCompra / (cantidadProcesada * piezasPorPresentacion), 4)
       : 0;
 
-  localDB.movimientos.push({
+  const nuevoMov = {
     codigo,
     fecha: fechaMovimiento.toISOString(),
     tipo,
     cantidad: roundTo(cantidadProcesada, 4),
     usuario: "Local",
+    sucursalId: sucursalTarget.id,
+    sucursalNombre: sucursalTarget.nombre,
     timestamp: new Date().toISOString(),
     observaciones: mov.observaciones || "",
     unidadCompra,
     piezasPorPresentacion,
     costoCompra,
     costoPorPieza,
-  });
+  };
+
+  localDB.movimientos.push(nuevoMov);
+
+  if (_dbFirestore) {
+    const movId = `M-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    obtenerRefColeccion("movimientos").doc(movId).set({ ...nuevoMov, id: movId }).catch((e) => console.warn("Firestore mov error:", e));
+  }
 
   guardarEstadoLocal();
 
@@ -1631,6 +1962,7 @@ function registrarGastoLocal(gasto) {
     return "Datos del gasto incompletos.";
   }
 
+  const sucursalActual = obtenerSucursalActiva();
   const nuevoGasto = {
     id: `G-${Date.now()}`,
     fecha: fecha.toISOString(),
@@ -1640,6 +1972,8 @@ function registrarGastoLocal(gasto) {
     persona: (gasto.persona || gasto.responsable || "").toString().trim(),
     monto: roundTo(monto, 2),
     usuario: "Local",
+    sucursalId: sucursalActual.id,
+    sucursalNombre: sucursalActual.nombre,
     timestamp: new Date().toISOString(),
     observaciones: gasto.observaciones || "",
   };
@@ -2017,14 +2351,17 @@ function confirmarVenta() {
 
   const ventaId = `V-${Date.now()}`;
   const timestamp = new Date().toISOString();
+  const sucursalActual = obtenerSucursalActiva();
 
   carritoVenta.forEach((item) => {
-    localDB.movimientos.push({
+    const nuevoMov = {
       codigo: normalizeCode(item.codigo),
       fecha: timestamp,
       tipo: TIPOS_MOVIMIENTO.SALIDA,
       cantidad: roundTo(item.cantidad, 4),
       usuario: "Local",
+      sucursalId: sucursalActual.id,
+      sucursalNombre: sucursalActual.nombre,
       timestamp,
       observaciones: `Venta ${ventaId}`,
       cantidadCompra: 0,
@@ -2032,12 +2369,19 @@ function confirmarVenta() {
       piezasPorPresentacion: 1,
       costoCompra: 0,
       costoPorPieza: 0,
-    });
+    };
+    localDB.movimientos.push(nuevoMov);
+    if (_dbFirestore) {
+      const movId = `M-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      obtenerRefColeccion("movimientos").doc(movId).set({ ...nuevoMov, id: movId }).catch((e) => console.warn("Firestore mov error:", e));
+    }
   });
 
-  localDB.ventas.push({
+  const nuevaVenta = {
     id: ventaId,
     fecha: timestamp,
+    sucursalId: sucursalActual.id,
+    sucursalNombre: sucursalActual.nombre,
     items: carritoVenta.map((item) => ({
       codigo: item.codigo,
       nombre: item.nombre,
@@ -2053,7 +2397,13 @@ function confirmarVenta() {
     },
     totalPagado: roundTo(totalPagado, 2),
     cambio: roundTo(totalPagado - totalVenta, 2),
-  });
+  };
+
+  localDB.ventas.push(nuevaVenta);
+
+  if (_dbFirestore) {
+    obtenerRefColeccion("ventas").doc(ventaId).set(nuevaVenta).catch((e) => console.warn("Firestore venta error:", e));
+  }
 
   if (carritoPendienteActivoId) {
     localDB.carritosPendientes = localDB.carritosPendientes.filter(
@@ -2823,31 +3173,47 @@ function validarIntegridadLocal() {
   return { errores };
 }
 
-function exportarStockCSVLocal() {
-  const stock = obtenerStock();
+function exportarStockCSVLocal(filtroSucursal = null) {
+  const filtro = filtroSucursal || (document.getElementById("filtroSucursalInventario") ? document.getElementById("filtroSucursalInventario").value : "TODAS");
+  const stock = obtenerStock(filtro);
   if (!stock.length) return null;
 
-  let csv =
-    "Codigo,Nombre,Stock Minimo,Stock Actual,Precio Real/Venta,Estado,Diferencia\n";
-  stock.forEach((producto) => {
-    let estado = "Normal";
-    let diferencia = 0;
+  const sucursales = obtenerSucursales();
+  const esConsolidado = filtro === "TODAS";
 
-    if (producto.cantidad <= 0) {
-      estado = "Sin Stock";
-      diferencia = -producto.stockMin;
-    } else if (
-      producto.cantidad <= producto.stockMin &&
-      producto.stockMin > 0
-    ) {
-      estado = "Stock Bajo";
-      diferencia = -(producto.stockMin - producto.cantidad);
-    } else {
-      diferencia = producto.cantidad - producto.stockMin;
-    }
+  let csv = "";
+  if (esConsolidado) {
+    const nombresSuc = sucursales.map((s) => `Stock ${s.nombre}`).join(",");
+    csv = `Codigo,Nombre,Stock Minimo,Stock Total,${nombresSuc},Precio Real/Venta,Estado\n`;
+    stock.forEach((producto) => {
+      let estado = producto.cantidad <= 0 ? "Sin Stock" : (producto.cantidad <= producto.stockMin && producto.stockMin > 0 ? "Stock Bajo" : "Normal");
+      const colsSuc = sucursales.map((s) => (producto.stockPorSucursal ? (producto.stockPorSucursal[s.id] || 0) : 0)).join(",");
+      csv += `"${producto.codigo}","${producto.nombre}",${producto.stockMin},${producto.cantidad},${colsSuc},${roundTo(producto.precioVenta || 0, 4)},"${estado}"\n`;
+    });
+  } else {
+    const sucursalTarget = sucursales.find((s) => s.id === filtro);
+    const nombreSuc = sucursalTarget ? sucursalTarget.nombre : "Sucursal";
+    csv = `Codigo,Nombre,Sucursal,Stock Minimo,Stock Actual,Precio Real/Venta,Estado,Diferencia\n`;
+    stock.forEach((producto) => {
+      let estado = "Normal";
+      let diferencia = 0;
 
-    csv += `"${producto.codigo}","${producto.nombre}",${producto.stockMin},${producto.cantidad},${roundTo(producto.precioVenta || 0, 4)},"${estado}","${diferencia}"\n`;
-  });
+      if (producto.cantidad <= 0) {
+        estado = "Sin Stock";
+        diferencia = -producto.stockMin;
+      } else if (
+        producto.cantidad <= producto.stockMin &&
+        producto.stockMin > 0
+      ) {
+        estado = "Stock Bajo";
+        diferencia = -(producto.stockMin - producto.cantidad);
+      } else {
+        diferencia = producto.cantidad - producto.stockMin;
+      }
+
+      csv += `"${producto.codigo}","${producto.nombre}","${nombreSuc}",${producto.stockMin},${producto.cantidad},${roundTo(producto.precioVenta || 0, 4)},"${estado}","${diferencia}"\n`;
+    });
+  }
 
   return csv;
 }
@@ -3023,6 +3389,9 @@ function cargarConfiguracionSistema() {
     nameField.value = config.businessName || DEFAULT_CONFIG.businessName;
   if (phoneField) phoneField.value = config.businessPhone || "";
   if (legendField) legendField.value = config.fiscalLegend || "";
+
+  renderSelectorSucursal();
+  renderizarTablaSucursales();
 }
 
 function guardarConfiguracionSistema(event) {
@@ -3214,14 +3583,17 @@ function registrarProducto(event) {
 }
 
 function registrarMovimiento(event) {
-  console.log("fechaMov", document.getElementById("fechaMov").value);
   event.preventDefault();
+
+  const sucursalMovEl = document.getElementById("sucursalMovimiento");
+  const sucursalId = sucursalMovEl ? sucursalMovEl.value : obtenerSucursalActivaId();
 
   const movimiento = {
     codigo: document.getElementById("codigoMov").value.trim().toUpperCase(),
     fecha: document.getElementById("fechaMov").value,
     tipo: document.getElementById("tipoMov").value,
     cantidad: parseFloat(document.getElementById("cantMov").value) || 0,
+    sucursalId,
     unidadCompra: document.getElementById("unidadCompraMov")
       ? document.getElementById("unidadCompraMov").value
       : "PIEZA",
@@ -3244,6 +3616,7 @@ function registrarMovimiento(event) {
   if (ok) {
     document.getElementById("formMovimiento").reset();
     document.getElementById("fechaMov").valueAsDate = new Date();
+    if (sucursalMovEl) sucursalMovEl.value = obtenerSucursalActivaId();
     const preview = document.getElementById("costoPorPiezaPreviewMov");
     if (preview) preview.value = "";
     handleTipoChange();
@@ -3298,9 +3671,10 @@ function mostrarStock() {
   const container = document.getElementById("stockTable");
   const filtroInput = document.getElementById("buscarInventarioTexto");
   const query = filtroInput ? filtroInput.value.trim().toLowerCase() : "";
+  const filtroSuc = document.getElementById("filtroSucursalInventario") ? document.getElementById("filtroSucursalInventario").value : "TODAS";
 
-  loading.style.display = "block";
-  let data = obtenerStock();
+  if (loading) loading.style.display = "block";
+  let data = obtenerStock(filtroSuc);
   if (query) {
     data = data.filter((p) => {
       const cod = (p.codigo || "").toLowerCase();
@@ -3308,8 +3682,8 @@ function mostrarStock() {
       return cod.includes(query) || nom.includes(query);
     });
   }
-  loading.style.display = "none";
-  displayStockTable(data, container);
+  if (loading) loading.style.display = "none";
+  displayStockTable(data, container, filtroSuc);
 }
 
 function filtrarInventarioEnTiempoReal() {
@@ -3325,12 +3699,16 @@ function limpiarBusquedaInventario() {
   mostrarStock();
 }
 
-function displayStockTable(data, container) {
+function displayStockTable(data, container, filtroSucursal = "TODAS") {
   if (data.length === 0) {
     container.innerHTML =
       '<div class="message warning">No hay productos registrados</div>';
     return;
   }
+
+  const sucursales = obtenerSucursales();
+  const sucursalElegida = sucursales.find((s) => s.id === filtroSucursal);
+  const esConsolidado = filtroSucursal === "TODAS";
 
   let html = `
         <table>
@@ -3339,7 +3717,8 @@ function displayStockTable(data, container) {
               <th>Codigo</th>
               <th>Nombre</th>
               <th>Stock Min.</th>
-              <th>Stock Actual</th>
+              <th>${esConsolidado ? "Stock Total" : `Stock (${sucursalElegida ? escapeXml(sucursalElegida.nombre) : "Sucursal"})`}</th>
+              ${esConsolidado ? "<th>Desglose por Sucursal</th>" : ""}
               <th>Precio Real/Venta</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -3363,12 +3742,26 @@ function displayStockTable(data, container) {
       estado = "Stock Bajo";
     }
 
+    let desgloseHtml = "";
+    if (esConsolidado) {
+      desgloseHtml = `<td><div style="display:flex; flex-wrap:wrap; gap:4px;">` +
+        sucursales
+          .map((s) => {
+            const qty = producto.stockPorSucursal ? (producto.stockPorSucursal[s.id] || 0) : 0;
+            const bg = qty > 0 ? "#e0f2fe" : "#f1f5f9";
+            const col = qty > 0 ? "#0369a1" : "#94a3b8";
+            return `<span class="badge" style="background:${bg}; color:${col}; font-size:0.75rem; padding:2px 6px;">${escapeXml(s.nombre)}: <strong>${qty}</strong></span>`;
+          })
+          .join("") + `</div></td>`;
+    }
+
     html += `
           <tr class="${statusClass}">
             <td><button type="button" class="barcode-code-btn" onclick="imprimirCodigoProducto('${producto.codigo}', '${(producto.nombre || "").replace(/'/g, "\\'")}')">${producto.codigo}</button></td>
             <td>${producto.nombre}</td>
             <td>${producto.stockMin}</td>
-            <td>${producto.cantidad}</td>
+            <td><strong style="font-size:1.05rem;">${producto.cantidad}</strong></td>
+            ${desgloseHtml}
             <td>${producto.precioVariable ? "Variable" : producto.precioVenta > 0 ? formatMoney(producto.precioVenta) : "N/D"}</td>
             <td>${estado}</td>
             <td>
@@ -3385,9 +3778,10 @@ function displayStockTable(data, container) {
 function mostrarAlertas() {
   const loading = document.getElementById("loading");
   const container = document.getElementById("stockTable");
+  const filtroSuc = document.getElementById("filtroSucursalInventario") ? document.getElementById("filtroSucursalInventario").value : "TODAS";
 
   loading.style.display = "block";
-  const data = obtenerStock();
+  const data = obtenerStock(filtroSuc);
   loading.style.display = "none";
 
   const alertProducts = data.filter(
@@ -3398,7 +3792,7 @@ function mostrarAlertas() {
       '<div class="message success">No hay productos con alertas de stock</div>';
     return;
   }
-  displayStockTable(alertProducts, container);
+  displayStockTable(alertProducts, container, filtroSuc);
 }
 
 function showStockAlerts() {
@@ -3546,7 +3940,12 @@ function obtenerReporteVentas(filtros) {
     .filter((venta) => {
       const fecha = new Date(venta.fecha);
       if (Number.isNaN(fecha.getTime())) return false;
-      return fecha >= desde && fecha <= hasta;
+      if (fecha < desde || fecha > hasta) return false;
+      if (filtros.sucursalId && filtros.sucursalId !== "TODAS") {
+        const vSucursal = venta.sucursalId || "SUC-MAIN";
+        if (vSucursal !== filtros.sucursalId) return false;
+      }
+      return true;
     })
     .flatMap((venta) => {
       const items = Array.isArray(venta.items) ? venta.items : [];
@@ -3563,6 +3962,7 @@ function obtenerReporteVentas(filtros) {
             id: venta.id || "SIN-FOLIO",
             fecha: venta.fecha,
             fechaTexto: formatDate(venta.fecha),
+            sucursalNombre: venta.sucursalNombre || "Matriz",
             codigoProducto: "-",
             nombreProducto: "Sin detalle",
             cantidad: 0,
@@ -3581,6 +3981,7 @@ function obtenerReporteVentas(filtros) {
         id: venta.id || "SIN-FOLIO",
         fecha: venta.fecha,
         fechaTexto: formatDate(venta.fecha),
+        sucursalNombre: venta.sucursalNombre || "Matriz",
         codigoProducto: item.codigo || "-",
         nombreProducto: item.nombre || "Producto",
         cantidad: roundTo(parseNumber(item.cantidad, 0), 2),
@@ -3600,6 +4001,7 @@ async function mostrarReporteVentas() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeVentas").value,
     fechaHasta: document.getElementById("fechaHastaVentas").value,
+    sucursalId: document.getElementById("filtroSucursalVentas") ? document.getElementById("filtroSucursalVentas").value : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -3684,6 +4086,7 @@ function displayReporteVentasTable(data) {
             <tr>
               <th>Fecha</th>
               <th>Folio</th>
+              <th>Sucursal</th>
               <th>Codigo</th>
               <th>Producto</th>
               <th>Cantidad</th>
@@ -3717,6 +4120,7 @@ function displayReporteVentasTable(data) {
           <tr>
             <td>${row.fechaTexto}</td>
             <td>${row.id}</td>
+            <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">${escapeXml(row.sucursalNombre || "Matriz")}</span></td>
             <td>${row.codigoProducto}</td>
             <td>${row.nombreProducto}</td>
             <td>${row.cantidad}</td>
@@ -3733,7 +4137,7 @@ function displayReporteVentasTable(data) {
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background: #e0f2fe; border-top: 2px solid #0284c7; color: #0369a1;">
-              <td colspan="4" style="text-align: right; font-weight: bold;">TOTALES:</td>
+              <td colspan="5" style="text-align: right; font-weight: bold;">TOTALES:</td>
               <td>${totalCantidad}</td>
               <td>-</td>
               <td>${formatMoney(totalEfectivo)}</td>
@@ -3752,6 +4156,7 @@ function exportarReporteVentas() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeVentas").value,
     fechaHasta: document.getElementById("fechaHastaVentas").value,
+    sucursalId: document.getElementById("filtroSucursalVentas") ? document.getElementById("filtroSucursalVentas").value : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -3807,7 +4212,7 @@ function exportarReporteVentas() {
 
   let csv = "\uFEFF"; // UTF-8 BOM para compatibilidad con Excel
   csv +=
-    "Fecha,Folio,Codigo,Producto,Cantidad,Precio Unitario,Efectivo,Tarjeta,Transferencia,Importe Total\n";
+    "Fecha,Folio,Sucursal,Codigo,Producto,Cantidad,Precio Unitario,Efectivo,Tarjeta,Transferencia,Importe Total\n";
 
   const foliosMostrados = new Set();
 
@@ -3819,7 +4224,7 @@ function exportarReporteVentas() {
     const tarjetaVal = esPrimerItemDelFolio ? row.tarjeta : "-";
     const transVal = esPrimerItemDelFolio ? row.transferencia : "-";
 
-    csv += `"${row.fechaTexto}","${row.id}","${row.codigoProducto}","${row.nombreProducto}","${row.cantidad}","${row.precioUnitario}","${efectivoVal}","${tarjetaVal}","${transVal}","${row.importeLinea}"\n`;
+    csv += `"${row.fechaTexto}","${row.id}","${row.sucursalNombre || "Matriz"}","${row.codigoProducto}","${row.nombreProducto}","${row.cantidad}","${row.precioUnitario}","${efectivoVal}","${tarjetaVal}","${transVal}","${row.importeLinea}"\n`;
   });
 
   // Fila de totales alineada a la interfaz del sistema
@@ -3853,12 +4258,18 @@ function obtenerReporteGastos(filtros) {
     .filter((gasto) => {
       const fecha = new Date(gasto.fecha);
       if (Number.isNaN(fecha.getTime())) return false;
-      return fecha >= desde && fecha <= hasta;
+      if (fecha < desde || fecha > hasta) return false;
+      if (filtros.sucursalId && filtros.sucursalId !== "TODAS") {
+        const gSucursal = gasto.sucursalId || "SUC-MAIN";
+        if (gSucursal !== filtros.sucursalId) return false;
+      }
+      return true;
     })
     .map((gasto) => ({
       id: gasto.id || "SIN-FOLIO",
       fecha: gasto.fecha,
       fechaTexto: formatDate(gasto.fecha),
+      sucursalNombre: gasto.sucursalNombre || "Matriz",
       categoria: gasto.categoria || "General",
       concepto: gasto.concepto || "Sin concepto",
       persona: gasto.persona || gasto.responsable || "-",
@@ -3873,6 +4284,7 @@ async function mostrarReporteGastos() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeGastos").value,
     fechaHasta: document.getElementById("fechaHastaGastos").value,
+    sucursalId: document.getElementById("filtroSucursalGastos") ? document.getElementById("filtroSucursalGastos").value : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -3929,6 +4341,7 @@ function displayReporteGastosTable(data) {
             <tr>
               <th>Fecha</th>
               <th>Folio</th>
+              <th>Sucursal</th>
               <th>Categoría</th>
               <th>Concepto</th>
               <th>Realizado por</th>
@@ -3945,6 +4358,7 @@ function displayReporteGastosTable(data) {
           <tr>
             <td>${row.fechaTexto}</td>
             <td>${row.id}</td>
+            <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">${escapeXml(row.sucursalNombre || "Matriz")}</span></td>
             <td>${row.categoria}</td>
             <td>${row.concepto}</td>
             <td>${escapeXml(row.persona)}</td>
@@ -3963,6 +4377,7 @@ function exportarReporteGastos() {
   const filtros = {
     fechaDesde: document.getElementById("fechaDesdeGastos").value,
     fechaHasta: document.getElementById("fechaHastaGastos").value,
+    sucursalId: document.getElementById("filtroSucursalGastos") ? document.getElementById("filtroSucursalGastos").value : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -3984,9 +4399,9 @@ function exportarReporteGastos() {
     return;
   }
 
-  let csv = "Fecha,Folio,Categoria,Concepto,RealizadoPor,Metodo,Monto,Observaciones\n";
+  let csv = "Fecha,Folio,Sucursal,Categoria,Concepto,RealizadoPor,Metodo,Monto,Observaciones\n";
   data.forEach((row) => {
-    csv += `"${row.fechaTexto}","${row.id}","${row.categoria}","${row.concepto}","${row.persona}","${row.metodoPago}","${row.monto}","${row.observaciones}"\n`;
+    csv += `"${row.fechaTexto}","${row.id}","${row.sucursalNombre || "Matriz"}","${row.categoria}","${row.concepto}","${row.persona}","${row.metodoPago}","${row.monto}","${row.observaciones}"\n`;
   });
 
   descargarArchivo(
@@ -4002,7 +4417,7 @@ function exportarReporteGastos() {
 }
 
 // ── Resumen Financiero General ────────────────────────────────────────────
-function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
+function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta, sucursalId = "TODAS") {
   const desde = new Date(`${fechaDesde}T00:00:00`);
   const hasta = new Date(`${fechaHasta}T23:59:59`);
 
@@ -4016,14 +4431,19 @@ function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
 
   const desdeIso = desde.toISOString();
   const hastaIso = hasta.toISOString();
-  const resumen = obtenerResumenFinancieroEnRango(desdeIso, hastaIso);
+  const resumen = obtenerResumenFinancieroEnRango(desdeIso, hastaIso, sucursalId);
 
-  // Retiros de cortes cerrados en el rango
+  // Retiros de cortes cerrados en el rango (filtrados por sucursal si aplica)
   const retirosPeriodo = (localDB.cortes || [])
     .filter((c) => {
       if (c.estado !== "CERRADO" || !c.fechaCierre) return false;
       const fc = new Date(c.fechaCierre);
-      return !Number.isNaN(fc.getTime()) && fc >= desde && fc <= hasta;
+      if (Number.isNaN(fc.getTime()) || fc < desde || fc > hasta) return false;
+      if (sucursalId && sucursalId !== "TODAS") {
+        const cSucursal = c.sucursalId || "SUC-MAIN";
+        if (cSucursal !== sucursalId) return false;
+      }
+      return true;
     })
     .reduce((acc, c) => acc + parseNumber(c.retiros, 0), 0);
 
@@ -4066,6 +4486,7 @@ function obtenerDatosResumenFinanciero(fechaDesde, fechaHasta) {
 async function generarResumenFinanciero() {
   const fechaDesde = document.getElementById("fechaDesdeResumen").value;
   const fechaHasta = document.getElementById("fechaHastaResumen").value;
+  const sucursalId = document.getElementById("filtroSucursalResumen") ? document.getElementById("filtroSucursalResumen").value : "TODAS";
 
   if (!fechaDesde || !fechaHasta) {
     showMessage("msgResumenFinanciero", "Seleccione las fechas para generar el resumen.", "warning");
@@ -4096,7 +4517,7 @@ async function generarResumenFinanciero() {
     }
   }
 
-  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta);
+  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta, sucursalId);
   if (!data) {
     showMessage("msgResumenFinanciero", "Rango de fechas inválido.", "warning");
     return;
@@ -4181,13 +4602,14 @@ async function generarResumenFinanciero() {
 function exportarResumenFinanciero() {
   const fechaDesde = document.getElementById("fechaDesdeResumen").value;
   const fechaHasta = document.getElementById("fechaHastaResumen").value;
+  const sucursalId = document.getElementById("filtroSucursalResumen") ? document.getElementById("filtroSucursalResumen").value : "TODAS";
 
   if (!fechaDesde || !fechaHasta) {
     showMessage("msgResumenFinanciero", "Seleccione las fechas para exportar el resumen.", "warning");
     return;
   }
 
-  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta);
+  const data = obtenerDatosResumenFinanciero(fechaDesde, fechaHasta, sucursalId);
   if (!data) {
     showMessage("msgResumenFinanciero", "Rango de fechas inválido.", "warning");
     return;
@@ -4195,7 +4617,7 @@ function exportarResumenFinanciero() {
 
   let csv = "\uFEFF"; // UTF-8 BOM
   csv += `RESUMEN FINANCIERO GENERAL\n`;
-  csv += `Periodo: ${fechaDesde} al ${fechaHasta}\n`;
+  csv += `Periodo: ${fechaDesde} al ${fechaHasta} | Sucursal: ${sucursalId}\n`;
   csv += `Generado: ${new Date().toLocaleString("es-MX")}\n`;
   csv += `\n`;
 
@@ -4242,10 +4664,14 @@ function obtenerCorteActivo() {
   if (normalizeCode(localDB.corteActivo.estado) !== "ABIERTO") {
     return null;
   }
+  const sucursalActivaId = obtenerSucursalActivaId();
+  if (localDB.corteActivo.sucursalId && localDB.corteActivo.sucursalId !== sucursalActivaId) {
+    return null;
+  }
   return localDB.corteActivo;
 }
 
-function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso) {
+function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso, sucursalId = "TODAS") {
   const inicio = new Date(fechaInicioIso);
   const fin = new Date(fechaFinIso);
 
@@ -4262,16 +4688,21 @@ function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso) {
       pagosTransferencia: 0,
       totalVentasNetas: 0,
       totalGastos: 0,
+      gastosEfectivo: 0,
+      gastosTarjeta: 0,
+      gastosTransferencia: 0,
+      gastosBancarios: 0,
     };
   }
 
   const ventasPeriodo = localDB.ventas.filter((venta) => {
     const fechaVenta = new Date(venta.fecha);
-    return (
-      !Number.isNaN(fechaVenta.getTime()) &&
-      fechaVenta >= inicio &&
-      fechaVenta <= fin
-    );
+    if (Number.isNaN(fechaVenta.getTime()) || fechaVenta < inicio || fechaVenta > fin) return false;
+    if (sucursalId && sucursalId !== "TODAS") {
+      const vSucursal = venta.sucursalId || "SUC-MAIN";
+      if (vSucursal !== sucursalId) return false;
+    }
+    return true;
   });
 
   const pagos = acumularPagosNetos(ventasPeriodo);
@@ -4280,11 +4711,12 @@ function obtenerResumenFinancieroEnRango(fechaInicioIso, fechaFinIso) {
 
   const gastosPeriodo = localDB.gastos.filter((gasto) => {
     const fechaGasto = new Date(gasto.timestamp || gasto.fecha);
-    return (
-      !Number.isNaN(fechaGasto.getTime()) &&
-      fechaGasto >= inicio &&
-      fechaGasto <= fin
-    );
+    if (Number.isNaN(fechaGasto.getTime()) || fechaGasto < inicio || fechaGasto > fin) return false;
+    if (sucursalId && sucursalId !== "TODAS") {
+      const gSucursal = gasto.sucursalId || "SUC-MAIN";
+      if (gSucursal !== sucursalId) return false;
+    }
+    return true;
   });
 
   let gastosEfectivo = 0;
@@ -4335,12 +4767,13 @@ function actualizarResumenCorteActual() {
   const corteActivo = obtenerCorteActivo();
   if (!corteActivo) {
     container.innerHTML =
-      '<div class="message info">No hay un corte abierto. Abra un corte para comenzar a acumular operaciones del periodo.</div>';
+      '<div class="message info">No hay un corte abierto en esta sucursal. Abra un corte para comenzar a acumular operaciones del turno.</div>';
     return;
   }
 
   const ahoraIso = new Date().toISOString();
-  const resumen = obtenerResumenFinancieroEnRango(corteActivo.fechaApertura, ahoraIso);
+  const sucursalActivaId = obtenerSucursalActivaId();
+  const resumen = obtenerResumenFinancieroEnRango(corteActivo.fechaApertura, ahoraIso, sucursalActivaId);
   const retiros = Math.max(
     0,
     parseNumber(
@@ -4416,9 +4849,10 @@ function renderEstadoCorteActual() {
   ];
 
   const corteActivo = obtenerCorteActivo();
+  const sucursalActiva = obtenerSucursalActiva();
 
   if (corteActivo) {
-    if (estadoField) estadoField.value = `ABIERTO (${corteActivo.id})`;
+    if (estadoField) estadoField.value = `ABIERTO (${corteActivo.id}) - ${corteActivo.sucursalNombre || sucursalActiva.nombre}`;
     if (fechaAperturaField) {
       fechaAperturaField.value = obtenerFechaHoraLocalTexto(corteActivo.fechaApertura);
     }
@@ -4463,7 +4897,7 @@ function renderEstadoCorteActual() {
       badgeCierre.className = "corte-panel-badge corte-panel-badge--info";
     }
   } else {
-    if (estadoField) estadoField.value = "SIN CORTE ABIERTO";
+    if (estadoField) estadoField.value = `SIN CORTE ABIERTO (${sucursalActiva.nombre})`;
     if (fechaAperturaField) fechaAperturaField.value = "-";
 
     // Panel Apertura: Requerido y activo
@@ -4472,8 +4906,9 @@ function renderEstadoCorteActual() {
     }
     if (cajaInicialField) {
       cajaInicialField.disabled = false;
+      const sucursalId = obtenerSucursalActivaId();
       const cortesOrdenados = (localDB.cortes || [])
-        .filter(c => c.estado === "CERRADO" && c.fechaCierre)
+        .filter(c => c.estado === "CERRADO" && c.fechaCierre && (!c.sucursalId || c.sucursalId === sucursalId))
         .sort((a, b) => new Date(b.fechaCierre) - new Date(a.fechaCierre));
       if (cortesOrdenados.length > 0) {
         cajaInicialField.value = String(roundTo(parseNumber(cortesOrdenados[0].cajaContada, 0), 2));
@@ -4524,7 +4959,7 @@ function renderEstadoCorteActual() {
 
 function abrirCorteCaja() {
   if (obtenerCorteActivo()) {
-    showMessage("msgCorte", "Ya existe un corte abierto.", "warning");
+    showMessage("msgCorte", "Ya existe un corte abierto en esta sucursal.", "warning");
     return;
   }
 
@@ -4561,6 +4996,7 @@ function abrirCorteCaja() {
     .toString()
     .trim();
 
+  const sucursalActual = obtenerSucursalActiva();
   localDB.corteActivo = {
     id: `CA-${Date.now()}`,
     fechaApertura: new Date().toISOString(),
@@ -4568,17 +5004,19 @@ function abrirCorteCaja() {
     observacionesApertura,
     estado: "ABIERTO",
     usuario: usuarioApertura,
+    sucursalId: sucursalActual.id,
+    sucursalNombre: sucursalActual.nombre,
   };
 
   guardarEstadoLocal();
   renderEstadoCorteActual();
-  showMessage("msgCorte", `Corte abierto por ${usuarioApertura} correctamente.`, "success");
+  showMessage("msgCorte", `Corte abierto por ${usuarioApertura} en sucursal ${sucursalActual.nombre} correctamente.`, "success");
 }
 
 function cerrarCorteCaja() {
   const corteActivo = obtenerCorteActivo();
   if (!corteActivo) {
-    showMessage("msgCorte", "No hay un corte abierto para cerrar.", "warning");
+    showMessage("msgCorte", "No hay un corte abierto para cerrar en esta sucursal.", "warning");
     return;
   }
 
@@ -4638,9 +5076,14 @@ function cerrarCorteCaja() {
   }
 
   const fechaCierre = new Date().toISOString();
+  const sucursalActiva = obtenerSucursalActiva();
+  const sucursalId = corteActivo.sucursalId || sucursalActiva.id;
+  const sucursalNombre = corteActivo.sucursalNombre || sucursalActiva.nombre;
+
   const resumen = obtenerResumenFinancieroEnRango(
     corteActivo.fechaApertura,
     fechaCierre,
+    sucursalId,
   );
   const cajaEsperada = roundTo(
     parseNumber(corteActivo.cajaInicial, 0) +
@@ -4652,7 +5095,7 @@ function cerrarCorteCaja() {
   );
   const diferencia = roundTo(cajaContada - cajaEsperada, 2);
 
-  localDB.cortes.push({
+  const nuevoCorte = {
     id: `CC-${Date.now()}`,
     periodicidad:
       periodicidad === "SEMANAL" ||
@@ -4682,8 +5125,16 @@ function cerrarCorteCaja() {
     observacionesApertura: corteActivo.observacionesApertura || "",
     observacionesCierre,
     usuario: corteActivo.usuario || "Local",
+    sucursalId,
+    sucursalNombre,
     estado: "CERRADO",
-  });
+  };
+
+  localDB.cortes.push(nuevoCorte);
+
+  if (_dbFirestore) {
+    obtenerRefColeccion("cortes").doc(nuevoCorte.id).set(nuevoCorte).catch((e) => console.warn("Firestore corte error:", e));
+  }
 
   localDB.corteActivo = null;
   guardarEstadoLocal();
@@ -4692,7 +5143,7 @@ function cerrarCorteCaja() {
   loadDashboard();
   showMessage(
     "msgCorte",
-    `Corte cerrado. Caja esperada: ${formatMoney(cajaEsperada)}. Diferencia: ${formatMoney(diferencia)}.`,
+    `Corte cerrado en ${sucursalNombre}. Caja esperada: ${formatMoney(cajaEsperada)}. Diferencia: ${formatMoney(diferencia)}.`,
     "success",
   );
 }
@@ -4719,6 +5170,10 @@ function obtenerReporteCortes(filtros) {
         normalizeCode(corte.periodicidad) !== normalizeCode(filtros.periodicidad)
       ) {
         return false;
+      }
+      if (filtros.sucursalId && filtros.sucursalId !== "TODAS") {
+        const cSucursal = corte.sucursalId || "SUC-MAIN";
+        if (cSucursal !== filtros.sucursalId) return false;
       }
       return true;
     })
@@ -4753,6 +5208,7 @@ function displayReporteCortesTable(data) {
           <thead>
             <tr>
               <th>Folio</th>
+              <th>Sucursal</th>
               <th>Usuario</th>
               <th>Periodicidad</th>
               <th>Apertura</th>
@@ -4776,6 +5232,7 @@ function displayReporteCortesTable(data) {
     html += `
           <tr>
             <td>${corte.id || "-"}</td>
+            <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">${escapeXml(corte.sucursalNombre || "Matriz")}</span></td>
             <td><strong>${corte.usuario || "Local"}</strong></td>
             <td>${corte.periodicidad || "DIARIO"}</td>
             <td>${obtenerFechaHoraLocalTexto(corte.fechaApertura)}</td>
@@ -4811,6 +5268,9 @@ function mostrarReporteCortes(silencioso = false) {
     periodicidad: document.getElementById("tipoCorteFiltro")
       ? document.getElementById("tipoCorteFiltro").value
       : "",
+    sucursalId: document.getElementById("filtroSucursalCortes")
+      ? document.getElementById("filtroSucursalCortes").value
+      : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -4839,6 +5299,9 @@ function exportarReporteCortes() {
     periodicidad: document.getElementById("tipoCorteFiltro")
       ? document.getElementById("tipoCorteFiltro").value
       : "",
+    sucursalId: document.getElementById("filtroSucursalCortes")
+      ? document.getElementById("filtroSucursalCortes").value
+      : "TODAS",
   };
 
   if (!filtros.fechaDesde || !filtros.fechaHasta) {
@@ -4861,10 +5324,10 @@ function exportarReporteCortes() {
   }
 
   let csv =
-    "Folio,Usuario,Periodicidad,Apertura,Cierre,Caja Inicial,Ventas Netas,Efectivo,Tarjeta,Transferencia,Gastos,Retiros,Ingresos Caja,Caja Esperada,Caja Contada,Diferencia,Observaciones Apertura,Observaciones Cierre\n";
+    "Folio,Sucursal,Usuario,Periodicidad,Apertura,Cierre,Caja Inicial,Ventas Netas,Efectivo,Tarjeta,Transferencia,Gastos,Retiros,Ingresos Caja,Caja Esperada,Caja Contada,Diferencia,Observaciones Apertura,Observaciones Cierre\n";
 
   data.forEach((corte) => {
-    csv += `"${corte.id || ""}","${(corte.usuario || "Local").replace(/"/g, '""')}","${corte.periodicidad || "DIARIO"}","${obtenerFechaHoraLocalTexto(corte.fechaApertura)}","${obtenerFechaHoraLocalTexto(corte.fechaCierre)}","${roundTo(parseNumber(corte.cajaInicial, 0), 2)}","${roundTo(parseNumber(corte.totalVentasNetas, 0), 2)}","${roundTo(parseNumber(corte.pagosEfectivo, 0), 2)}","${roundTo(parseNumber(corte.pagosTarjeta, 0), 2)}","${roundTo(parseNumber(corte.pagosTransferencia, 0), 2)}","${roundTo(parseNumber(corte.totalGastos, 0), 2)}","${roundTo(parseNumber(corte.retiros, 0), 2)}","${roundTo(parseNumber(corte.ingresosCaja, 0), 2)}","${roundTo(parseNumber(corte.cajaEsperada, 0), 2)}","${roundTo(parseNumber(corte.cajaContada, 0), 2)}","${roundTo(parseNumber(corte.diferencia, 0), 2)}","${(corte.observacionesApertura || "").replace(/"/g, '""')}","${(corte.observacionesCierre || "").replace(/"/g, '""')}"\n`;
+    csv += `"${corte.id || ""}","${(corte.sucursalNombre || "Matriz").replace(/"/g, '""')}","${(corte.usuario || "Local").replace(/"/g, '""')}","${corte.periodicidad || "DIARIO"}","${obtenerFechaHoraLocalTexto(corte.fechaApertura)}","${obtenerFechaHoraLocalTexto(corte.fechaCierre)}","${roundTo(parseNumber(corte.cajaInicial, 0), 2)}","${roundTo(parseNumber(corte.totalVentasNetas, 0), 2)}","${roundTo(parseNumber(corte.pagosEfectivo, 0), 2)}","${roundTo(parseNumber(corte.pagosTarjeta, 0), 2)}","${roundTo(parseNumber(corte.pagosTransferencia, 0), 2)}","${roundTo(parseNumber(corte.totalGastos, 0), 2)}","${roundTo(parseNumber(corte.retiros, 0), 2)}","${roundTo(parseNumber(corte.ingresosCaja, 0), 2)}","${roundTo(parseNumber(corte.cajaEsperada, 0), 2)}","${roundTo(parseNumber(corte.cajaContada, 0), 2)}","${roundTo(parseNumber(corte.diferencia, 0), 2)}","${(corte.observacionesApertura || "").replace(/"/g, '""')}","${(corte.observacionesCierre || "").replace(/"/g, '""')}"\n`;
   });
 
   descargarArchivo(
@@ -7101,6 +7564,11 @@ document.addEventListener("keydown", function (event) {
       cerrarModalDetallePedido();
       return;
     }
+    const modalSuc = document.getElementById("modalSucursal");
+    if (modalSuc && modalSuc.classList.contains("open")) {
+      cerrarModalSucursal();
+      return;
+    }
   }
 
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
@@ -7201,6 +7669,15 @@ window.addEventListener("load", () => {
     modalEditar.addEventListener("click", (event) => {
       if (event.target === modalEditar) {
         cerrarModalEditarProducto();
+      }
+    });
+  }
+
+  const modalSucursal = document.getElementById("modalSucursal");
+  if (modalSucursal) {
+    modalSucursal.addEventListener("click", (event) => {
+      if (event.target === modalSucursal) {
+        cerrarModalSucursal();
       }
     });
   }
