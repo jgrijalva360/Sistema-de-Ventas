@@ -105,6 +105,32 @@
       font-size: 0.85rem;
       margin-bottom: 18px;
       display: none;
+      line-height: 1.4;
+    }
+
+    .login-success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 18px;
+      display: none;
+      line-height: 1.4;
+    }
+
+    .link-forgot {
+      color: #38bdf8;
+      font-size: 0.85rem;
+      text-decoration: none;
+      transition: color 0.2s;
+      cursor: pointer;
+    }
+
+    .link-forgot:hover {
+      color: #7dd3fc;
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -112,14 +138,16 @@
 <body>
 
   <div class="login-card">
-    <div class="login-header">
-      <h2>🔑 Iniciar Sesión</h2>
-      <p>Acceso al Sistema de Ventas e Inventario</p>
-      <p style="font-size: 0.9rem;"><b>By. Dev-Mrsakate</b></p>
+    <div class="login-header" id="loginHeader">
+      <h2 id="loginTitle">🔑 Iniciar Sesión</h2>
+      <p id="loginSubtitle">Acceso al Sistema de Ventas e Inventario</p>
+      <p style="font-size: 0.85rem; margin-top: 4px; color: #64748b;"><b>By. Dev-Mrsakate</b></p>
     </div>
 
     <div id="loginError" class="login-error"></div>
+    <div id="loginSuccess" class="login-success"></div>
 
+    <!-- Formulario de Inicio de Sesión -->
     <form id="formLogin" onsubmit="realizarLogin(event)" autocomplete="on">
       <div class="form-group">
         <label for="loginEmail">Correo Electrónico</label>
@@ -133,7 +161,34 @@
           minlength="6" maxlength="64">
       </div>
 
+      <div style="text-align: right; margin-top: -6px; margin-bottom: 14px;">
+        <a href="javascript:void(0)" class="link-forgot" onclick="mostrarVistaRecuperar(true)">
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div>
+
       <button type="submit" class="btn-login" id="btnLoginSubmit">Ingresar</button>
+    </form>
+
+    <!-- Formulario de Recuperación de Contraseña -->
+    <form id="formRecuperar" onsubmit="solicitarRecuperacionPassword(event)" style="display: none;">
+      <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 0.85rem; color: #bae6fd; line-height: 1.4;">
+        ℹ️ Ingresa tu correo electrónico registrado. Te enviaremos un enlace seguro para restablecer tu contraseña.
+      </div>
+
+      <div class="form-group">
+        <label for="recuperarEmail">Correo Electrónico</label>
+        <input type="email" id="recuperarEmail" placeholder="usuario@ejemplo.com" required autocomplete="email"
+          maxlength="100">
+      </div>
+
+      <button type="submit" class="btn-login" id="btnRecuperarSubmit">Enviar Enlace de Recuperación</button>
+
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="javascript:void(0)" class="link-forgot" onclick="mostrarVistaRecuperar(false)" style="color: #94a3b8; font-size: 0.88rem;">
+          ← Volver a Iniciar Sesión
+        </a>
+      </div>
     </form>
   </div>
 

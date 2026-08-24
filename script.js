@@ -473,6 +473,15 @@ async function initializeApp() {
         window.location.href = "login.html";
       } else {
         document.body.style.display = "block";
+
+        // Actualizar datos del usuario autenticado en la interfaz
+        const userEmailEl = document.getElementById("userLoggedEmail");
+        if (userEmailEl) userEmailEl.textContent = user.email || "Usuario Activo";
+        const cuentaEl = document.getElementById("lblCuentaUsuarioActual");
+        if (cuentaEl) cuentaEl.textContent = user.email || "Usuario Activo";
+        const modalCuentaEl = document.getElementById("lblModalUsuarioEmail");
+        if (modalCuentaEl) modalCuentaEl.textContent = user.email || "Usuario Activo";
+
         // Al confirmar usuario, recargamos el estado específico del documento de este usuario
         await cargarEstadoLocal();
         refrescarVistaActual();
@@ -7810,4 +7819,252 @@ function desconectarFirebase() {
   iniciarSincronizacionAuto();
 }
 
+// ── GESTIÓN DE SEGURIDAD Y CAMBIO DE CONTRASEÑA ──────────────────────────────
+
+function abrirModalCambiarPassword() {
+  const modal = document.getElementById("modalCambiarPassword");
+  if (!modal) return;
+  const user = (typeof firebase !== "undefined" && firebase.auth) ? firebase.auth().currentUser : null;
+  const modalCuentaEl = document.getElementById("lblModalUsuarioEmail");
+  if (modalCuentaEl && user) modalCuentaEl.textContent = user.email || "";
+
+  const form = document.getElementById("formModalCambiarPassword");
+  if (form) form.reset();
+  const msg = document.getElementById("modalMsgPassword");
+  if (msg) msg.innerHTML = "";
+
+  modal.classList.add("active");
+  modal.classList.add("open");
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("modalPassActual")?.focus();
+}
+
+function cerrarModalCambiarPassword() {
+  const modal = document.getElementById("modalCambiarPassword");
+  if (!modal) return;
+  modal.classList.remove("active");
+  modal.classList.remove("open");
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function procesarCambioPassword({ passActual, passNueva, passConfirmar, btnSubmit, msgEl, onSuccess }) {
+  if (!passActual || !passNueva || !passConfirmar) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">⚠️ Todos los campos son obligatorios.</span>';
+    return;
+  }
+  if (passNueva.length < 6) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">⚠️ La nueva contraseña debe tener al menos 6 caracteres.</span>';
+    return;
+  }
+  if (passNueva !== passConfirmar) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">⚠️ Las nuevas contraseñas no coinciden.</span>';
+    return;
+  }
+  if (passActual === passNueva) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">⚠️ La nueva contraseña no puede ser igual a la actual.</span>';
+    return;
+  }
+
+  if (typeof firebase === "undefined" || !firebase.auth) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">❌ Firebase no está disponible.</span>';
+    return;
+  }
+
+  const user = firebase.auth().currentUser;
+  if (!user || !user.email) {
+    if (msgEl) msgEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">❌ No hay un usuario autenticado activo.</span>';
+    return;
+  }
+
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Actualizando...";
+  }
+  if (msgEl) {
+    msgEl.innerHTML = '<span style="color:#0284c7; font-weight:600;">⏳ Verificando credenciales y actualizando contraseña...</span>';
+  }
+
+  try {
+    // 1. Reautenticar con la contraseña actual
+    const credencial = firebase.auth.EmailAuthProvider.credential(user.email, passActual);
+    await user.reauthenticateWithCredential(credencial);
+
+    // 2. Actualizar contraseña
+    await user.updatePassword(passNueva);
+
+    if (msgEl) {
+      msgEl.innerHTML = '<span style="color:#10b981; font-weight:600;">✅ ¡Contraseña actualizada exitosamente!</span>';
+    }
+    if (typeof onSuccess === "function") {
+      onSuccess();
+    }
+  } catch (error) {
+    console.error("Error al cambiar contraseña:", error);
+    let textoError = "❌ No se pudo actualizar la contraseña.";
+    switch (error.code) {
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        textoError = "❌ La contraseña actual ingresada es incorrecta.";
+        break;
+      case "auth/weak-password":
+        textoError = "⚠️ La nueva contraseña es muy débil (mínimo 6 caracteres).";
+        break;
+      case "auth/requires-recent-login":
+        textoError = "⚠️ Por seguridad, debes cerrar sesión e iniciar nuevamente para cambiar tu contraseña.";
+        break;
+      case "auth/too-many-requests":
+        textoError = "⚠️ Demasiados intentos fallidos. Intenta más tarde.";
+        break;
+      case "auth/network-request-failed":
+        textoError = "🌐 Error de conexión. Revisa tu conexión a internet.";
+        break;
+      default:
+        textoError = `❌ ${error.message || "Error al actualizar contraseña."}`;
+    }
+    if (msgEl) {
+      msgEl.innerHTML = `<span style="color:#ef4444; font-weight:600;">${textoError}</span>`;
+    }
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = btnSubmit.dataset.originalText || "Actualizar Contraseña";
+    }
+  }
+}
+
+async function cambiarPasswordUsuario(event) {
+  event.preventDefault();
+  const passActual = document.getElementById("passActualConfig")?.value || "";
+  const passNueva = document.getElementById("passNuevaConfig")?.value || "";
+  const passConfirmar = document.getElementById("passConfirmarConfig")?.value || "";
+  const btnSubmit = document.getElementById("btnGuardarPassConfig");
+  const msgEl = document.getElementById("msgConfigPassword");
+
+  if (btnSubmit && !btnSubmit.dataset.originalText) {
+    btnSubmit.dataset.originalText = btnSubmit.innerText;
+  }
+
+  await procesarCambioPassword({
+    passActual,
+    passNueva,
+    passConfirmar,
+    btnSubmit,
+    msgEl,
+    onSuccess: () => {
+      document.getElementById("formCambiarPasswordConfig")?.reset();
+    }
+  });
+}
+
+async function cambiarPasswordUsuarioModal(event) {
+  event.preventDefault();
+  const passActual = document.getElementById("modalPassActual")?.value || "";
+  const passNueva = document.getElementById("modalPassNueva")?.value || "";
+  const passConfirmar = document.getElementById("modalPassConfirmar")?.value || "";
+  const btnSubmit = document.getElementById("btnModalGuardarPass");
+  const msgEl = document.getElementById("modalMsgPassword");
+
+  if (btnSubmit && !btnSubmit.dataset.originalText) {
+    btnSubmit.dataset.originalText = btnSubmit.innerText;
+  }
+
+  await procesarCambioPassword({
+    passActual,
+    passNueva,
+    passConfirmar,
+    btnSubmit,
+    msgEl,
+    onSuccess: () => {
+      document.getElementById("formModalCambiarPassword")?.reset();
+      setTimeout(() => {
+        cerrarModalCambiarPassword();
+      }, 1500);
+    }
+  });
+}
+
+async function enviarEmailRestablecimientoDesdeSistema() {
+  if (typeof firebase === "undefined" || !firebase.auth) {
+    alert("Firebase no está disponible.");
+    return;
+  }
+  const user = firebase.auth().currentUser;
+  if (!user || !user.email) {
+    alert("No hay un usuario autenticado activo.");
+    return;
+  }
+
+  const confirmar = confirm(`¿Deseas enviar un correo de restablecimiento de contraseña a ${user.email}?`);
+  if (!confirmar) return;
+
+  try {
+    await firebase.auth().sendPasswordResetEmail(user.email);
+    alert(`📧 Se ha enviado un enlace para restablecer tu contraseña al correo ${user.email}.\nRevisa tu bandeja de entrada o carpeta de spam.`);
+  } catch (error) {
+    console.error("Error al enviar email de restablecimiento:", error);
+    alert(`❌ No se pudo enviar el correo: ${error.message}`);
+  }
+}
+
+// ── Control de Navegación por Pestañas (Tabs) y Menú Lateral Móvil ─────────────
+
+function toggleSidebar(force) {
+  const sidebar = document.querySelector(".sidebar");
+  const overlay = document.getElementById("sidebarOverlay");
+  if (!sidebar) return;
+
+  const isOpen = typeof force === "boolean" ? force : !sidebar.classList.contains("open");
+
+  if (isOpen) {
+    sidebar.classList.add("open");
+    if (overlay) overlay.classList.add("active");
+  } else {
+    sidebar.classList.remove("open");
+    if (overlay) overlay.classList.remove("active");
+  }
+}
+
+function showTab(tabId) {
+  currentTab = tabId;
+  const tabs = document.querySelectorAll(".tab-content");
+  tabs.forEach((tab) => tab.classList.remove("active"));
+
+  const targetTab = document.getElementById(tabId);
+  if (targetTab) targetTab.classList.add("active");
+
+  const navLinks = document.querySelectorAll(".nav-link");
+  navLinks.forEach((link) => {
+    link.classList.remove("active");
+    if (link.getAttribute("onclick") && link.getAttribute("onclick").includes(`'${tabId}'`)) {
+      link.classList.add("active");
+    }
+  });
+
+  // Si estamos en vista móvil (<= 768px), cerrar automáticamente el sidebar al cambiar de pestaña
+  if (window.innerWidth <= 768) {
+    toggleSidebar(false);
+  }
+
+  // Refrescar vistas pertinentes
+  if (tabId === "dashboard") loadDashboard();
+  if (tabId === "inventario") mostrarStock();
+  if (tabId === "ventas") {
+    renderVentaCarrito();
+    renderVentasRecientes();
+    renderCarritosPendientes();
+    actualizarTotalesPagoVenta();
+  }
+  if (tabId === "pedidos") renderizarModuloPedidos();
+  if (tabId === "gastos") renderGastosRecientes();
+  if (tabId === "cortes") cargarModuloCortes();
+  if (tabId === "configuracion") {
+    cargarConfiguracionSistema();
+    cargarFormularioConfigFirebase();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", initializeApp);
+
+

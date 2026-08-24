@@ -113,3 +113,103 @@ async function realizarLogin(event) {
     btnSubmit.innerText = "Ingresar";
   }
 }
+
+// Alternar entre formulario de Login y de Recuperación
+function mostrarVistaRecuperar(mostrar) {
+  const formLogin = document.getElementById("formLogin");
+  const formRecuperar = document.getElementById("formRecuperar");
+  const loginTitle = document.getElementById("loginTitle");
+  const loginSubtitle = document.getElementById("loginSubtitle");
+  const errorDiv = document.getElementById("loginError");
+  const successDiv = document.getElementById("loginSuccess");
+
+  if (errorDiv) errorDiv.style.display = "none";
+  if (successDiv) successDiv.style.display = "none";
+
+  if (mostrar) {
+    if (formLogin) formLogin.style.display = "none";
+    if (formRecuperar) formRecuperar.style.display = "block";
+    const currentEmail = document.getElementById("loginEmail")?.value.trim();
+    const recuperarInput = document.getElementById("recuperarEmail");
+    if (recuperarInput && currentEmail) {
+      recuperarInput.value = currentEmail;
+    }
+    if (loginTitle) loginTitle.innerText = "🔐 Recuperar Acceso";
+    if (loginSubtitle) loginSubtitle.innerText = "Restablece tu contraseña por correo";
+    if (recuperarInput) recuperarInput.focus();
+  } else {
+    if (formLogin) formLogin.style.display = "block";
+    if (formRecuperar) formRecuperar.style.display = "none";
+    if (loginTitle) loginTitle.innerText = "🔑 Iniciar Sesión";
+    if (loginSubtitle) loginSubtitle.innerText = "Acceso al Sistema de Ventas e Inventario";
+  }
+}
+
+// Solicitar envío de email de restablecimiento de contraseña
+async function solicitarRecuperacionPassword(event) {
+  event.preventDefault();
+  const emailInput = document.getElementById("recuperarEmail");
+  const errorDiv = document.getElementById("loginError");
+  const successDiv = document.getElementById("loginSuccess");
+  const btnSubmit = document.getElementById("btnRecuperarSubmit");
+
+  const email = emailInput ? emailInput.value.trim() : "";
+  if (errorDiv) errorDiv.style.display = "none";
+  if (successDiv) successDiv.style.display = "none";
+
+  // 1. Validar formato de correo
+  const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !regexEmail.test(email)) {
+    if (errorDiv) {
+      errorDiv.style.display = "block";
+      errorDiv.innerText = "⚠️ Por favor ingresa un correo electrónico válido.";
+    }
+    return;
+  }
+
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "Enviando enlace...";
+  }
+
+  try {
+    if (typeof firebase === "undefined" || !firebase.auth) {
+      throw new Error("Firebase no está inicializado.");
+    }
+
+    await firebase.auth().sendPasswordResetEmail(email);
+
+    if (successDiv) {
+      successDiv.style.display = "block";
+      successDiv.innerHTML = `✅ <strong>¡Correo enviado con éxito!</strong><br>Hemos enviado un enlace a <strong>${email}</strong> para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.`;
+    }
+    if (emailInput) emailInput.value = "";
+  } catch (error) {
+    console.error("Error al solicitar restablecimiento de contraseña:", error);
+    if (errorDiv) {
+      errorDiv.style.display = "block";
+      switch (error.code) {
+        case "auth/user-not-found":
+          errorDiv.innerText = "❌ No existe ninguna cuenta registrada con este correo electrónico.";
+          break;
+        case "auth/invalid-email":
+          errorDiv.innerText = "❌ El correo electrónico ingresado no es válido.";
+          break;
+        case "auth/too-many-requests":
+          errorDiv.innerText = "⚠️ Demasiadas solicitudes. Por favor espera unos minutos antes de reintentar.";
+          break;
+        case "auth/network-request-failed":
+          errorDiv.innerText = "🌐 Error de red. Revisa tu conexión a internet.";
+          break;
+        default:
+          errorDiv.innerText = `❌ Error: ${error.message || "No se pudo enviar el correo de recuperación."}`;
+      }
+    }
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = "Enviar Enlace de Recuperación";
+    }
+  }
+}
+

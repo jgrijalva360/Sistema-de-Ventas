@@ -21,6 +21,7 @@
     <!-- Menu de navegación (SIDEBAR) -->
     <nav class="sidebar">
       <div class="sidebar-header">
+        <button type="button" class="sidebar-close-btn" onclick="toggleSidebar(false)" aria-label="Cerrar menú">✕</button>
         <h1>Sistema de ventas y control de inventario</h1>
         <div id="syncBadge"
           style="margin-top: 10px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 6px; color: #a7f3d0; background: rgba(16, 185, 129, 0.15); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(16, 185, 129, 0.3); transition: all 0.3s ease;">
@@ -98,7 +99,7 @@
           </a>
         </li>
         <li class="nav-item" style="margin-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 10px;">
-          <a class="nav-link" onclick="cerrarSesionFirebase()" style="color: #fca5a5;">
+          <a class="nav-link" onclick="cerrarSesionFirebase()" style="color: #fca5a5; cursor: pointer;">
             <span class="nav-icon">🚪</span>
             Cerrar Sesión
           </a>
@@ -106,7 +107,23 @@
       </ul>
     </nav>
 
+    <!-- Overlay oscuro para cerrar sidebar en dispositivos móviles -->
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+
     <div class="main-content">
+
+      <!-- Barra superior para celulares / pantallas táctiles -->
+      <header class="mobile-navbar">
+        <button type="button" class="btn-hamburger" onclick="toggleSidebar(true)" aria-label="Abrir menú de navegación">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
+        <span class="mobile-navbar-title">Sistema de Ventas</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 0.78rem; color: #a7f3d0; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); padding: 2px 8px; border-radius: 999px;">● Online</span>
+        </div>
+      </header>
 
       <!-- Dashboard General -->
       <div id="dashboard" class="tab-content active">
@@ -985,6 +1002,45 @@
         </div>
         
         <div class="content-body" style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
+          
+          <!-- Seguridad & Contraseña de Usuario -->
+          <div class="card">
+            <div class="card-header" style="display: flex; align-items: center; gap: 8px; color: #0f172a; font-weight: 700;">
+              <span>🔒</span> Seguridad & Cambio de Contraseña
+            </div>
+            <div class="card-body">
+              <p style="color: #334155; font-size: 0.92rem; margin-top: 0; margin-bottom: 14px; font-weight: 500;">
+                Cuenta activa: <strong id="lblCuentaUsuarioActual" style="color: #0284c7;">Cargando...</strong>
+              </p>
+
+              <form id="formCambiarPasswordConfig" onsubmit="cambiarPasswordUsuario(event)" style="max-width: 520px;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="passActualConfig" style="color: #1e293b; font-weight: 600; font-size: 0.88rem;">Contraseña Actual *</label>
+                  <input id="passActualConfig" type="password" placeholder="Tu contraseña actual" required minlength="6" autocomplete="current-password" style="color: #0f172a; width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="passNuevaConfig" style="color: #1e293b; font-weight: 600; font-size: 0.88rem;">Nueva Contraseña *</label>
+                  <input id="passNuevaConfig" type="password" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" style="color: #0f172a; width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 16px;">
+                  <label for="passConfirmarConfig" style="color: #1e293b; font-weight: 600; font-size: 0.88rem;">Confirmar Nueva Contraseña *</label>
+                  <input id="passConfirmarConfig" type="password" placeholder="Repite la nueva contraseña" required minlength="6" autocomplete="new-password" style="color: #0f172a; width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div class="actions" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                  <button class="btn btn-primary" type="submit" id="btnGuardarPassConfig">
+                    🔐 Actualizar Contraseña
+                  </button>
+                  <button class="btn btn-secondary" type="button" onclick="enviarEmailRestablecimientoDesdeSistema()">
+                    📧 Enviar enlace a mi correo
+                  </button>
+                </div>
+              </form>
+              <div id="msgConfigPassword" style="margin-top: 12px;"></div>
+            </div>
+          </div>
           
           <!-- 0. Gestión de Sucursales -->
           <div class="card">
