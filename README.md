@@ -1,86 +1,81 @@
 # Sistema de Ventas y Control de Inventario
 
-Sistema web moderno e interactivo para la gestión de inventario, punto de venta (POS), control de gastos y cortes de caja. Funciona en **red local**: un servidor Node.js centraliza la base de datos en `db.json` para que múltiples computadoras puedan acceder a los mismos datos simultáneamente.
+Sistema web moderno e interactivo para la gestión de inventario, punto de venta (POS), control de gastos, cortes de caja y pedidos personalizados. Conectado a **Firebase Cloud Firestore** con arquitectura de colecciones optimizada, soporte **offline (IndexedDB)** y despliegue en **Firebase Hosting**.
+
+🌐 **Demo / Producción:** [https://sistemadeventas-d7877.web.app](https://sistemadeventas-d7877.web.app)
+
+---
 
 ## 🚀 Características Principales
 
-- **📊 Dashboard Interactivo:** Métricas financieras en tiempo real, balance de caja actual, resumen de inventario y tendencias.
+- **📊 Dashboard Interactivo:** Métricas financieras en tiempo real, balance de caja actual (efectivo vs. pagos bancarios), resumen de inventario y tendencias.
 - **💳 Punto de Venta (POS):**
   - Búsqueda y escaneo de productos por código de barras.
-  - Pagos combinados (Efectivo, Tarjeta, Transferencia).
-  - Impresión de tickets de venta.
+  - Pagos combinados y desglosados (Efectivo, Tarjeta, Transferencia).
+  - Impresión de tickets de venta formateados.
   - Carritos pendientes y apartados de productos.
 - **📦 Control de Inventario:**
-  - Registro y edición de productos con precios y stock mínimo.
+  - Registro y edición de productos con margen de ganancia, stock mínimo y banderas de precio variable.
   - Generación e impresión/descarga de códigos de barras (Code 39).
   - Búsqueda en tiempo real e historial de productos.
-- **📋 Movimientos de Stock:** Registro de entradas, salidas y ajustes de inventario.
-- **💸 Control de Gastos:** Registro clasificado por categoría con impacto directo en caja.
+- **📋 Movimientos de Stock:** Registro clasificado de entradas, salidas y ajustes de inventario.
+- **💸 Control de Gastos:**
+  - Registro clasificado por categoría y por **Método de Pago** (Efectivo, Tarjeta, Transferencia).
+  - Registro opcional de **Realizado por** (responsable del gasto).
+  - **Desvinculación inteligente:** Los gastos con tarjeta/banco no afectan el efectivo físico en caja y se computan al saldo bancario neto.
 - **🧾 Sistema de Cortes de Caja:**
   - Apertura con caja inicial (precargada automáticamente con la caja contada anterior).
-  - Seguimiento de ventas, efectivo y gastos durante la sesión.
+  - Seguimiento de ventas, efectivo neto, cobros bancarios y gastos en efectivo vs. tarjeta.
   - Control de ingresos/retiros de caja y cálculo de diferencias al cierre.
   - Historial completo de cortes con exportación a CSV.
-- **🌐 Base de Datos en Red Local:** Los datos se almacenan en `backend/db.json` y son accesibles desde cualquier computadora de la red.
-- **💾 Respaldo y Configuración:** Exportación e importación completa de la base de datos en formato JSON.
+- **🛍️ Pedidos Personalizados:** Gestión de estados (Pendiente, En Proceso, Terminado, Entregado) con abonos parciales.
+- **☁️ Firebase Cloud Firestore + Caché Offline:**
+  - Arquitectura de colecciones atomizadas (`productos`, `ventas`, `gastos`, `movimientos`, `cortes`, `config`).
+  - Persistencia offline en IndexedDB (**0 lecturas consumidas** al recargar el navegador).
+  - Consultas acotadas por fecha/corte y sincronización multi-dispositivo en tiempo real.
+- **💾 Respaldo y Configuración:** Exportación e importación completa en JSON y sincronización de datos del negocio.
+
+---
 
 ## 🛠️ Requisitos
 
-- [Node.js](https://nodejs.org) v18 o superior (para el servidor de red local).
 - Navegador web moderno (Google Chrome, Microsoft Edge, Mozilla Firefox, Safari).
+- Para desarrollo local / despliegue: [Node.js](https://nodejs.org) v18+ y Firebase CLI (`npm i -g firebase-tools`).
 
-## 🚀 Instalación y Uso
+---
 
-### Primera vez
+## 🚀 Uso y Despliegue
 
-1. Abre una terminal en la carpeta `backend/`:
-   ```bash
-   cd backend
-   npm install
-   ```
+### Acceso Web (Producción)
+Simplemente ingresa a la aplicación desplegada en Firebase Hosting:
+👉 **[https://sistemadeventas-d7877.web.app](https://sistemadeventas-d7877.web.app)**
 
-2. Inicia el servidor:
-   ```bash
-   node server.js
-   ```
+### Despliegue a Firebase Hosting
+Si realizas cambios en el código y deseas desplegarlos:
 
-3. Abre el navegador en `http://localhost:3000`.
-
-### Uso diario
-
-**Con ventana de terminal visible:**
-- Doble clic en `backend/iniciar-servidor.bat`
-
-**En segundo plano (sin ventana):**
-- Doble clic en `backend/iniciar-oculto.vbs` para iniciar.
-- Doble clic en `backend/detener-servidor.bat` para detener.
-
-### Acceso desde otras computadoras en la misma red
-
-Al iniciar el servidor, la terminal mostrará la IP de tu PC:
-
-```
-  Esta PC:    http://localhost:3000
-  Otras PCs:  http://192.168.X.X:3000
+```bash
+firebase deploy
 ```
 
-Las demás computadoras solo necesitan abrir esa dirección en su navegador.
+---
 
 ## 📁 Estructura del proyecto
 
 ```
 ├── index.html               # Interfaz principal de la aplicación
-├── script.js                # Lógica de negocio y comunicación con el servidor
-├── styles.css               # Estilos visuales
+├── script.js                # Lógica de negocio y sincronización con Firebase Firestore
+├── styles.css               # Estilos visuales del sistema
+├── environment.js          # Credenciales de entorno de Firebase
+├── firebase.json            # Configuración de Firebase Hosting y Firestore
+├── .firebaserc              # Proyecto activo de Firebase
+├── login.html               # Pantalla de inicio de sesión / autenticación
+├── login.js                 # Manejo de usuarios y autenticación Firebase Auth
+├── 404.html                 # Página de error 404 personalizada
 ├── assets/                  # Recursos multimedia (sonidos, etc.)
-└── backend/
-    ├── server.js            # Servidor Express (red local, puerto 3000)
-    ├── db.json              # Base de datos (archivo JSON persistente)
-    ├── package.json         # Dependencias Node.js
-    ├── iniciar-servidor.bat # Inicia el servidor con terminal visible
-    ├── iniciar-oculto.vbs   # Inicia el servidor en segundo plano
-    └── detener-servidor.bat # Detiene el servidor en segundo plano
+└── backend/                 # Backend opcional para red local HTTP fallback
 ```
+
+---
 
 ## 📄 Licencia
 

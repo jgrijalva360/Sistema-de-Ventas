@@ -255,7 +255,7 @@ function mostrarCargando(visible) {
         <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.2);
           border-top-color:#6c63ff;border-radius:50%;
           animation:_spin 0.8s linear infinite;"></div>
-        <p style="margin:0;font-size:1rem;opacity:.85;">Conectando con la base de datos...</p>
+        <p style="margin:0;font-size:1rem;opacity:.85;">Cargando datos del sistema...</p>
         <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
       document.body.appendChild(overlay);
     }
@@ -313,11 +313,11 @@ async function _persistirEnServidor() {
       ]);
 
       localStorage.removeItem(STORAGE_KEY + "_backup");
-      actualizarBadgeSincronizacion("online", "Firestore Colecciones (En Vivo)");
+      actualizarBadgeSincronizacion("online", "En Línea");
       return;
     } catch (err) {
       console.warn("🔥 Error al guardar estado en Firestore:", err);
-      actualizarBadgeSincronizacion("offline", "Modo Offline (Respaldo)");
+      actualizarBadgeSincronizacion("offline", "Modo Sin Conexión");
       try {
         localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
       } catch (e) { }
@@ -338,10 +338,10 @@ async function _persistirEnServidor() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _lastServerJsonString = rawBody;
     localStorage.removeItem(STORAGE_KEY + "_backup");
-    actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+    actualizarBadgeSincronizacion("online", "En Línea");
   } catch (err) {
     console.warn("Servidor local no disponible, guardando en localStorage como respaldo:", err.message);
-    actualizarBadgeSincronizacion("offline", "Modo Local (Respaldo)");
+    actualizarBadgeSincronizacion("offline", "Modo Sin Conexión");
     try {
       localStorage.setItem(STORAGE_KEY + "_backup", JSON.stringify(localDB));
     } catch (e) {
@@ -369,7 +369,7 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
 
   // Si Firestore está habilitado, usamos escuchadores específicos en Tiempo Real
   if (_dbFirestore) {
-    actualizarBadgeSincronizacion("online", "Firestore Colecciones (En Vivo)");
+    actualizarBadgeSincronizacion("online", "En Línea");
     const unsubs = [];
 
     // Escuchador en Tiempo Real para el catálogo de Productos (inventario en vivo)
@@ -424,7 +424,7 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
       try {
         const res = await fetch(API_DB);
         if (!res.ok) {
-          actualizarBadgeSincronizacion("offline", "Modo Local");
+          actualizarBadgeSincronizacion("offline", "Sin conexión");
           return;
         }
         const data = await res.json();
@@ -434,7 +434,7 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
 
         if (!_lastServerJsonString) {
           _lastServerJsonString = serverJson;
-          actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+          actualizarBadgeSincronizacion("online", "En Línea");
           return;
         }
 
@@ -443,15 +443,15 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
           _lastServerJsonString = serverJson;
           _aplicarDatosALocalDB(data);
           refrescarVistaActual();
-          actualizarBadgeSincronizacion("updated", "¡Datos actualizados desde Red!");
+          actualizarBadgeSincronizacion("updated", "¡Datos actualizados!");
           setTimeout(() => {
-            actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+            actualizarBadgeSincronizacion("online", "En Línea");
           }, 2500);
         } else {
-          actualizarBadgeSincronizacion("online", "Conectado en Red Local");
+          actualizarBadgeSincronizacion("online", "En Línea");
         }
       } catch (err) {
-        actualizarBadgeSincronizacion("offline", "Modo Local");
+        actualizarBadgeSincronizacion("offline", "Sin conexión");
       }
     }, intervalMs);
   }
@@ -550,7 +550,7 @@ async function cargarEstadoLocal() {
       localDB.movimientos = movSnap.docs.map((d) => d.data());
       localDB.cortes = cortesSnap.docs.map((d) => d.data());
 
-      actualizarBadgeSincronizacion("online", "Firestore Colecciones (Offline Ready)");
+      actualizarBadgeSincronizacion("online", "En Línea");
       return;
     } catch (err) {
       console.warn("🔥 Error al leer colecciones de Firestore, usando respaldo local:", err);
@@ -4950,76 +4950,7 @@ function exportarStock() {
   showMessage("stockTable", "Stock exportado exitosamente", "success");
 }
 
-function exportarDatosJSON() {
-  const fecha = new Date().toISOString().slice(0, 10);
-  descargarArchivo(
-    `Inventario_Local_${fecha}.json`,
-    exportarEstadoLocal(),
-    "application/json;charset=utf-8;",
-  );
-  showMessage("configResults", "Datos locales exportados a JSON.", "success");
-}
 
-function importarDatosJSON() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".json,application/json";
-  input.onchange = function (e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function () {
-      try {
-        const data = JSON.parse(reader.result);
-        if (!validarEstructuraEstado(data)) {
-          showMessage(
-            "configResults",
-            "El archivo JSON no tiene la estructura esperada.",
-            "error",
-          );
-          return;
-        }
-
-        _aplicarDatosALocalDB(data);
-
-        localDB.productos = localDB.productos.map((producto) => ({
-          ...producto,
-          precioVenta: Math.max(0, parseNumber(producto.precioVenta, 0)),
-          precioVariable: parseBoolean(producto.precioVariable),
-        }));
-        guardarEstadoLocal();
-
-        loadListas();
-        loadDashboard();
-        cargarConfiguracionSistema();
-        if (currentTab === "inventario") {
-          mostrarStock();
-        }
-        if (currentTab === "gastos") {
-          renderGastosRecientes();
-        }
-        if (currentTab === "pedidos") {
-          renderizarModuloPedidos();
-        }
-        renderCarritosPendientes();
-        showMessage(
-          "configResults",
-          "Datos importados correctamente desde JSON.",
-          "success",
-        );
-      } catch (error) {
-        showMessage(
-          "configResults",
-          `Error al importar JSON: ${error.message}`,
-          "error",
-        );
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-}
 
 function limpiarFormProducto() {
   document.getElementById("formProducto").reset();
@@ -5083,6 +5014,19 @@ function descargarBackupBaseDeDatos() {
   }
 }
 
+async function vaciarColeccionFirestore(nombreColeccion) {
+  if (!_dbFirestore) return;
+  try {
+    const snap = await obtenerRefColeccion(nombreColeccion).get();
+    if (snap.empty) return;
+    const batch = _dbFirestore.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  } catch (err) {
+    console.warn(`Error al vaciar colección ${nombreColeccion} en Firestore:`, err);
+  }
+}
+
 async function respaldarEnFirestoreColeccionBackup() {
   if (_dbFirestore) {
     try {
@@ -5108,7 +5052,7 @@ async function realizarCierreOResetPeriodico(modo) {
 
   if (modo === "reset_operativo") {
     titulo = "Reset de Operaciones (Mensual / Periódico)";
-    descripcion = "Se descargar un BACKUP automático de seguridad.\nSe BORRARÁN: Ventas, Gastos, Pedidos, Cortes de Caja y Carritos pendientes.\nSe CONSERVARÁN: Productos, Stock actual y Configuración.";
+    descripcion = "Se descargará un BACKUP automático de seguridad.\nSe BORRARÁN: Ventas, Gastos, Pedidos entregados, Cortes de Caja y Carritos pendientes.\nSe CONSERVARÁN: Productos, Stock actual y Configuración.";
   } else if (modo === "simplificar_movimientos") {
     titulo = "Simplificación de Movimientos del Historial";
     descripcion = "Se descargará un BACKUP automático de seguridad.\nSe UNIFICARÁ el historial de movimientos reemplazándolos por un único movimiento de 'Ajuste / Cierre' con el stock actual de cada producto.\nSe conservará el catálogo de Productos e Inventario intacto.";
@@ -5141,6 +5085,7 @@ async function realizarCierreOResetPeriodico(modo) {
       const stockActual = calcularStock(p.codigo);
       if (stockActual > 0) {
         nuevosMovimientos.push({
+          id: `M-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           codigo: normalizeCode(p.codigo),
           fecha: fechaHoraActual,
           tipo: TIPOS_MOVIMIENTO.INGRESO,
@@ -5165,6 +5110,19 @@ async function realizarCierreOResetPeriodico(modo) {
     localDB.corteActivo = null;
     localDB.carritosPendientes = [];
     localDB.pedidosPersonalizados = pedidosNoEntregados;
+
+    // Sincronizar borrado de documentos en Colecciones Firestore
+    if (_dbFirestore) {
+      await Promise.all([
+        vaciarColeccionFirestore("ventas"),
+        vaciarColeccionFirestore("gastos"),
+        vaciarColeccionFirestore("cortes"),
+        vaciarColeccionFirestore("movimientos")
+      ]);
+      for (const m of nuevosMovimientos) {
+        await obtenerRefColeccion("movimientos").doc(m.id).set(m);
+      }
+    }
   } else if (modo === "reset_total") {
     localDB.productos = [];
     localDB.movimientos = [];
@@ -5175,6 +5133,17 @@ async function realizarCierreOResetPeriodico(modo) {
     localDB.carritosPendientes = [];
     localDB.pedidosPersonalizados = [];
     localDB.config = { ...DEFAULT_CONFIG };
+
+    // Vaciar todas las colecciones en Firestore
+    if (_dbFirestore) {
+      await Promise.all([
+        vaciarColeccionFirestore("productos"),
+        vaciarColeccionFirestore("ventas"),
+        vaciarColeccionFirestore("gastos"),
+        vaciarColeccionFirestore("cortes"),
+        vaciarColeccionFirestore("movimientos")
+      ]);
+    }
   }
 
   // 3. Persistir y refrescar vistas
@@ -7174,25 +7143,6 @@ document.addEventListener("click", function (event) {
 });
 
 window.addEventListener("load", () => {
-  const configActions = document.querySelector("#configuracion .actions");
-  if (configActions && !document.getElementById("btnExportJson")) {
-    const btn = document.createElement("button");
-    btn.id = "btnExportJson";
-    btn.className = "btn btn-secondary";
-    btn.textContent = "Exportar JSON";
-    btn.onclick = exportarDatosJSON;
-    configActions.appendChild(btn);
-  }
-
-  if (configActions && !document.getElementById("btnImportJson")) {
-    const btnImport = document.createElement("button");
-    btnImport.id = "btnImportJson";
-    btnImport.className = "btn btn-info";
-    btnImport.textContent = "Importar JSON";
-    btnImport.onclick = importarDatosJSON;
-    configActions.appendChild(btnImport);
-  }
-
   handleTipoChange();
 
   ["pagoEfectivo", "pagoTarjeta", "pagoTransferencia"].forEach((id) => {
