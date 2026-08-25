@@ -364,15 +364,21 @@ function inicializarFirebaseSIEsPosible() {
       if (!firebase.apps.length) {
         firebase.initializeApp(config);
       }
+
+      // Silenciar advertencias internas y no críticas del SDK de Firebase (BloomFilter y deprecaciones de persistencia)
+      if (firebase.firestore && typeof firebase.firestore.setLogLevel === "function") {
+        firebase.firestore.setLogLevel("error");
+      }
+
       _dbFirestore = firebase.firestore();
 
       // Habilitar la persistencia offline de Firestore en IndexedDB
       try {
         _dbFirestore.enablePersistence({ synchronizeTabs: true }).catch((err) => {
           if (err.code === "failed-precondition") {
-            console.warn("Aviso de persistencia Firestore: Múltiples pestañas abiertas.");
+            // Múltiples pestañas abiertas
           } else if (err.code === "unimplemented") {
-            console.warn("Aviso de persistencia Firestore: Navegador sin soporte offline.");
+            // Navegador sin soporte offline
           }
         });
       } catch (e) { }
@@ -457,13 +463,31 @@ async function migrarMonolitoAColeccionesSiEsNecesario() {
 async function initializeApp() {
   mostrarCargando(true);
   inicializarFirebaseSIEsPosible();
-  await cargarEstadoLocal();
-  mostrarCargando(false);
   setDefaultDates();
   loadListas();
   cargarConfiguracionSistema();
-  loadDashboard();
-  iniciarSincronizacionAuto(3000);
+
+  let inicializado = false;
+
+  const ejecutarCargaInicial = async (user) => {
+    if (inicializado) return;
+    inicializado = true;
+
+    if (user) {
+      const userEmailEl = document.getElementById("userLoggedEmail");
+      if (userEmailEl) userEmailEl.textContent = user.email || "Usuario Activo";
+      const cuentaEl = document.getElementById("lblCuentaUsuarioActual");
+      if (cuentaEl) cuentaEl.textContent = user.email || "Usuario Activo";
+      const modalCuentaEl = document.getElementById("lblModalUsuarioEmail");
+      if (modalCuentaEl) modalCuentaEl.textContent = user.email || "Usuario Activo";
+    }
+
+    await cargarEstadoLocal();
+    await registrarVersionAppEnFirestoreSiEsNecesario();
+    mostrarCargando(false);
+    loadDashboard();
+    iniciarSincronizacionAuto(3000);
+  };
 
   // 🔒 Validación estricta de seguridad (Auth Guard y Carga Multi-usuario)
   if (typeof firebase !== "undefined" && firebase.auth) {
@@ -473,23 +497,12 @@ async function initializeApp() {
         window.location.href = "login.html";
       } else {
         document.body.style.display = "block";
-
-        // Actualizar datos del usuario autenticado en la interfaz
-        const userEmailEl = document.getElementById("userLoggedEmail");
-        if (userEmailEl) userEmailEl.textContent = user.email || "Usuario Activo";
-        const cuentaEl = document.getElementById("lblCuentaUsuarioActual");
-        if (cuentaEl) cuentaEl.textContent = user.email || "Usuario Activo";
-        const modalCuentaEl = document.getElementById("lblModalUsuarioEmail");
-        if (modalCuentaEl) modalCuentaEl.textContent = user.email || "Usuario Activo";
-
-        // Al confirmar usuario, recargamos el estado específico del documento de este usuario
-        await cargarEstadoLocal();
-        refrescarVistaActual();
-        iniciarSincronizacionAuto(3000);
+        await ejecutarCargaInicial(user);
       }
     });
   } else {
     document.body.style.display = "block";
+    await ejecutarCargaInicial(null);
   }
 }
 
@@ -553,10 +566,260 @@ function actualizarBadgeSincronizacion(estado, texto) {
   txt.textContent = texto;
 }
 
-// ── guardarEstadoLocal (con debounce 400ms) ───────────────────
+// ── Control de Versiones y Nombres de Dispositivos Multi-Equipo ───────
+const APP_VERSION = "v2.1.20260824.2152";
+let _miRevisionLocal = 0;
+let _bannerVersionMostrado = false;
+
+function obtenerNombreDispositivoLocal() {
+  let nombre = localStorage.getItem("pos_device_name");
+  if (!nombre) {
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    const tipo = isMobile ? "Celular/Móvil" : "Caja/PC";
+    nombre = `${tipo} ${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    localStorage.setItem("pos_device_name", nombre);
+  }
+  return nombre;
+}
+
+function guardarNombreDispositivoLocal(nuevoNombre) {
+  const nombreLimpio = (nuevoNombre || "").trim();
+  if (nombreLimpio) {
+    localStorage.setItem("pos_device_name", nombreLimpio);
+    const input = document.getElementById("inputNombreDispositivo");
+    if (input) input.value = nombreLimpio;
+    const lblLast = document.getElementById("lblLastDeviceConfig");
+    if (lblLast) lblLast.textContent = `${nombreLimpio} (Este equipo)`;
+  }
+}
+
+function esVersionMasNueva(remota, local) {
+  if (!remota || !local) return false;
+  const limpiar = (v) => v.toString().replace(/[^0-9]/g, "");
+  const numRemota = parseInt(limpiar(remota), 10) || 0;
+  const numLocal = parseInt(limpiar(local), 10) || 0;
+  return numRemota > numLocal;
+}
+
+function actualizarUIIndicadoresVersion(data) {
+  if (!data) return;
+  const revision = data.dataRevision || 1;
+  const dispositivo = data.lastDevice || "Desconocido";
+  const fechaIso = data.lastTimestamp || new Date().toISOString();
+  const remoteAppVersion = data.appVersion || APP_VERSION;
+  const miDispositivo = obtenerNombreDispositivoLocal();
+
+  // 1. Sidebar Badge
+  const lblAppSidebar = document.getElementById("lblAppVersionSidebar");
+  const lblRevSidebar = document.getElementById("lblDataRevisionSidebar");
+  if (lblAppSidebar) lblAppSidebar.textContent = APP_VERSION;
+  if (lblRevSidebar) lblRevSidebar.textContent = `Rev #${revision}`;
+
+  // 2. Settings View
+  const lblAppConfig = document.getElementById("lblAppVersionConfig");
+  const lblRevConfig = document.getElementById("lblDataRevisionConfig");
+  const lblLastDeviceConfig = document.getElementById("lblLastDeviceConfig");
+  const lblLastTimestampConfig = document.getElementById("lblLastTimestampConfig");
+  const inputDispositivo = document.getElementById("inputNombreDispositivo");
+
+  if (lblAppConfig) lblAppConfig.textContent = APP_VERSION;
+  if (lblRevConfig) lblRevConfig.textContent = `Rev #${revision}`;
+  if (lblLastDeviceConfig) {
+    lblLastDeviceConfig.textContent = dispositivo === miDispositivo ? `${dispositivo} (Este equipo)` : dispositivo;
+  }
+  if (lblLastTimestampConfig) {
+    lblLastTimestampConfig.textContent = obtenerFechaHoraLocalTexto(fechaIso);
+  }
+  if (inputDispositivo && !inputDispositivo.value) {
+    inputDispositivo.value = miDispositivo;
+  }
+
+  // 3. Sincronizar versión actual hacia la nube si la local es más reciente o la nube tenía versión vieja
+  if (esVersionMasNueva(APP_VERSION, remoteAppVersion) || remoteAppVersion === "2.1.0") {
+    obtenerRefDocConfig("version").set({
+      appVersion: APP_VERSION,
+      lastDevice: miDispositivo,
+      lastTimestamp: new Date().toISOString()
+    }, { merge: true }).catch(() => { });
+  }
+
+  // 4. Notificación si otro equipo hizo una modificación reciente
+  if (_miRevisionLocal > 0 && revision > _miRevisionLocal && dispositivo !== miDispositivo) {
+    actualizarBadgeSincronizacion("updated", `¡Cambios de ${dispositivo}!`);
+    setTimeout(() => actualizarBadgeSincronizacion("online", "En Línea"), 3000);
+  }
+
+  // 5. Solo mostrar banner si la versión en la nube es estrictamente MÁS NUEVA que la actual
+  if (esVersionMasNueva(remoteAppVersion, APP_VERSION) && !_bannerVersionMostrado) {
+    _bannerVersionMostrado = true;
+    mostrarBannerNuevaVersion(remoteAppVersion);
+  }
+
+  _miRevisionLocal = revision;
+}
+
+async function registrarVersionAppEnFirestoreSiEsNecesario() {
+  if (!_dbFirestore) return;
+  try {
+    const tenantId = obtenerDocIdEmpresa();
+    const docRef = obtenerRefDocConfig("version");
+    const miDispositivo = obtenerNombreDispositivoLocal();
+
+    await Promise.all([
+      docRef.set({
+        appVersion: APP_VERSION,
+        lastDevice: miDispositivo,
+        lastTimestamp: new Date().toISOString()
+      }, { merge: true }),
+      _dbFirestore.collection("sistema").doc(tenantId).set({
+        appVersion: APP_VERSION,
+        actualizadoEn: new Date().toISOString()
+      }, { merge: true })
+    ]);
+    console.info(`📌 Versión [${APP_VERSION}] registrada exitosamente en Firestore.`);
+  } catch (err) {
+    console.warn("Aviso al registrar versión en Firestore:", err);
+  }
+}
+
+function mostrarBannerNuevaVersion(nuevaVer) {
+  let banner = document.getElementById("bannerNuevaVersionApp");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "bannerNuevaVersionApp";
+    banner.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:99999;background:#0f172a;color:white;padding:12px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.4);display:flex;align-items:center;gap:12px;border:1px solid #38bdf8;";
+    banner.innerHTML = `
+      <span>🚀 Hay una actualización disponible (<strong>${nuevaVer}</strong>).</span>
+      <button class="btn btn-sm btn-primary" onclick="recargarAplicacionSinCache()" style="padding:4px 10px;font-size:0.8rem;">Recargar</button>
+      <button type="button" onclick="document.getElementById('bannerNuevaVersionApp').remove()" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0 4px;" title="Cerrar">✕</button>
+    `;
+    document.body.appendChild(banner);
+  }
+}
+
+function recargarAplicacionSinCache() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("_v", Date.now());
+  window.location.replace(url.toString());
+}
+
+async function forzarSincronizacionTotal(mostrarAlerta = false) {
+  mostrarCargando(true);
+  try {
+    await cargarEstadoLocal();
+    refrescarVistaActual();
+    mostrarCargando(false);
+    if (mostrarAlerta) {
+      alert("✅ Sincronización completa con la nube realizada con éxito.");
+    }
+  } catch (err) {
+    mostrarCargando(false);
+    if (mostrarAlerta) {
+      alert("⚠️ Error al sincronizar con la nube: " + err.message);
+    }
+  }
+}
+
+// ── Guardado y Carga por Lotes / Chunks (Agrupación de 150 registros por Documento) ──
+const TAMANO_CHUNK_DEFAULT = 150;
+
+async function guardarColeccionChunked(nombreColeccion, arrayItems, chunkSize = TAMANO_CHUNK_DEFAULT) {
+  if (!_dbFirestore) return;
+  const items = Array.isArray(arrayItems) ? arrayItems : [];
+  const totalChunks = Math.ceil(items.length / chunkSize) || 1;
+  const coleccionRef = obtenerRefColeccion("chunks_" + nombreColeccion);
+  if (!coleccionRef) return;
+
+  const batch = _dbFirestore.batch();
+
+  // 1. Guardar cada chunk de datos
+  for (let i = 0; i < totalChunks; i++) {
+    const chunkItems = items.slice(i * chunkSize, (i + 1) * chunkSize);
+    const chunkDocRef = coleccionRef.doc(`chunk_${i}`);
+    batch.set(chunkDocRef, {
+      chunkIndex: i,
+      items: chunkItems,
+      totalItems: chunkItems.length,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  // 2. Guardar metadata del manifest
+  const metaDocRef = coleccionRef.doc("_manifest");
+  batch.set(metaDocRef, {
+    totalChunks,
+    totalCount: items.length,
+    chunkSize,
+    updatedAt: new Date().toISOString()
+  });
+
+  await batch.commit();
+
+  // 3. Limpiar chunks sobrantes si el array disminuyó
+  try {
+    const snap = await coleccionRef.get();
+    const batchCleanup = _dbFirestore.batch();
+    let huboSobrantes = false;
+    snap.docs.forEach((d) => {
+      if (d.id.startsWith("chunk_")) {
+        const idx = parseInt(d.id.replace("chunk_", ""), 10);
+        if (idx >= totalChunks) {
+          batchCleanup.delete(d.ref);
+          huboSobrantes = true;
+        }
+      }
+    });
+    if (huboSobrantes) await batchCleanup.commit();
+  } catch (_) { }
+}
+
+async function cargarColeccionChunked(nombreColeccion) {
+  if (!_dbFirestore) return [];
+  try {
+    const coleccionRef = obtenerRefColeccion("chunks_" + nombreColeccion);
+    if (!coleccionRef) return [];
+
+    const snap = await coleccionRef.get();
+    if (snap.empty) {
+      // Fallback: si aún no existen chunks, intentar leer de la colección individual antigua
+      const snapAntigua = await obtenerRefColeccion(nombreColeccion).get();
+      if (!snapAntigua.empty) {
+        const dataAntigua = snapAntigua.docs.map((d) => d.data());
+        guardarColeccionChunked(nombreColeccion, dataAntigua).catch(() => { });
+        return dataAntigua;
+      }
+      return [];
+    }
+
+    const chunkDocs = snap.docs
+      .filter((d) => d.id.startsWith("chunk_"))
+      .sort((a, b) => {
+        const idxA = parseInt(a.id.replace("chunk_", ""), 10) || 0;
+        const idxB = parseInt(b.id.replace("chunk_", ""), 10) || 0;
+        return idxA - idxB;
+      });
+
+    const resultado = [];
+    chunkDocs.forEach((d) => {
+      const data = d.data();
+      if (Array.isArray(data.items)) {
+        resultado.push(...data.items);
+      }
+    });
+    return resultado;
+  } catch (err) {
+    console.warn(`Aviso al cargar chunks de ${nombreColeccion}:`, err);
+    return [];
+  }
+}
+
+// ── guardarEstadoLocal (con debounce 800ms y respaldo inmediato) ───────
 function guardarEstadoLocal() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(localDB));
+  } catch (_) { }
   clearTimeout(_saveDebounceTimer);
-  _saveDebounceTimer = setTimeout(_persistirEnServidor, 400);
+  _saveDebounceTimer = setTimeout(_persistirEnServidor, 800);
 }
 
 async function _persistirEnServidor() {
@@ -566,6 +829,12 @@ async function _persistirEnServidor() {
   if (_dbFirestore) {
     try {
       await Promise.all([
+        _dbFirestore.collection("sistema").doc(obtenerDocIdEmpresa()).set({
+          nombreNegocio: (localDB.config && localDB.config.businessName) || "Mi Negocio",
+          actualizadoEn: new Date().toISOString(),
+          appVersion: APP_VERSION,
+          estado: "activo"
+        }, { merge: true }),
         obtenerRefDocConfig("corteActivo").set(localDB.corteActivo || {}),
         obtenerRefDocConfig("general").set({
           config: localDB.config || DEFAULT_CONFIG,
@@ -574,6 +843,17 @@ async function _persistirEnServidor() {
         obtenerRefDocConfig("sucursales").set({ items: localDB.sucursales || DEFAULT_SUCURSALES }),
         obtenerRefDocConfig("carritosPendientes").set({ items: localDB.carritosPendientes || [] }),
         obtenerRefDocConfig("pedidosPersonalizados").set({ items: localDB.pedidosPersonalizados || [] }),
+        guardarColeccionChunked("productos", localDB.productos),
+        guardarColeccionChunked("ventas", localDB.ventas),
+        guardarColeccionChunked("gastos", localDB.gastos),
+        guardarColeccionChunked("movimientos", localDB.movimientos),
+        guardarColeccionChunked("cortes", localDB.cortes),
+        obtenerRefDocConfig("version").set({
+          appVersion: APP_VERSION,
+          dataRevision: firebase.firestore.FieldValue.increment(1),
+          lastDevice: obtenerNombreDispositivoLocal(),
+          lastTimestamp: new Date().toISOString()
+        }, { merge: true })
       ]);
 
       localStorage.removeItem(STORAGE_KEY + "_backup");
@@ -616,7 +896,7 @@ async function _persistirEnServidor() {
   }
 }
 
-// ── Observable / Sincronización Automática (Firestore Listener por Colecciones) ──────
+// ── Observable / Sincronización Automática Ultra-Eficiente en Tiempo Real ───────────
 function iniciarSincronizacionAuto(intervalMs = 3000) {
   if (_unsubscribeFirestore) {
     if (Array.isArray(_unsubscribeFirestore)) {
@@ -631,36 +911,56 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
     _syncPollInterval = null;
   }
 
-  // Si Firestore está habilitado, usamos escuchadores específicos en Tiempo Real
+  // Si Firestore está habilitado, usamos escuchadores optimizados por documento único
   if (_dbFirestore) {
     actualizarBadgeSincronizacion("online", "En Línea");
     const unsubs = [];
 
-    // Escuchador en Tiempo Real para el catálogo de Productos (inventario en vivo)
+    // 1. Escuchador en Tiempo Real para Chunks de Productos (Catálogo escalable)
     unsubs.push(
-      obtenerRefColeccion("productos").onSnapshot(
+      obtenerRefColeccion("chunks_productos").onSnapshot(
         (snapshot) => {
           if (_isPersisting) return;
-          localDB.productos = snapshot.docs.map((doc) => doc.data());
-          refrescarVistaActual();
+          if (!snapshot.empty) {
+            const chunkDocs = snapshot.docs
+              .filter((d) => d.id.startsWith("chunk_"))
+              .sort((a, b) => {
+                const idxA = parseInt(a.id.replace("chunk_", ""), 10) || 0;
+                const idxB = parseInt(b.id.replace("chunk_", ""), 10) || 0;
+                return idxA - idxB;
+              });
+            const productosActualizados = [];
+            chunkDocs.forEach((d) => {
+              const data = d.data();
+              if (Array.isArray(data.items)) {
+                productosActualizados.push(...data.items);
+              }
+            });
+            if (productosActualizados.length > 0) {
+              localDB.productos = productosActualizados;
+              refrescarVistaActual();
+            }
+          }
         },
-        (err) => console.warn("Suscripción a productos:", err)
+        (err) => console.warn("Suscripción a chunks de productos:", err)
       )
     );
 
-    // Escuchador en Tiempo Real para el Corte Activo
+    // 2. Escuchador en Tiempo Real para el Corte Activo (Apertura y Cierre de Turno en vivo)
     unsubs.push(
       obtenerRefDocConfig("corteActivo").onSnapshot(
         (doc) => {
           if (_isPersisting) return;
           localDB.corteActivo = doc.exists && doc.data().id ? doc.data() : null;
           renderEstadoCorteActual();
+          actualizarResumenCorteActual();
+          if (currentTab === "cortes") mostrarReporteCortes(true);
         },
         (err) => console.warn("Suscripción a corte activo:", err)
       )
     );
 
-    // Escuchador en Tiempo Real para Configuración General (nombre negocio, teléfono, listas)
+    // 3. Escuchador en Tiempo Real para Configuración General (nombre negocio, listas)
     unsubs.push(
       obtenerRefDocConfig("general").onSnapshot(
         (doc) => {
@@ -676,7 +976,7 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
       )
     );
 
-    // Escuchador en Tiempo Real para Sucursales
+    // 4. Escuchador en Tiempo Real para Sucursales
     unsubs.push(
       obtenerRefDocConfig("sucursales").onSnapshot(
         (doc) => {
@@ -689,6 +989,143 @@ function iniciarSincronizacionAuto(intervalMs = 3000) {
         },
         (err) => console.warn("Suscripción a sucursales:", err)
       )
+    );
+
+    // 5. Escuchador en Tiempo Real para Pedidos Personalizados
+    unsubs.push(
+      obtenerRefDocConfig("pedidosPersonalizados").onSnapshot(
+        (doc) => {
+          if (_isPersisting) return;
+          if (doc.exists && Array.isArray(doc.data().items)) {
+            localDB.pedidosPersonalizados = doc.data().items;
+            if (currentTab === "pedidos") renderizarModuloPedidos();
+          }
+        },
+        (err) => console.warn("Suscripción a pedidos:", err)
+      )
+    );
+
+    // 6. Escuchador en Tiempo Real para Carritos Pendientes
+    unsubs.push(
+      obtenerRefDocConfig("carritosPendientes").onSnapshot(
+        (doc) => {
+          if (_isPersisting) return;
+          if (doc.exists && Array.isArray(doc.data().items)) {
+            localDB.carritosPendientes = doc.data().items;
+            if (currentTab === "ventas") renderCarritosPendientes();
+          }
+        },
+        (err) => console.warn("Suscripción a carritos pendientes:", err)
+      )
+    );
+
+    // 7. Escuchador en Tiempo Real para Ventas del Turno Activo / Hoy
+    let fechaInicioSyncVentas = localDB.corteActivo && localDB.corteActivo.fechaApertura
+      ? localDB.corteActivo.fechaApertura
+      : new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+
+    unsubs.push(
+      obtenerRefColeccion("ventas")
+        .where("fecha", ">=", fechaInicioSyncVentas)
+        .onSnapshot(
+          (snapshot) => {
+            if (_isPersisting) return;
+            let huboCambios = false;
+            snapshot.docChanges().forEach((change) => {
+              const data = change.doc.data();
+              if (change.type === "added" || change.type === "modified") {
+                const idx = localDB.ventas.findIndex((v) => v.id === data.id);
+                if (idx >= 0) {
+                  localDB.ventas[idx] = data;
+                } else {
+                  localDB.ventas.push(data);
+                }
+                huboCambios = true;
+              } else if (change.type === "removed") {
+                localDB.ventas = localDB.ventas.filter((v) => v.id !== change.doc.id);
+                huboCambios = true;
+              }
+            });
+            if (huboCambios) {
+              refrescarVistaActual();
+            }
+          },
+          (err) => console.warn("Suscripción a ventas en vivo:", err)
+        )
+    );
+
+    // 8. Escuchador en Tiempo Real para Gastos del Turno Activo / Hoy
+    unsubs.push(
+      obtenerRefColeccion("gastos")
+        .where("fecha", ">=", fechaInicioSyncVentas)
+        .onSnapshot(
+          (snapshot) => {
+            if (_isPersisting) return;
+            let huboCambios = false;
+            snapshot.docChanges().forEach((change) => {
+              const data = change.doc.data();
+              if (change.type === "added" || change.type === "modified") {
+                const idx = localDB.gastos.findIndex((g) => g.id === data.id);
+                if (idx >= 0) {
+                  localDB.gastos[idx] = data;
+                } else {
+                  localDB.gastos.push(data);
+                }
+                huboCambios = true;
+              } else if (change.type === "removed") {
+                localDB.gastos = localDB.gastos.filter((g) => g.id !== change.doc.id);
+                huboCambios = true;
+              }
+            });
+            if (huboCambios) {
+              refrescarVistaActual();
+            }
+          },
+          (err) => console.warn("Suscripción a gastos en vivo:", err)
+        )
+    );
+
+    // 9. Escuchador en Tiempo Real para Control de Versiones y Revisiones Multi-Equipo
+    unsubs.push(
+      obtenerRefDocConfig("version").onSnapshot(
+        (doc) => {
+          if (doc.exists) {
+            actualizarUIIndicadoresVersion(doc.data());
+          }
+        },
+        (err) => console.warn("Suscripción a control de versiones:", err)
+      )
+    );
+
+    // 10. Escuchador en Tiempo Real para Cortes Cerrados (Historial en vivo)
+    unsubs.push(
+      obtenerRefColeccion("cortes")
+        .limit(100)
+        .onSnapshot(
+          (snapshot) => {
+            if (_isPersisting) return;
+            let huboCambios = false;
+            snapshot.docChanges().forEach((change) => {
+              const data = change.doc.data();
+              if (change.type === "added" || change.type === "modified") {
+                const idx = localDB.cortes.findIndex((c) => c.id === data.id);
+                if (idx >= 0) {
+                  localDB.cortes[idx] = data;
+                } else {
+                  localDB.cortes.push(data);
+                }
+                huboCambios = true;
+              } else if (change.type === "removed") {
+                localDB.cortes = localDB.cortes.filter((c) => c.id !== change.doc.id);
+                huboCambios = true;
+              }
+            });
+            if (huboCambios && currentTab === "cortes") {
+              mostrarReporteCortes(true);
+            }
+          },
+          (err) => console.warn("Suscripción a cortes en vivo:", err)
+        )
     );
 
     _unsubscribeFirestore = unsubs;
@@ -745,7 +1182,10 @@ function refrescarVistaActual() {
   }
   if (currentTab === "pedidos") renderizarModuloPedidos();
   if (currentTab === "gastos") renderGastosRecientes();
-  if (currentTab === "cortes") cargarModuloCortes();
+  if (currentTab === "cortes") {
+    cargarModuloCortes();
+    actualizarResumenCorteActual();
+  }
   renderSelectorSucursal();
 }
 
@@ -794,49 +1234,58 @@ async function cargarEstadoLocal() {
     try {
       await migrarMonolitoAColeccionesSiEsNecesario();
 
-      const prodSnap = await obtenerRefColeccion("productos").get();
-      localDB.productos = prodSnap.docs.map((d) => d.data());
+      // 1. Cargar Catálogo de Productos mediante Chunks
+      const productosChunks = await cargarColeccionChunked("productos");
+      if (productosChunks.length > 0) {
+        localDB.productos = productosChunks;
+      } else {
+        // Fallback si aún estaban en documento antiguo
+        const catalogoSnap = await obtenerRefDocConfig("catalogoProductos").get();
+        if (catalogoSnap.exists && Array.isArray(catalogoSnap.data().items) && catalogoSnap.data().items.length > 0) {
+          localDB.productos = catalogoSnap.data().items;
+          await guardarColeccionChunked("productos", localDB.productos);
+        }
+      }
+      obtenerRefDocConfig("catalogoProductos").delete().catch(() => { });
 
-      const corteActivoSnap = await obtenerRefDocConfig("corteActivo").get();
+      // 2. Cargar configuraciones del sistema (5 documentos individuales rápidos)
+      const [corteActivoSnap, genSnap, sucursalesSnap, carritosSnap, pedidosSnap] = await Promise.all([
+        obtenerRefDocConfig("corteActivo").get(),
+        obtenerRefDocConfig("general").get(),
+        obtenerRefDocConfig("sucursales").get(),
+        obtenerRefDocConfig("carritosPendientes").get(),
+        obtenerRefDocConfig("pedidosPersonalizados").get()
+      ]);
+
       localDB.corteActivo = corteActivoSnap.exists && corteActivoSnap.data().id ? corteActivoSnap.data() : null;
 
-      const genSnap = await obtenerRefDocConfig("general").get();
       if (genSnap.exists) {
         const d = genSnap.data();
         localDB.config = { ...DEFAULT_CONFIG, ...(d.config || {}) };
         if (d.listas) localDB.listas = d.listas;
       }
 
-      const sucursalesSnap = await obtenerRefDocConfig("sucursales").get();
       if (sucursalesSnap.exists && Array.isArray(sucursalesSnap.data().items) && sucursalesSnap.data().items.length > 0) {
         localDB.sucursales = sucursalesSnap.data().items;
       } else {
         localDB.sucursales = [...DEFAULT_SUCURSALES];
       }
 
-      const carritosSnap = await obtenerRefDocConfig("carritosPendientes").get();
       localDB.carritosPendientes = carritosSnap.exists && Array.isArray(carritosSnap.data().items) ? carritosSnap.data().items : [];
-
-      const pedidosSnap = await obtenerRefDocConfig("pedidosPersonalizados").get();
       localDB.pedidosPersonalizados = pedidosSnap.exists && Array.isArray(pedidosSnap.data().items) ? pedidosSnap.data().items : [];
 
-      // Carga acotada de las operaciones recientes (últimos 30 días o del corte activo)
-      let fechaDesdeIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      if (localDB.corteActivo && localDB.corteActivo.fechaApertura) {
-        fechaDesdeIso = localDB.corteActivo.fechaApertura;
-      }
-
-      const [ventasSnap, gastosSnap, movSnap, cortesSnap] = await Promise.all([
-        obtenerRefColeccion("ventas").where("fecha", ">=", fechaDesdeIso).get(),
-        obtenerRefColeccion("gastos").where("fecha", ">=", fechaDesdeIso).get(),
-        obtenerRefColeccion("movimientos").where("fecha", ">=", fechaDesdeIso).get(),
-        obtenerRefColeccion("cortes").get()
+      // 3. Carga ultra-eficiente de operaciones mediante Chunks (bloques de 150 registros por documento)
+      const [ventasChunks, gastosChunks, movChunks, cortesChunks] = await Promise.all([
+        cargarColeccionChunked("ventas"),
+        cargarColeccionChunked("gastos"),
+        cargarColeccionChunked("movimientos"),
+        cargarColeccionChunked("cortes")
       ]);
 
-      localDB.ventas = ventasSnap.docs.map((d) => d.data());
-      localDB.gastos = gastosSnap.docs.map((d) => d.data());
-      localDB.movimientos = movSnap.docs.map((d) => d.data());
-      localDB.cortes = cortesSnap.docs.map((d) => d.data());
+      if (ventasChunks.length > 0 || !localDB.ventas.length) localDB.ventas = ventasChunks;
+      if (gastosChunks.length > 0 || !localDB.gastos.length) localDB.gastos = gastosChunks;
+      if (movChunks.length > 0 || !localDB.movimientos.length) localDB.movimientos = movChunks;
+      if (cortesChunks.length > 0 || !localDB.cortes.length) localDB.cortes = cortesChunks;
 
       renderSelectorSucursal();
       renderizarTablaSucursales();
@@ -5017,8 +5466,13 @@ function abrirCorteCaja() {
     sucursalNombre: sucursalActual.nombre,
   };
 
+  if (_dbFirestore) {
+    obtenerRefDocConfig("corteActivo").set(localDB.corteActivo).catch((e) => console.warn("Firestore corte error:", e));
+  }
+
   guardarEstadoLocal();
   renderEstadoCorteActual();
+  actualizarResumenCorteActual();
   showMessage("msgCorte", `Corte abierto por ${usuarioApertura} en sucursal ${sucursalActual.nombre} correctamente.`, "success");
 }
 
@@ -5369,6 +5823,10 @@ function eliminarCorteCaja(corteId) {
   if (!confirmado) return;
 
   localDB.cortes = (localDB.cortes || []).filter((corte) => corte !== corteTarget);
+  if (_dbFirestore) {
+    const docId = corteTarget.id || id;
+    obtenerRefColeccion("cortes").doc(docId).delete().catch((e) => console.warn("Firestore delete corte error:", e));
+  }
   guardarEstadoLocal();
   mostrarReporteCortes(true);
   showMessage("msgCorte", `Corte eliminado correctamente.`, "success");
@@ -5589,7 +6047,11 @@ async function realizarCierreOResetPeriodico(modo) {
         vaciarColeccionFirestore("ventas"),
         vaciarColeccionFirestore("gastos"),
         vaciarColeccionFirestore("cortes"),
-        vaciarColeccionFirestore("movimientos")
+        vaciarColeccionFirestore("movimientos"),
+        vaciarColeccionFirestore("chunks_ventas"),
+        vaciarColeccionFirestore("chunks_gastos"),
+        vaciarColeccionFirestore("chunks_cortes"),
+        vaciarColeccionFirestore("chunks_movimientos")
       ]);
       for (const m of nuevosMovimientos) {
         await obtenerRefColeccion("movimientos").doc(m.id).set(m);
@@ -5613,7 +6075,12 @@ async function realizarCierreOResetPeriodico(modo) {
         vaciarColeccionFirestore("ventas"),
         vaciarColeccionFirestore("gastos"),
         vaciarColeccionFirestore("cortes"),
-        vaciarColeccionFirestore("movimientos")
+        vaciarColeccionFirestore("movimientos"),
+        vaciarColeccionFirestore("chunks_productos"),
+        vaciarColeccionFirestore("chunks_ventas"),
+        vaciarColeccionFirestore("chunks_gastos"),
+        vaciarColeccionFirestore("chunks_cortes"),
+        vaciarColeccionFirestore("chunks_movimientos")
       ]);
     }
   }
@@ -5639,17 +6106,23 @@ function restaurarBackupDesdeJSON(event) {
     try {
       const data = JSON.parse(e.target.result);
       if (validarEstructuraEstado(data)) {
-        if (confirm("⚠️ ¿Estás seguro de restaurar este respaldo? Se sobrescribirán todos los datos actuales del sistema.")) {
+        if (confirm("⚠️ ¿Estás seguro de restaurar este respaldo? Se sobrescribirán todos los datos del sistema con los del archivo.")) {
+          mostrarCargando(true);
           _aplicarDatosALocalDB(data);
+
+          // 1. Guardar configuraciones y colecciones completas agrupadas en Chunks en Firestore
           await _persistirEnServidor();
+
+          mostrarCargando(false);
           refrescarVistaActual();
           cargarConfiguracionSistema();
-          alert("✅ Base de datos restaurada con éxito.");
+          alert(`✅ Base de datos restaurada con éxito.\n• Productos: ${localDB.productos.length}\n• Ventas: ${localDB.ventas.length}\n• Gastos: ${localDB.gastos.length}\n• Movimientos: ${localDB.movimientos.length}\n• Cortes: ${localDB.cortes.length}`);
         }
       } else {
         alert("❌ El archivo seleccionado no contiene una estructura válida de respaldo.");
       }
     } catch (err) {
+      mostrarCargando(false);
       alert("❌ Error al leer el archivo JSON: " + err.message);
     }
   };
@@ -8062,7 +8535,35 @@ function showTab(tabId) {
   if (tabId === "configuracion") {
     cargarConfiguracionSistema();
     cargarFormularioConfigFirebase();
+    const inputDispositivo = document.getElementById("inputNombreDispositivo");
+    if (inputDispositivo) inputDispositivo.value = obtenerNombreDispositivoLocal();
   }
+
+  // 🎯 Auto-focus al input principal del módulo seleccionado
+  setTimeout(() => {
+    const inputFocusMap = {
+      ventas: "codigoVenta",
+      productos: "codigoProd",
+      movimientos: "codigoMov",
+      gastos: "conceptoGasto",
+      inventario: "buscarInventarioTexto",
+      pedidos: "filtroBusquedaPedido",
+      reportes: "fechaDesde",
+      cortes: document.getElementById("cajaContadaCorte") && !document.getElementById("cajaContadaCorte").disabled ? "cajaContadaCorte" : "cajaInicialCorte",
+      configuracion: "businessNameConfig"
+    };
+
+    const targetInputId = inputFocusMap[tabId];
+    if (targetInputId) {
+      const el = document.getElementById(targetInputId);
+      if (el && typeof el.focus === "function") {
+        el.focus();
+        if (typeof el.select === "function" && el.value) {
+          el.select();
+        }
+      }
+    }
+  }, 100);
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);

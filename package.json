@@ -1,0 +1,11 @@
+{
+  "name": "sistema-ventas-inventario",
+  "version": "2.1.0",
+  "description": "Sistema de Ventas e Inventario POS en Tiempo Real",
+  "scripts": {
+    "deploy": "node deploy.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
