@@ -1841,7 +1841,7 @@ function obtenerStock(sucursalId = null) {
       return {
         codigo: p.codigo,
         nombre: p.nombre,
-        stockMin: p.stockMin,
+        stockMinimo: p.stockMinimo,
         cantidad: Math.round(cantidad * 100) / 100,
         cantidadTotal: Math.round(cantidadTotal * 100) / 100,
         stockPorSucursal,
@@ -1992,7 +1992,7 @@ function obtenerResumen() {
   stock.forEach((item) => {
     if (item.cantidad <= 0) {
       sinStock += 1;
-    } else if (item.cantidad <= item.stockMin && item.stockMin > 0) {
+    } else if (item.cantidad <= item.stockMinimo && item.stockMinimo > 0) {
       stockBajo += 1;
     }
     valorTotalInventario += item.cantidad;
@@ -2179,7 +2179,7 @@ function registrarProductoLocal(producto) {
     nombre,
     unidad: producto.unidad || "Unidades",
     grupo: producto.grupo || "General",
-    stockMin: Math.max(0, parseInt(producto.stockMin, 10) || 0),
+    stockMinimo: Math.max(0, parseInt(producto.stockMinimo, 10) || 0),
     margen: roundTo(margen, 2),
     precioVenta: roundTo(precioVenta, 2),
     precioVariable,
@@ -2224,7 +2224,7 @@ function editarProducto(codigo) {
   productoEnEdicionCodigo = codigoNormalizado;
   codigoField.value = producto.codigo;
   nombreField.value = (producto.nombre || "").toString();
-  stockMinField.value = Math.max(0, parseInt(producto.stockMin, 10) || 0);
+  stockMinField.value = Math.max(0, parseInt(producto.stockMinimo, 10) || 0);
   precioVentaField.value = roundTo(parseNumber(producto.precioVenta, 0), 2);
   if (precioVariableField)
     precioVariableField.checked = parseBoolean(producto.precioVariable);
@@ -2303,7 +2303,7 @@ function guardarEdicionProducto(event) {
   }
 
   producto.nombre = nombreNuevo;
-  producto.stockMin = nuevoStockMin;
+  producto.stockMinimo = nuevoStockMin;
   producto.precioVenta = roundTo(nuevoPrecioVenta, 2);
   producto.precioVariable = precioVariable;
 
@@ -2372,7 +2372,9 @@ function registrarMovimientoLocal(mov) {
       ? roundTo(costoCompra / (cantidadProcesada * piezasPorPresentacion), 4)
       : 0;
 
+  const movId = `M-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const nuevoMov = {
+    id: movId,
     codigo,
     fecha: fechaMovimiento.toISOString(),
     tipo,
@@ -2388,10 +2390,14 @@ function registrarMovimientoLocal(mov) {
     costoPorPieza,
   };
 
+  if (validarMovimientoDuplicado(nuevoMov)) {
+    return "Error: Ya existe un movimiento con la misma fecha y características para este producto.";
+  }
+
   localDB.movimientos.push(nuevoMov);
+  localDB.movimientos = validarYLimpiarMovimientosDuplicados(localDB.movimientos);
 
   if (_dbFirestore) {
-    const movId = `M-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     obtenerRefColeccion("movimientos").doc(movId).set({ ...nuevoMov, id: movId }).catch((e) => console.warn("Firestore mov error:", e));
   }
 
@@ -2399,6 +2405,180 @@ function registrarMovimientoLocal(mov) {
 
   return "Movimiento registrado correctamente.";
 }
+
+/**
+ * Valida si un movimiento ya existe en el historial local por fecha/código/ID.
+ */
+function validarMovimientoDuplicado(mov, lista = localDB.movimientos) {
+  if (!mov || !Array.isArray(lista)) return false;
+  const fecha = (mov.fecha || mov.timestamp || "").toString().trim();
+  const codigo = typeof normalizeCode === "function" ? normalizeCode(mov.codigo || "") : (mov.codigo || "").toString().trim().toUpperCase();
+  const id = (mov.id || "").toString().trim();
+
+  return lista.some((m) => {
+    if (id && m.id && m.id === id) return true;
+    const mFecha = (m.fecha || m.timestamp || "").toString().trim();
+    const mCodigo = typeof normalizeCode === "function" ? normalizeCode(m.codigo || "") : (m.codigo || "").toString().trim().toUpperCase();
+    if (fecha && codigo && mFecha === fecha && mCodigo === codigo) return true;
+    if (fecha && !codigo && mFecha === fecha) return true;
+    return false;
+  });
+}
+
+/**
+ * Limpia y devuelve la lista de movimientos sin duplicados por ID, fecha exacta y firma.
+ */
+function validarYLimpiarMovimientosDuplicados(lista = localDB.movimientos) {
+  if (!Array.isArray(lista)) return [];
+  const idsVistos = new Set();
+  const fechasCodigosVistos = new Set();
+  const firmasVistas = new Set();
+  const limpios = [];
+
+  for (const mov of lista) {
+    if (!mov) continue;
+    const id = (mov.id || "").toString().trim();
+    const fecha = (mov.fecha || mov.timestamp || "").toString().trim();
+    const codigo = typeof normalizeCode === "function" ? normalizeCode(mov.codigo || "") : (mov.codigo || "").toString().trim().toUpperCase();
+    const tipo = (mov.tipo || "").toString().trim().toUpperCase();
+    const cantidad = parseFloat(mov.cantidad) || 0;
+    const sucursalId = (mov.sucursalId || "").toString().trim();
+
+    const fechaCodigoKey = fecha && codigo ? `${fecha}_${codigo}` : "";
+    const firma = `${fecha}_${codigo}_${tipo}_${cantidad}_${sucursalId}`;
+
+    if (id && idsVistos.has(id)) continue;
+    if (fechaCodigoKey && fechasCodigosVistos.has(fechaCodigoKey)) continue;
+    if (firma && firmasVistas.has(firma)) continue;
+
+    if (id) idsVistos.add(id);
+    if (fechaCodigoKey) fechasCodigosVistos.add(fechaCodigoKey);
+    if (firma) firmasVistas.add(firma);
+
+    limpios.push(mov);
+  }
+
+  return limpios;
+}
+
+/**
+ * Depura los movimientos duplicados de la base de datos local y Firestore.
+ */
+async function depurarMovimientosDuplicados() {
+  const original = Array.isArray(localDB.movimientos) ? localDB.movimientos.length : 0;
+  const limpios = validarYLimpiarMovimientosDuplicados(localDB.movimientos);
+  const eliminados = original - limpios.length;
+
+  localDB.movimientos = limpios;
+  guardarEstadoLocal();
+
+  if (_dbFirestore) {
+    try {
+      if (typeof guardarColeccionChunked === "function") {
+        await guardarColeccionChunked("movimientos", limpios);
+      }
+      if (typeof incrementarRevision === "function") {
+        await incrementarRevision();
+      }
+    } catch (e) {
+      console.error("Error al actualizar movimientos en Firestore:", e);
+    }
+  }
+
+  return { totalOriginal: original, totalLimpios: limpios.length, duplicadosEliminados: eliminados };
+}
+
+/**
+ * Función interactiva para el usuario con diálogo y confirmación.
+ */
+async function ejecutarDepuracionMovimientos() {
+  const totalActual = Array.isArray(localDB.movimientos) ? localDB.movimientos.length : 0;
+  if (!confirm(`Se analizarán los ${totalActual} movimientos registrados para detectar y eliminar duplicados por fecha exacta o ID.\n\n¿Deseas continuar?`)) {
+    return;
+  }
+
+  try {
+    const res = await depurarMovimientosDuplicados();
+    if (res.duplicadosEliminados > 0) {
+      alert(`✅ ¡Depuración completada exitosamente!\n\n• Movimientos duplicados eliminados: ${res.duplicadosEliminados}\n• Total de movimientos limpios: ${res.totalLimpios}`);
+    } else {
+      alert(`✨ No se encontraron movimientos duplicados.\nTotal actual de movimientos: ${res.totalOriginal}`);
+    }
+
+    if (typeof loadDashboard === "function") loadDashboard();
+    if (typeof mostrarStock === "function") mostrarStock();
+  } catch (err) {
+    alert("❌ Error al depurar movimientos: " + (err.message || err));
+  }
+}
+
+/**
+ * Recalcula y actualiza el stock actual de cada producto en localDB.productos
+ * basándose en la suma cronológica de los movimientos de inventario.
+ */
+async function recalcularStockProductosDesdeMovimientos() {
+  if (!Array.isArray(localDB.productos) || !Array.isArray(localDB.movimientos)) {
+    return { actualizados: 0, total: 0 };
+  }
+
+  let actualizados = 0;
+  localDB.productos.forEach((prod) => {
+    const cod = normalizeCode(prod.codigo);
+    const stockCalculado = typeof calcularStock === 'function' ? calcularStock(cod, "TODAS") : 0;
+    const stockActualNum = typeof prod.stockActual === 'number' ? prod.stockActual : (typeof prod.cantidad === 'number' ? prod.cantidad : 0);
+
+    if (stockActualNum !== stockCalculado) {
+      prod.stockActual = stockCalculado;
+      prod.cantidad = stockCalculado;
+      actualizados++;
+    }
+  });
+
+  if (actualizados > 0) {
+    guardarEstadoLocal();
+    if (_dbFirestore && typeof guardarColeccionChunked === "function") {
+      try {
+        await guardarColeccionChunked("productos", localDB.productos);
+        await incrementarRevision();
+      } catch (e) {
+        console.error("Error al actualizar catálogo en Firestore:", e);
+      }
+    }
+  }
+
+  return { actualizados, total: localDB.productos.length };
+}
+
+/**
+ * Función interactiva para el usuario con diálogo para recalcular stock.
+ */
+async function ejecutarRecalculoStock() {
+  if (!confirm("¿Deseas recalcular y sincronizar el Stock Actual de todos los productos en base al historial de movimientos?")) {
+    return;
+  }
+
+  try {
+    const res = await recalcularStockProductosDesdeMovimientos();
+    if (res.actualizados > 0) {
+      alert(`✅ ¡Stock recalculado exitosamente!\n\nSe corrigió el stock de ${res.actualizados} producto(s) en base al historial de movimientos.`);
+    } else {
+      alert(`✨ Todos los productos (${res.total}) ya tienen su stock perfectamente alineado con los movimientos.`);
+    }
+
+    if (typeof loadDashboard === "function") loadDashboard();
+    if (typeof mostrarStock === "function") mostrarStock();
+  } catch (err) {
+    alert("❌ Error al recalcular stock: " + (err.message || err));
+  }
+}
+
+// Exponer en el objeto global
+window.validarMovimientoDuplicado = validarMovimientoDuplicado;
+window.validarYLimpiarMovimientosDuplicados = validarYLimpiarMovimientosDuplicados;
+window.depurarMovimientosDuplicados = depurarMovimientosDuplicados;
+window.ejecutarDepuracionMovimientos = ejecutarDepuracionMovimientos;
+window.recalcularStockProductosDesdeMovimientos = recalcularStockProductosDesdeMovimientos;
+window.ejecutarRecalculoStock = ejecutarRecalculoStock;
 
 function registrarGastoLocal(gasto) {
   const now = new Date();
@@ -3564,7 +3744,7 @@ function buscarProductoLocal(texto) {
       return {
         codigo: p.codigo,
         nombre: p.nombre,
-        stockMin: p.stockMin,
+        stockMinimo: p.stockMinimo,
         stockActual: calcularStock(p.codigo),
         costoPromedioPieza,
         precioVenta,
@@ -3587,8 +3767,8 @@ function validarIntegridadLocal() {
       errores.push(`Producto ${p.codigo} tiene nombre invalido.`);
     }
     if (
-      Number.isNaN(parseInt(p.stockMin, 10)) ||
-      parseInt(p.stockMin, 10) < 0
+      Number.isNaN(parseInt(p.stockMinimo, 10)) ||
+      parseInt(p.stockMinimo, 10) < 0
     ) {
       errores.push(`Producto ${p.codigo} tiene stock minimo invalido.`);
     }
@@ -3644,9 +3824,9 @@ function exportarStockCSVLocal(filtroSucursal = null) {
     const nombresSuc = sucursales.map((s) => `Stock ${s.nombre}`).join(",");
     csv = `Codigo,Nombre,Stock Minimo,Stock Total,${nombresSuc},Precio Real/Venta,Estado\n`;
     stock.forEach((producto) => {
-      let estado = producto.cantidad <= 0 ? "Sin Stock" : (producto.cantidad <= producto.stockMin && producto.stockMin > 0 ? "Stock Bajo" : "Normal");
+      let estado = producto.cantidad <= 0 ? "Sin Stock" : (producto.cantidad <= producto.stockMinimo && producto.stockMinimo > 0 ? "Stock Bajo" : "Normal");
       const colsSuc = sucursales.map((s) => (producto.stockPorSucursal ? (producto.stockPorSucursal[s.id] || 0) : 0)).join(",");
-      csv += `"${producto.codigo}","${producto.nombre}",${producto.stockMin},${producto.cantidad},${colsSuc},${roundTo(producto.precioVenta || 0, 4)},"${estado}"\n`;
+      csv += `"${producto.codigo}","${producto.nombre}",${producto.stockMinimo},${producto.cantidad},${colsSuc},${roundTo(producto.precioVenta || 0, 4)},"${estado}"\n`;
     });
   } else {
     const sucursalTarget = sucursales.find((s) => s.id === filtro);
@@ -3658,18 +3838,18 @@ function exportarStockCSVLocal(filtroSucursal = null) {
 
       if (producto.cantidad <= 0) {
         estado = "Sin Stock";
-        diferencia = -producto.stockMin;
+        diferencia = -producto.stockMinimo;
       } else if (
-        producto.cantidad <= producto.stockMin &&
-        producto.stockMin > 0
+        producto.cantidad <= producto.stockMinimo &&
+        producto.stockMinimo > 0
       ) {
         estado = "Stock Bajo";
-        diferencia = -(producto.stockMin - producto.cantidad);
+        diferencia = -(producto.stockMinimo - producto.cantidad);
       } else {
-        diferencia = producto.cantidad - producto.stockMin;
+        diferencia = producto.cantidad - producto.stockMinimo;
       }
 
-      csv += `"${producto.codigo}","${producto.nombre}","${nombreSuc}",${producto.stockMin},${producto.cantidad},${roundTo(producto.precioVenta || 0, 4)},"${estado}","${diferencia}"\n`;
+      csv += `"${producto.codigo}","${producto.nombre}","${nombreSuc}",${producto.stockMinimo},${producto.cantidad},${roundTo(producto.precioVenta || 0, 4)},"${estado}","${diferencia}"\n`;
     });
   }
 
@@ -4019,7 +4199,7 @@ function registrarProducto(event) {
   const producto = {
     codigo: document.getElementById("codigoProd").value.trim().toUpperCase(),
     nombre: document.getElementById("nombreProd").value.trim(),
-    stockMin: parseInt(document.getElementById("stockMinProd").value, 10) || 0,
+    stockMinimo: parseInt(document.getElementById("stockMinProd").value, 10) || 0,
     precioVenta:
       parseFloat(document.getElementById("precioVentaProd").value) || 0,
     precioVariable,
@@ -4193,8 +4373,8 @@ function displayStockTable(data, container, filtroSucursal = "TODAS") {
       statusClass = "status-zero";
       estado = "Sin Stock";
     } else if (
-      producto.cantidad <= producto.stockMin &&
-      producto.stockMin > 0
+      producto.cantidad <= producto.stockMinimo &&
+      producto.stockMinimo > 0
     ) {
       statusClass = "status-low";
       estado = "Stock Bajo";
@@ -4217,7 +4397,7 @@ function displayStockTable(data, container, filtroSucursal = "TODAS") {
           <tr class="${statusClass}">
             <td><button type="button" class="barcode-code-btn" onclick="imprimirCodigoProducto('${producto.codigo}', '${(producto.nombre || "").replace(/'/g, "\\'")}')">${producto.codigo}</button></td>
             <td>${producto.nombre}</td>
-            <td>${producto.stockMin}</td>
+            <td>${producto.stockMinimo}</td>
             <td><strong style="font-size:1.05rem;">${producto.cantidad}</strong></td>
             ${desgloseHtml}
             <td>${producto.precioVariable ? "Variable" : producto.precioVenta > 0 ? formatMoney(producto.precioVenta) : "N/D"}</td>
@@ -4243,7 +4423,7 @@ function mostrarAlertas() {
   loading.style.display = "none";
 
   const alertProducts = data.filter(
-    (p) => p.cantidad <= 0 || (p.cantidad <= p.stockMin && p.stockMin > 0),
+    (p) => p.cantidad <= 0 || (p.cantidad <= p.stockMinimo && p.stockMinimo > 0),
   );
   if (alertProducts.length === 0) {
     container.innerHTML =
@@ -4256,7 +4436,7 @@ function mostrarAlertas() {
 function showStockAlerts() {
   const data = obtenerStock();
   const alertProducts = data.filter(
-    (p) => p.cantidad <= 0 || (p.cantidad <= p.stockMin && p.stockMin > 0),
+    (p) => p.cantidad <= 0 || (p.cantidad <= p.stockMinimo && p.stockMinimo > 0),
   );
   const container = document.getElementById("alertsContainer");
 
@@ -4286,7 +4466,7 @@ function showStockAlerts() {
             <td>${p.codigo}</td>
             <td>${p.nombre}</td>
             <td>${p.cantidad}</td>
-            <td>${p.stockMin}</td>
+            <td>${p.stockMinimo}</td>
             <td>${estado}</td>
           </tr>
         `;

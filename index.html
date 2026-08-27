@@ -537,12 +537,18 @@
                     <textarea id="obsMov" placeholder="Observaciones opcionales" rows="3"></textarea>
                   </div>
                 </div>
-                <div class="actions">
+                <div class="actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button type="submit" class="btn btn-success">
                     Guardar Movimiento
                   </button>
                   <button type="button" class="btn btn-secondary" onclick="limpiarFormMovimiento()">
                     Limpiar
+                  </button>
+                  <button type="button" class="btn btn-primary" onclick="ejecutarRecalculoStock()">
+                    🔄 Recalcular Stock
+                  </button>
+                  <button type="button" class="btn btn-warning" onclick="ejecutarDepuracionMovimientos()">
+                    🧹 Depurar Duplicados
                   </button>
                 </div>
               </form>
@@ -1190,6 +1196,16 @@
               </div>
               
               <div class="actions" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1;">
+                  <div>
+                    <strong style="display:block; color:#0f172a; font-size:0.95rem;">Depurar Movimientos Duplicados</strong>
+                    <span style="color:#475569; font-size:0.88rem; font-weight: 500;">Busca y elimina automáticamente movimientos duplicados en el historial (por fecha exacta, ID o datos repetidos).</span>
+                  </div>
+                  <button class="btn btn-secondary" type="button" onclick="ejecutarDepuracionMovimientos()">
+                    🧹 Depurar Movimientos Duplicados
+                  </button>
+                </div>
+
                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1;">
                   <div>
                     <strong style="display:block; color:#0f172a; font-size:0.95rem;">Simplificar y Cierre (Recomendado)</strong>
