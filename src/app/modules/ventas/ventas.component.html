@@ -1,0 +1,464 @@
+<div class="pos-layout">
+  <!-- Columna Izquierda: Entrada de Productos y Carrito -->
+  <div class="pos-main">
+    <div class="card">
+      <div class="card-header">
+        <span>🛒 Captura de Venta</span>
+        <div class="header-actions">
+          <button type="button" class="btn btn-sm btn-secondary" (click)="abrirModalPausar()"
+            [disabled]="ventasService.carrito().length === 0">
+            ⏸️ Guardar Venta
+          </button>
+          <button type="button" class="btn btn-sm btn-danger" (click)="ventasService.limpiarCarrito()"
+            [disabled]="ventasService.carrito().length === 0">
+            🗑️ Limpiar
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Barra de Búsqueda y Código de Barras / Autocompletado -->
+        <div class="search-bar-grid">
+          <div class="form-group flex-2 search-autocomplete-container">
+            <label for="codigoInput">Código de Barras o Nombre del Producto *</label>
+            <div class="input-with-btn">
+              <input #codigoInputRef id="codigoInput" type="text" [value]="codigoBusqueda()"
+                (input)="onInputChange($event)" (focus)="onInputFocus()"
+                (keydown.arrowdown)="navegarSugerencias(1, $event)" (keydown.arrowup)="navegarSugerencias(-1, $event)"
+                (keydown.enter)="onEnterCodigo($event)" (keydown.escape)="cerrarSugerencias()"
+                placeholder="Escribe el nombre o escanea el código..." autocomplete="off" autocorrect="off" />
+              <button type="button" class="btn btn-primary" (click)="onEnterCodigo()">➕ Agregar</button>
+            </div>
+
+            <!-- Lista desplegable de sugerencias de productos en tiempo real -->
+            @if (mostrarSugerencias() && sugerenciasProductos().length > 0) {
+            <div class="suggestions-dropdown">
+              @for (prod of sugerenciasProductos(); track prod.codigo; let i = $index) {
+              <div class="suggestion-item" [class.active]="i === indiceSeleccionado()"
+                (mousedown)="seleccionarProducto(prod)">
+                <div class="sug-info">
+                  <span class="sug-title">{{ prod.nombre }}</span>
+                  <div class="sug-sub">
+                    <span class="sug-code">{{ prod.codigo }}</span>
+                    @if (prod.grupo) {
+                    <span class="sug-group">{{ prod.grupo }}</span>
+                    }
+                    @if (prod.precioVariable) {
+                    <span class="badge badge-info" style="font-size: 0.7rem; padding: 1px 5px;">Precio Variable</span>
+                    }
+                  </div>
+                </div>
+                <div class="sug-price-stock">
+                  <span class="sug-price">{{ prod.precioVenta | currencyMxn }}</span>
+                  <span class="sug-stock" [class.low-stock]="obtenerStockSucursal(prod) <= (prod.stockMinimo || 0)">
+                    Stock ({{ sucursalesService.sucursalActiva().nombre }}): {{ obtenerStockSucursal(prod) }}
+                  </span>
+                </div>
+              </div>
+              }
+            </div>
+            }
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="cantidadInput">Cantidad</label>
+            <input id="cantidadInput" type="number" [(ngModel)]="cantidadAgregar" min="1" step="1" />
+          </div>
+        </div>
+
+        @if (mensajeAlerta()) {
+        <div class="alert-inline" [class]="tipoAlerta()">
+          {{ mensajeAlerta() }}
+        </div>
+        }
+
+        <!-- Tabla de Carrito -->
+        <div class="table-container pos-table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th style="text-align: center;">Cantidad</th>
+                <th style="text-align: right;">P. Unit</th>
+                <th style="text-align: right;">Subtotal</th>
+                <th style="text-align: center;">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of ventasService.carrito(); track item.codigo; let i = $index) {
+              <tr>
+                <td><strong>{{ item.codigo }}</strong></td>
+                <td>{{ item.nombre }}</td>
+                <td style="text-align: center;">
+                  <div class="qty-control">
+                    <button type="button" class="btn-qty" (click)="modificarCantidad(i, -1)">-</button>
+                    <input type="number" [value]="item.cantidad" (change)="onCantidadChange(i, $event)" min="1"
+                      class="qty-input" />
+                    <button type="button" class="btn-qty" (click)="modificarCantidad(i, 1)">+</button>
+                  </div>
+                </td>
+                <td style="text-align: right;">{{ item.precioUnitario | currencyMxn }}</td>
+                <td style="text-align: right;"><strong>{{ item.subtotal | currencyMxn }}</strong></td>
+                <td style="text-align: center;">
+                  <button type="button" class="btn-del" (click)="ventasService.eliminarDelCarrito(i)"
+                    title="Eliminar">✕</button>
+                </td>
+              </tr>
+              } @empty {
+              <tr>
+                <td colspan="6" class="empty-cart-msg">
+                  🛒 El carrito está vacío. Escanea el código o busca por nombre para agregar productos.
+                </td>
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Carritos en Espera / Pendientes -->
+    @if (ventasService.carritosPendientes().length > 0) {
+    <div class="card">
+      <div class="card-header">
+        <span>⏸️ Ventas en Espera ({{ ventasService.carritosPendientes().length }})</span>
+      </div>
+      <div class="card-body pending-carts-grid">
+        @for (cp of ventasService.carritosPendientes(); track cp.id) {
+        <div class="pending-card">
+          <div class="pc-head">
+            <strong>{{ cp.alias }}</strong>
+            <span class="pc-total">{{ cp.total | currencyMxn }}</span>
+          </div>
+          <span class="pc-time">{{ cp.fecha | fechaLocal }}</span>
+          <div class="pc-actions">
+            <button type="button" class="btn btn-sm btn-primary" (click)="ventasService.recuperarVentaEnEspera(cp.id)">
+              ▶️ Retomar
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" (click)="ventasService.eliminarVentaEnEspera(cp.id)">
+              ✕
+            </button>
+          </div>
+        </div>
+        }
+      </div>
+    </div>
+    }
+
+    <!-- Ventas del Día de Hoy -->
+    <div class="card ventas-hoy-card" style="margin-top: 16px;">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span>🕒 Ventas del Día de Hoy</span>
+          <span class="badge badge-info" style="font-size: 0.8rem;">{{ ventasService.ventasDeHoy().length }}
+            ticket(s)</span>
+        </div>
+        <div style="font-size: 0.95rem; font-weight: 800; color: #0284c7;">
+          Total Hoy: {{ ventasService.totalVentasHoy() | currencyMxn }}
+        </div>
+      </div>
+      <div class="card-body table-container" style="max-height: 280px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Hora</th>
+              <th>Artículos</th>
+              <th style="text-align: right;">Total</th>
+              <th style="text-align: center;">Pago</th>
+              <th style="text-align: center;">Ticket</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (v of ventasService.ventasDeHoy(); track v.id) {
+            <tr>
+              <td><strong>{{ v.id }}</strong></td>
+              <td>{{ v.fecha | fechaLocal }}</td>
+              <td>
+                <span style="font-size: 0.82rem; color: #475569;">
+                  {{ v.items.length }} ítem(s)
+                  @if (v.items[0]) {
+                  <small style="color: #64748b; display: block;">({{ v.items[0].nombre }}{{ v.items.length > 1 ? '...' :
+                    '' }})</small>
+                  }
+                </span>
+              </td>
+              <td style="text-align: right;"><strong style="color: #0284c7;">{{ v.total | currencyMxn }}</strong></td>
+              <td style="text-align: center;">
+                @if (v.pagos.efectivo) { <span class="badge badge-success"
+                  style="font-size: 0.72rem; padding: 2px 6px;">EFECTIVO</span> }
+                @if (v.pagos.tarjeta) { <span class="badge badge-info"
+                  style="font-size: 0.72rem; padding: 2px 6px;">TARJETA</span> }
+                @if (v.pagos.transferencia) { <span class="badge badge-warning"
+                  style="font-size: 0.72rem; padding: 2px 6px;">TRANSFERENCIA</span> }
+              </td>
+              <td style="text-align: center;">
+                <button type="button" class="btn btn-sm btn-secondary" (click)="verTicket(v)"
+                  title="Ver / Reimprimir Ticket" style="padding: 3px 8px; font-size: 0.8rem;">
+                  🧾
+                </button>
+              </td>
+            </tr>
+            } @empty {
+            <tr>
+              <td colspan="6" style="text-align: center; color: #94a3b8; padding: 25px;">
+                No hay ventas registradas el día de hoy todavía.
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna Derecha: Panel de Cobro y Totales -->
+  <div class="pos-checkout">
+    <div class="card checkout-card">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>💳 Liquidación y Cobro</span>
+        <button type="button" class="btn-toggle-print" [class.active]="autoImprimirTicket()"
+          (click)="toggleAutoImprimir()"
+          [title]="autoImprimirTicket() ? 'Impresión automática ACTIVADA (clic para desactivar)' : 'Impresión automática DESACTIVADA (clic para activar)'">
+          <span>{{ autoImprimirTicket() ? '🖨️ Ticket: SÍ' : '🚫 Ticket: NO' }}</span>
+        </button>
+      </div>
+      <div class="card-body">
+        <!-- Total Gigante -->
+        <div class="total-banner">
+          <span class="total-label">TOTAL A COBRAR</span>
+          <strong class="total-amount">{{ ventasService.totalCarrito() | currencyMxn }}</strong>
+        </div>
+
+        <!-- Métodos de Pago Divididos -->
+        <div class="payment-methods">
+          <div class="form-group">
+            <label for="pagoEfectivo">💵 Efectivo ($)</label>
+            <input id="pagoEfectivo" type="number" min="0" step="0.01" [ngModel]="ventasService.pagos().efectivo"
+              (ngModelChange)="onPagoChange('efectivo', $event)" />
+          </div>
+
+          <div class="quick-cash-row">
+            <button type="button" class="btn-cash" (click)="setExacto()">Exacto</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(20)">$20</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(50)">$50</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(100)">$100</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(200)">$200</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(500)">$500</button>
+            <button type="button" class="btn-cash" (click)="setEfectivo(1000)">$1,000</button>
+          </div>
+
+          <div class="form-group" style="margin-top: 10px;">
+            <label for="pagoTarjeta">💳 Tarjeta ($)</label>
+            <input id="pagoTarjeta" type="number" min="0" step="0.01" [ngModel]="ventasService.pagos().tarjeta"
+              (ngModelChange)="onPagoChange('tarjeta', $event)" />
+          </div>
+
+          <div class="form-group">
+            <label for="pagoTransf">📱 Transferencia ($)</label>
+            <input id="pagoTransf" type="number" min="0" step="0.01" [ngModel]="ventasService.pagos().transferencia"
+              (ngModelChange)="onPagoChange('transferencia', $event)" />
+          </div>
+        </div>
+
+        <!-- Resumen de Cobro -->
+        <div class="checkout-summary">
+          <div class="cs-row">
+            <span>Total Pagado:</span>
+            <strong>{{ ventasService.totalPagado() | currencyMxn }}</strong>
+          </div>
+          @if (ventasService.cambio() > 0) {
+          <div class="cs-row change-row">
+            <span>Cambio / Vuelto:</span>
+            <strong class="text-green">{{ ventasService.cambio() | currencyMxn }}</strong>
+          </div>
+          }
+          @if (ventasService.faltante() > 0 && ventasService.totalCarrito() > 0) {
+          <div class="cs-row missing-row">
+            <span>Faltante:</span>
+            <strong class="text-red">{{ ventasService.faltante() | currencyMxn }}</strong>
+          </div>
+          }
+        </div>
+
+        <!-- Botón de Cobrar -->
+        <button type="button" class="btn btn-success btn-block btn-pay" (click)="realizarCobro()"
+          [disabled]="ventasService.carrito().length === 0 || ventasService.totalPagado() < ventasService.totalCarrito()">
+          ✅ COBRAR TICKET
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Pausar Venta -->
+@if (modalPausarAbierto()) {
+<div class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>⏸️ Poner Venta en Espera</h3>
+      <button type="button" class="modal-close" (click)="modalPausarAbierto.set(false)">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="aliasPausa">Nombre o Alias de la Cuenta *</label>
+        <input id="aliasPausa" type="text" [(ngModel)]="aliasPausa" placeholder="Ej: Mesa 4, Cliente Camisa Azul..." />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" (click)="modalPausarAbierto.set(false)">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="confirmarPausa()">Guardar en Espera</button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- Ticket de Venta (Optimizado para Impresoras Térmicas 80mm) -->
+@if (ticketVenta()) {
+<!-- Modal solo si se abre manualmente desde el historial / botón 🧾 -->
+@if (modalTicketAbierto()) {
+<div class="modal-overlay ticket-modal-overlay">
+  <div class="modal-card ticket-modal-card">
+    <div class="modal-header ticket-no-print">
+      <h3>🧾 Ticket de Venta (80mm)</h3>
+      <button type="button" class="modal-close" (click)="cerrarModalTicket()">&times;</button>
+    </div>
+
+    <div class="ticket-wrapper">
+      <ng-container *ngTemplateOutlet="ticketTemplate"></ng-container>
+    </div>
+
+    <div class="modal-actions ticket-no-print">
+      <button type="button" class="btn btn-secondary" (click)="cerrarModalTicket()">✕ Cerrar</button>
+      <button type="button" class="btn btn-primary" (click)="imprimirTicket()">🖨️ Imprimir Ticket</button>
+    </div>
+  </div>
+</div>
+} @else {
+<!-- Contenedor invisible en pantalla pero activo para la orden de impresión @media print -->
+<div class="ticket-print-only">
+  <ng-container *ngTemplateOutlet="ticketTemplate"></ng-container>
+</div>
+}
+
+<!-- Plantilla Reutilizable del Ticket 80mm -->
+<ng-template #ticketTemplate>
+  <div class="ticket-thermal-80mm" id="ticketImpresion">
+    <!-- Encabezado del Comercio -->
+    <div class="ticket-header-block">
+      <h2 class="ticket-business-name">
+        {{ configuracionService.config().businessName || 'SISTEMA DE VENTAS' }}
+      </h2>
+      @if (ticketVenta()?.sucursalNombre) {
+      <div class="ticket-sucursal">Sucursal: {{ ticketVenta()?.sucursalNombre }}</div>
+      }
+      @if (configuracionService.config().businessPhone) {
+      <div class="ticket-phone">Tel: {{ configuracionService.config().businessPhone }}</div>
+      }
+    </div>
+
+    <div class="ticket-separator">================================</div>
+
+    <!-- Metadatos de la Venta -->
+    <div class="ticket-meta-block">
+      <div class="ticket-meta-row">
+        <span>FOLIO:</span>
+        <strong>#{{ ticketVenta()?.id }}</strong>
+      </div>
+      <div class="ticket-meta-row">
+        <span>FECHA:</span>
+        <span>{{ ticketVenta()?.fecha | fechaLocal }}</span>
+      </div>
+      @if (ticketVenta()?.usuario) {
+      <div class="ticket-meta-row">
+        <span>LE ATENDIÓ:</span>
+        <span>{{ ticketVenta()?.usuario }}</span>
+      </div>
+      }
+    </div>
+
+    <div class="ticket-separator">--------------------------------</div>
+
+    <!-- Cabecera de Productos -->
+    <div class="ticket-items-head">
+      <span class="th-desc">DESCRIPCIÓN</span>
+      <span class="th-tot">TOTAL</span>
+    </div>
+    <div class="ticket-separator">--------------------------------</div>
+
+    <!-- Lista de Productos -->
+    <div class="ticket-items-list">
+      @for (it of ticketVenta()?.items; track it.codigo) {
+      <div class="ticket-item">
+        <div class="ticket-item-name">{{ it.nombre }}</div>
+        <div class="ticket-item-detail">
+          <span class="item-math">
+            {{ it.cantidad }} {{ it.cantidad === 1 ? 'pza' : 'pzas' }} x {{ it.precioUnitario | currencyMxn }}
+          </span>
+          <span class="item-subtotal">{{ it.subtotal | currencyMxn }}</span>
+        </div>
+      </div>
+      }
+    </div>
+
+    <div class="ticket-separator">--------------------------------</div>
+
+    <!-- Totales y Resumen -->
+    <div class="ticket-totals-block">
+      <div class="ticket-tot-row">
+        <span>CANTIDAD ARTÍCULOS:</span>
+        <strong>{{ totalArticulosTicket() }}</strong>
+      </div>
+      <div class="ticket-tot-row ticket-grand-total">
+        <span>TOTAL:</span>
+        <span>{{ ticketVenta()?.total | currencyMxn }}</span>
+      </div>
+    </div>
+
+    <div class="ticket-separator">--------------------------------</div>
+
+    <!-- Desglose de Pagos -->
+    <div class="ticket-payments-block">
+      @if (ticketVenta()?.pagos?.efectivo) {
+      <div class="ticket-pay-row">
+        <span>Efectivo:</span>
+        <span>{{ ticketVenta()?.pagos?.efectivo | currencyMxn }}</span>
+      </div>
+      }
+      @if (ticketVenta()?.pagos?.tarjeta) {
+      <div class="ticket-pay-row">
+        <span>Tarjeta:</span>
+        <span>{{ ticketVenta()?.pagos?.tarjeta | currencyMxn }}</span>
+      </div>
+      }
+      @if (ticketVenta()?.pagos?.transferencia) {
+      <div class="ticket-pay-row">
+        <span>Transferencia:</span>
+        <span>{{ ticketVenta()?.pagos?.transferencia | currencyMxn }}</span>
+      </div>
+      }
+      <div class="ticket-pay-row ticket-received-row">
+        <span>Importe Recibido:</span>
+        <strong>{{ ticketVenta()?.totalPagado | currencyMxn }}</strong>
+      </div>
+      <div class="ticket-pay-row ticket-change-row">
+        <span>Cambio:</span>
+        <strong>{{ ticketVenta()?.cambio | currencyMxn }}</strong>
+      </div>
+    </div>
+
+    <div class="ticket-separator">================================</div>
+
+    <!-- Pie del Ticket -->
+    <div class="ticket-footer-block">
+      <p class="ticket-legend">
+        {{ configuracionService.config().fiscalLegend || '¡Gracias por su compra!' }}
+      </p>
+      <p class="ticket-notice">Conserve este comprobante para cualquier aclaración</p>
+    </div>
+
+    <!-- Margen de seguridad para cortador térmico -->
+    <div class="ticket-cut-margin">.</div>
+  </div>
+</ng-template>
+}

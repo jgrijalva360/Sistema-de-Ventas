@@ -1,0 +1,591 @@
+<div class="config-page">
+  <div class="content-header">
+    <div>
+      <h2>⚙️ Configuración del Sistema</h2>
+      <p>Datos comerciales, sucursales, multi-equipo, seguridad y respaldos.</p>
+    </div>
+  </div>
+
+  <!-- 1. Negocio & Ticket -->
+  <div class="card">
+    <div class="card-header">
+      <span>🏪 1. Datos del Negocio e Impresión de Tickets</span>
+    </div>
+    <div class="card-body">
+      <form (ngSubmit)="guardarNegocio()" class="form-grid">
+        <div class="form-group">
+          <label for="confBizName">Nombre Comercial del Negocio *</label>
+          <input #bizNameInputRef id="confBizName" type="text" [(ngModel)]="bizName" name="bizName" required />
+        </div>
+
+        <div class="form-group">
+          <label for="confBizPhone">Teléfono / WhatsApp de Contacto</label>
+          <input id="confBizPhone" type="text" [(ngModel)]="bizPhone" name="bizPhone" />
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="confLegend">Leyenda / Pie de Ticket</label>
+          <input id="confLegend" type="text" [(ngModel)]="fiscalLegend" name="fiscalLegend" />
+        </div>
+
+        <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-primary">💾 Guardar Datos del Negocio</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Sucursales -->
+  <div class="card">
+    <div class="card-header">
+      <span>🏢 2. Administración de Sucursales</span>
+      <button type="button" class="btn btn-sm btn-primary" (click)="abrirModalSucursal()">
+        ➕ Nueva Sucursal
+      </button>
+    </div>
+    <div class="card-body table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Dirección</th>
+            <th>Teléfono</th>
+            <th style="text-align: center;">Tipo</th>
+            <th style="text-align: center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (suc of sucursalesService.sucursales(); track suc.id) {
+            <tr>
+              <td><strong>{{ suc.nombre }}</strong></td>
+              <td>{{ suc.direccion }}</td>
+              <td>{{ suc.telefono }}</td>
+              <td style="text-align: center;">
+                @if (suc.esMatriz) { <span class="badge badge-success">Matriz</span> }
+                @else { <span class="badge badge-info">Sucursal</span> }
+              </td>
+              <td style="text-align: center;">
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button type="button" class="btn btn-sm btn-secondary" (click)="editarSucursal(suc)">✏️</button>
+                  @if (!suc.esMatriz) {
+                    <button type="button" class="btn btn-sm btn-danger" (click)="eliminarSucursal(suc.id)">🗑️</button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3. Multi-Equipo & Dispositivos -->
+  <div class="card">
+    <div class="card-header">
+      <span>📱 3. Sincronización Multi-Equipo & Dispositivos</span>
+    </div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="confDevName">Nombre de este Dispositivo *</label>
+          <div style="display: flex; gap: 8px;">
+            <input id="confDevName" type="text" [(ngModel)]="nombreDispositivo" placeholder="Ej: Mostrador 1, Celular Gerente..." />
+            <button type="button" class="btn btn-secondary" (click)="guardarNombreDispositivo()">Guardar</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Revisión Activa de la Base de Datos</label>
+          <input type="text" [value]="'Rev #' + syncService.dataRevision()" readonly disabled />
+        </div>
+
+        <div class="form-group">
+          <label>Versión del Sistema</label>
+          <input type="text" [value]="syncService.currentVersion()" readonly disabled />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Seguridad -->
+  <div class="card">
+    <div class="card-header">
+      <span>🛡️ 4. Seguridad y Contraseña</span>
+    </div>
+    <div class="card-body">
+      <form (ngSubmit)="cambiarPassword()">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: end;">
+          <div class="form-group" style="display: flex; flex-direction: column;">
+            <label for="passActual" style="margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: #334155; height: 18px; line-height: 18px;">
+              Contraseña Actual *
+            </label>
+            <input
+              id="passActual"
+              type="password"
+              [(ngModel)]="passActual"
+              name="passActual"
+              placeholder="••••••••"
+              required
+              style="height: 42px; width: 100%; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: 0.9rem;"
+            />
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: column;">
+            <label for="passNueva" style="margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: #334155; height: 18px; line-height: 18px;">
+              Nueva Contraseña (mín. 6 car.) *
+            </label>
+            <input
+              id="passNueva"
+              type="password"
+              [(ngModel)]="passNueva"
+              name="passNueva"
+              placeholder="••••••••"
+              required
+              minlength="6"
+              style="height: 42px; width: 100%; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: 0.9rem;"
+            />
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: column;">
+            <label for="passConfirmar" style="margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: #334155; height: 18px; line-height: 18px;">
+              Confirmar Nueva Contraseña *
+            </label>
+            <input
+              id="passConfirmar"
+              type="password"
+              [(ngModel)]="passConfirmar"
+              name="passConfirmar"
+              placeholder="••••••••"
+              required
+              minlength="6"
+              style="height: 42px; width: 100%; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: 0.9rem;"
+            />
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-warning" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; font-weight: 700; font-size: 0.88rem;">
+            🔑 Actualizar Contraseña
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Respaldos JSON -->
+  <div class="card">
+    <div class="card-header">
+      <span>💾 5. Copias de Seguridad (Backup JSON)</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size: 0.9rem; color: var(--slate); margin-bottom: 14px;">
+        Exporta o restaura una copia de seguridad íntegra de toda tu base de datos (inventario, ventas, gastos, sucursales y cortes).
+      </p>
+      <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary" (click)="configuracionService.descargarBackupJSON()">
+          📥 Descargar Backup JSON Completo
+        </button>
+        <label class="btn btn-secondary" style="cursor: pointer;">
+          📤 Restaurar desde Archivo JSON
+          <input type="file" accept=".json" (change)="onRestaurarFile($event)" style="display: none;" />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Zona de Mantenimiento & Periodos -->
+  <div class="card" style="border-color: #fca5a5;">
+    <div class="card-header" style="background: #fee2e2; color: #991b1b;">
+      <span>⚠️ 6. Mantenimiento y Cierre de Periodos</span>
+    </div>
+    <div class="card-body maintenance-section">
+      <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px 14px; font-size: 0.84rem; color: #9f1239;">
+        ℹ️ <strong>Nota de Seguridad:</strong> Antes de ejecutar cualquier acción de limpieza o reset, el sistema <strong>descargará automáticamente una copia de seguridad completa (JSON)</strong>.
+      </div>
+
+      <!-- Subsección A: Optimización y Sincronización -->
+      <div>
+        <div class="maintenance-subtitle" style="color: #0369a1;">
+          🛠️ Optimización y Depuración de Datos
+        </div>
+        <div class="maintenance-grid">
+          <!-- Card 1: Consolidar Abonos -->
+          <div class="maintenance-action-card">
+            <div class="card-top">
+              <div class="action-icon">💰</div>
+              <div class="action-texts">
+                <strong>Sincronizar Abonos en Ventas</strong>
+                <p>Verifica y genera en Ventas los abonos de pedidos con vista previa detallada.</p>
+              </div>
+            </div>
+            <button type="button" class="btn action-btn" (click)="consolidarAbonosPedidos()" style="background: #0284c7; color: white;">
+              🔄 Sincronizar Abonos
+            </button>
+          </div>
+
+          <!-- Card 2: Depurar Ventas -->
+          <div class="maintenance-action-card">
+            <div class="card-top">
+              <div class="action-icon">🧾</div>
+              <div class="action-texts">
+                <strong>Depurar Ventas Duplicadas</strong>
+                <p>Analiza el historial de ventas y elimina registros idénticos repetidos.</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary action-btn" (click)="depurarVentasDuplicadas()">
+              🧹 Depurar Ventas
+            </button>
+          </div>
+
+          <!-- Card 3: Depurar Kardex -->
+          <div class="maintenance-action-card">
+            <div class="card-top">
+              <div class="action-icon">📊</div>
+              <div class="action-texts">
+                <strong>Depurar Movimientos Duplicados</strong>
+                <p>Limpia entradas repetidas en el Kardex manteniendo el stock intacto.</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary action-btn" (click)="depurarMovimientosDuplicados()">
+              🧹 Depurar Kardex
+            </button>
+          </div>
+
+          <!-- Card 4: Consolidar Kardex -->
+          <div class="maintenance-action-card">
+            <div class="card-top">
+              <div class="action-icon">📦</div>
+              <div class="action-texts">
+                <strong>Consolidar Kardex</strong>
+                <p>Compacta el historial estableciendo un saldo inicial con las existencias actuales.</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary action-btn" (click)="resetPeriodico('simplificar_movimientos')">
+              🔄 Consolidar Kardex
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subsección B: Cierres y Resets de Periodo -->
+      <div>
+        <div class="maintenance-subtitle" style="color: #b45309;">
+          ⚠️ Cierre de Periodo y Resets
+        </div>
+        <div class="danger-zone-grid">
+          <!-- Reset Operativo -->
+          <div class="danger-card warning-card">
+            <div class="card-top">
+              <div class="action-icon">🧹</div>
+              <div class="action-texts">
+                <strong>Limpieza Operativa (Cierre de Periodo / Año)</strong>
+                <p>
+                  Elimina ventas concluidas, gastos, cortes y movimientos. <strong>Conserva catálogo, existencias y pedidos/ventas pendientes.</strong>
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-warning action-btn" (click)="resetPeriodico('reset_operativo')">
+              🧹 Ejecutar Reset Operativo
+            </button>
+          </div>
+
+          <!-- Reset Total -->
+          <div class="danger-card critical-card">
+            <div class="card-top">
+              <div class="action-icon">💣</div>
+              <div class="action-texts">
+                <strong>Restablecimiento Total de Fábrica</strong>
+                <p>
+                  Borra por completo todos los datos de Firestore (Productos, Ventas, Pedidos, Gastos). <strong>Acción irreversible.</strong>
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-danger action-btn" (click)="resetPeriodico('reset_total')">
+              💣 Reset Total de Fábrica
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Sucursal -->
+@if (modalSucursalAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🏢 {{ sucursalEditando() ? 'Editar' : 'Nueva' }} Sucursal</h3>
+        <button type="button" class="modal-close" (click)="modalSucursalAbierto.set(false)">&times;</button>
+      </div>
+      <div class="modal-body form-grid">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="sucNom">Nombre de la Sucursal *</label>
+          <input id="sucNom" type="text" [(ngModel)]="sucursalNombre" placeholder="Ej: Sucursal Norte..." required />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="sucDir">Dirección</label>
+          <input id="sucDir" type="text" [(ngModel)]="sucursalDireccion" placeholder="Calle, número, colonia..." />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="sucTel">Teléfono</label>
+          <input id="sucTel" type="text" [(ngModel)]="sucursalTelefono" placeholder="10 dígitos" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" (click)="modalSucursalAbierto.set(false)">Cancelar</button>
+        <button type="button" class="btn btn-success" (click)="guardarSucursalModal()">💾 Guardar Sucursal</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal Restaurar Copia de Seguridad Granular -->
+@if (modalRestaurarAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card modal-backup">
+      <div class="modal-header">
+        <div>
+          <h3>📥 Restaurar Copia de Seguridad</h3>
+          <p class="modal-subtitle">
+            Archivo: <strong>{{ resumenBackup()?.fileName }}</strong>
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="modalRestaurarAbierto.set(false)">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="restore-intro">
+          Selecciona los módulos o colecciones que deseas importar a la base de datos:
+        </p>
+
+        <!-- Botones de selección rápida -->
+        <div class="quick-select-pills">
+          <button type="button" class="pill-btn" (click)="seleccionarTodoBackup()">✨ Seleccionar Todo</button>
+          <button type="button" class="pill-btn" (click)="seleccionarSoloProductosBackup()">📦 Solo Catálogo</button>
+          <button type="button" class="pill-btn" (click)="seleccionarSoloOperacionesBackup()">💼 Solo Operaciones</button>
+          <button type="button" class="pill-btn" (click)="deseleccionarTodoBackup()">🧹 Desmarcar Todo</button>
+        </div>
+
+        <!-- Grid de opciones con Checkboxes -->
+        <div class="backup-modules-grid">
+          <!-- 1. Catálogo de Productos -->
+          <label class="module-card" [class.selected]="optProductos()">
+            <input type="checkbox" [ngModel]="optProductos()" (ngModelChange)="optProductos.set($event)" />
+            <div class="module-icon">📦</div>
+            <div class="module-info">
+              <strong>Productos y Catálogo</strong>
+              <small>{{ resumenBackup()?.productosCount || 0 }} productos encontrados</small>
+            </div>
+          </label>
+
+          <!-- 2. Ventas -->
+          <label class="module-card" [class.selected]="optVentas()">
+            <input type="checkbox" [ngModel]="optVentas()" (ngModelChange)="optVentas.set($event)" />
+            <div class="module-icon">💵</div>
+            <div class="module-info">
+              <strong>Historial de Ventas</strong>
+              <small>{{ resumenBackup()?.ventasCount || 0 }} ventas registradas</small>
+            </div>
+          </label>
+
+          <!-- 3. Movimientos de Inventario -->
+          <label class="module-card" [class.selected]="optMovimientos()">
+            <input type="checkbox" [ngModel]="optMovimientos()" (ngModelChange)="optMovimientos.set($event)" />
+            <div class="module-icon">🔄</div>
+            <div class="module-info">
+              <strong>Movimientos de Stock (Kardex)</strong>
+              <small>{{ resumenBackup()?.movimientosCount || 0 }} movimientos</small>
+            </div>
+          </label>
+
+          <!-- 4. Gastos -->
+          <label class="module-card" [class.selected]="optGastos()">
+            <input type="checkbox" [ngModel]="optGastos()" (ngModelChange)="optGastos.set($event)" />
+            <div class="module-icon">🧾</div>
+            <div class="module-info">
+              <strong>Gastos Operativos</strong>
+              <small>{{ resumenBackup()?.gastosCount || 0 }} gastos registrados</small>
+            </div>
+          </label>
+
+          <!-- 5. Cortes de Caja -->
+          <label class="module-card" [class.selected]="optCortes()">
+            <input type="checkbox" [ngModel]="optCortes()" (ngModelChange)="optCortes.set($event)" />
+            <div class="module-icon">🔒</div>
+            <div class="module-info">
+              <strong>Cortes de Caja</strong>
+              <small>{{ resumenBackup()?.cortesCount || 0 }} cortes y arqueos</small>
+            </div>
+          </label>
+
+          <!-- 6. Pedidos Personalizados -->
+          <label class="module-card" [class.selected]="optPedidos()">
+            <input type="checkbox" [ngModel]="optPedidos()" (ngModelChange)="optPedidos.set($event)" />
+            <div class="module-icon">📋</div>
+            <div class="module-info">
+              <strong>Pedidos Personalizados</strong>
+              <small>{{ resumenBackup()?.pedidosCount || 0 }} pedidos en sistema</small>
+            </div>
+          </label>
+
+          <!-- 7. Sucursales -->
+          <label class="module-card" [class.selected]="optSucursales()">
+            <input type="checkbox" [ngModel]="optSucursales()" (ngModelChange)="optSucursales.set($event)" />
+            <div class="module-icon">🏪</div>
+            <div class="module-info">
+              <strong>Sucursales</strong>
+              <small>{{ resumenBackup()?.sucursalesCount || 0 }} sucursales registradas</small>
+            </div>
+          </label>
+
+          <!-- 8. Configuración General -->
+          <label class="module-card" [class.selected]="optConfiguracion()">
+            <input type="checkbox" [ngModel]="optConfiguracion()" (ngModelChange)="optConfiguracion.set($event)" />
+            <div class="module-icon">⚙️</div>
+            <div class="module-info">
+              <strong>Configuración del Negocio</strong>
+              <small>Nombre, teléfono, tickets y listas</small>
+            </div>
+          </label>
+
+          <!-- 9. Bitácora y Auditoría -->
+          <label class="module-card" [class.selected]="optBitacora()">
+            <input type="checkbox" [ngModel]="optBitacora()" (ngModelChange)="optBitacora.set($event)" />
+            <div class="module-icon">📜</div>
+            <div class="module-info">
+              <strong>Bitácora y Auditoría</strong>
+              <small>{{ resumenBackup()?.bitacoraCount || 0 }} eventos registrados</small>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="modalRestaurarAbierto.set(false)"
+          [disabled]="restaurandoBackup()"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="ejecutarRestauracion()"
+          [disabled]="!hayModulosSeleccionados() || restaurandoBackup()"
+        >
+          {{ restaurandoBackup() ? '⏳ Restaurando datos...' : '💾 Restaurar Módulos Seleccionados' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal Previsualización de Consolidación de Abonos en Ventas -->
+@if (modalConsolidarAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card" style="max-width: 850px; width: 100%;">
+      <div class="modal-header">
+        <div>
+          <h3>🔄 Consolidación de Abonos de Pedidos en Ventas</h3>
+          <p class="modal-subtitle">
+            Revisión previa de pagos de pedidos que se registrarán en el módulo de Ventas.
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="modalConsolidarAbierto.set(false)">&times;</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Resumen KPI -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #64748b; font-weight: 700; display: block;">PEDIDOS ANALIZADOS</span>
+            <strong style="font-size: 1.25rem; color: #0f172a;">{{ analisisConsolidacion()?.pedidosAnalizados || 0 }}</strong>
+          </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #64748b; font-weight: 700; display: block;">ABONOS YA EN VENTAS</span>
+            <strong style="font-size: 1.25rem; color: #16a34a;">{{ analisisConsolidacion()?.ventasExistentes || 0 }}</strong>
+          </div>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #1d4ed8; font-weight: 700; display: block;">VENTAS POR AGREGAR</span>
+            <strong style="font-size: 1.25rem; color: #1d4ed8;">{{ analisisConsolidacion()?.ventasNuevas?.length || 0 }}</strong>
+          </div>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #047857; font-weight: 700; display: block;">MONTO TOTAL A REGISTRAR</span>
+            <strong style="font-size: 1.25rem; color: #047857;">{{ (analisisConsolidacion()?.montoTotalNuevas || 0) | currencyMxn }}</strong>
+          </div>
+        </div>
+
+        @if ((analisisConsolidacion()?.ventasNuevas?.length || 0) > 0) {
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 8px;">
+              DETALLE DE LAS VENTAS QUE SE GENERARÁN ({{ analisisConsolidacion()?.ventasNuevas?.length }}):
+            </div>
+            <div class="table-responsive" style="max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <table class="data-table" style="margin: 0; width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
+                  <tr style="border-bottom: 1px solid #cbd5e1; text-align: left; font-size: 0.82rem; color: #475569;">
+                    <th style="padding: 8px 10px;">Folio Generado</th>
+                    <th style="padding: 8px 10px;">Pedido / Cliente</th>
+                    <th style="padding: 8px 10px;">Concepto</th>
+                    <th style="padding: 8px 10px;">Método</th>
+                    <th style="padding: 8px 10px; text-align: right;">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of analisisConsolidacion()?.ventasNuevas; track item.id) {
+                    <tr style="border-bottom: 1px solid #f1f5f9; font-size: 0.85rem;">
+                      <td style="padding: 8px 10px;">
+                        <code style="font-weight: 700; color: #0284c7; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;">{{ item.id }}</code>
+                      </td>
+                      <td style="padding: 8px 10px;">
+                        <strong>{{ item.pedidoId }}</strong>
+                        <div style="font-size: 0.76rem; color: #64748b;">{{ item.clienteNombre }}</div>
+                      </td>
+                      <td style="padding: 8px 10px;">{{ item.concepto }}</td>
+                      <td style="padding: 8px 10px;">
+                        <span style="background: #f1f5f9; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.78rem;">
+                          {{ item.metodoPago }}
+                        </span>
+                      </td>
+                      <td style="padding: 8px 10px; text-align: right; font-weight: 800; color: #16a34a;">
+                        + {{ item.monto | currencyMxn }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        } @else {
+          <div style="text-align: center; padding: 32px 16px; background: #f0fdf4; border: 1.5px dashed #86efac; border-radius: 8px;">
+            <div style="font-size: 2.5rem; margin-bottom: 8px;">✨</div>
+            <h4 style="margin: 0 0 6px 0; color: #166534; font-size: 1.1rem; font-weight: 800;">¡Todos los abonos están al día!</h4>
+            <p style="margin: 0; color: #15803d; font-size: 0.9rem;">
+              Todos los anticipos y abonos de tus pedidos ya cuentan con su venta correspondiente registrada en el sistema. No se requieren cambios.
+            </p>
+          </div>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" (click)="modalConsolidarAbierto.set(false)" [disabled]="aplicandoConsolidacion()">
+          Cerrar
+        </button>
+        @if ((analisisConsolidacion()?.ventasNuevas?.length || 0) > 0) {
+          <button
+            type="button"
+            class="btn btn-primary"
+            style="background: #0284c7; color: white; border-color: #0284c7;"
+            (click)="confirmarConsolidacion()"
+            [disabled]="aplicandoConsolidacion()"
+          >
+            {{ aplicandoConsolidacion() ? '⏳ Registrando...' : '✅ Confirmar y Registrar en Ventas (' + (analisisConsolidacion()?.ventasNuevas?.length) + ')' }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}

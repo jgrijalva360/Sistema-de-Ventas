@@ -1,0 +1,681 @@
+<div class="inventario-page">
+  <div class="content-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
+    <div>
+      <h2 style="margin: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a;">📦 Inventario & Catálogo de Productos</h2>
+      <p style="margin: 4px 0 0; font-size: 0.9rem; color: #64748b;">
+        Gestión centralizada de existencias por sucursal, precios, códigos de barras y auditoría.
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+      <!-- Selector de Sucursal para el Inventario -->
+      <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 4px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <span style="font-size: 0.95rem;">📍</span>
+        <label for="selectSucursalInv" style="font-size: 0.84rem; font-weight: 700; color: #334155; margin: 0;">Sucursal:</label>
+        <select
+          id="selectSucursalInv"
+          [ngModel]="sucursalFiltro()"
+          (ngModelChange)="sucursalFiltro.set($event)"
+          style="border: none; background: transparent; font-weight: 700; color: #0284c7; font-size: 0.88rem; outline: none; cursor: pointer;"
+        >
+          <option value="TODAS">🌐 Todas (Consolidado Global)</option>
+          @for (suc of sucursalesService.sucursales(); track suc.id) {
+            <option [value]="suc.id">🏪 {{ suc.nombre }}</option>
+          }
+        </select>
+      </div>
+
+      <button
+        type="button"
+        class="btn"
+        [class.btn-success]="!formularioRegistroVisible()"
+        [class.btn-secondary]="formularioRegistroVisible()"
+        style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700; padding: 9px 18px;"
+        (click)="toggleFormularioRegistro()"
+      >
+        <span>{{ formularioRegistroVisible() ? '✕ Cerrar Registro' : '➕ Nuevo Producto' }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-primary"
+        style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);"
+        (click)="abrirAuditoria()"
+      >
+        <span>🔍 Auditoría de Stock</span>
+        @if (resumenAuditoria().discrepancias > 0) {
+          <span class="badge badge-danger" style="background: #ef4444; color: white; border-radius: 999px; padding: 2px 7px; font-size: 0.75rem;">
+            {{ resumenAuditoria().discrepancias }}
+          </span>
+        }
+      </button>
+    </div>
+  </div>
+
+  <!-- Formulario Desplegable: Registrar Nuevo Producto -->
+  @if (formularioRegistroVisible()) {
+    <div class="card registro-card" style="margin-bottom: 24px; border: 2px solid #0284c7; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.12); animation: fadeIn 0.2s ease;">
+      <div class="registro-card-header" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: white;">➕ Registrar Nuevo Producto</h3>
+        <button type="button" class="btn-close-clean" (click)="formularioRegistroVisible.set(false)" style="background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;">✕</button>
+      </div>
+
+      <div class="card-body" style="padding: 20px;">
+        <form (ngSubmit)="onGuardarNuevo()">
+          <!-- Campo Código y Botones de Barras -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;">
+            <div class="form-group-full">
+              <label for="nuevoCodigo" class="field-label">Código del Producto *</label>
+              <input
+                #nuevoCodigoInputRef
+                id="nuevoCodigo"
+                type="text"
+                maxlength="8"
+                [(ngModel)]="nuevoProducto.codigo"
+                name="codigo"
+                required
+                placeholder="Código único (máx 8 dígitos)"
+                class="form-input custom-input"
+                (input)="onCodigoChange()"
+              />
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 24px;">
+              <button
+                type="button"
+                class="btn-barcode btn-sugerir"
+                style="flex: 1; padding: 10px 12px; font-size: 0.82rem; font-weight: 600;"
+                (click)="sugerirCodigo()"
+              >
+                ⚡ Sugerir Código
+              </button>
+              <button
+                type="button"
+                class="btn-barcode btn-guardar-img"
+                style="flex: 1; padding: 10px 12px; font-size: 0.82rem; font-weight: 600;"
+                (click)="guardarCodigoBarrasComoImagen()"
+                [disabled]="!nuevoProducto.codigo"
+              >
+                🏷️ Descargar Barras PNG
+              </button>
+            </div>
+          </div>
+
+          <!-- Campo Nombre y Categoría -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 14px;">
+            <div class="form-group-full">
+              <label for="nuevoNombre" class="field-label">Nombre del Producto *</label>
+              <input
+                id="nuevoNombre"
+                type="text"
+                [(ngModel)]="nuevoProducto.nombre"
+                name="nombre"
+                required
+                placeholder="Ej. Cuaderno Profesional 100 Hojas"
+                class="form-input custom-input"
+              />
+            </div>
+
+            <div class="form-group-full">
+              <label for="nuevoGrupo" class="field-label">Grupo / Categoría</label>
+              <input
+                id="nuevoGrupo"
+                type="text"
+                [(ngModel)]="nuevoProducto.grupo"
+                name="grupo"
+                placeholder="Ej. PAPELERIA"
+                class="form-input custom-input"
+              />
+            </div>
+          </div>
+
+          <!-- Fila de Sucursal Destino, Stock, Precio y Precio Variable -->
+          <div class="form-row-grid" style="margin-top: 14px; grid-template-columns: 1.2fr 1fr 1fr 1fr 1.3fr;">
+            <div class="form-group-col">
+              <label for="nuevaSucursal" class="field-label">Sucursal de Asignación</label>
+              <select
+                id="nuevaSucursal"
+                [ngModel]="nuevaSucursalDestino()"
+                (ngModelChange)="nuevaSucursalDestino.set($event)"
+                name="sucursalDestino"
+                class="form-input custom-input"
+              >
+                @for (suc of sucursalesService.sucursales(); track suc.id) {
+                  <option [value]="suc.id">{{ suc.nombre }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="form-group-col">
+              <label for="nuevoStockInicial" class="field-label">Stock Inicial</label>
+              <input
+                id="nuevoStockInicial"
+                type="number"
+                min="0"
+                step="1"
+                [(ngModel)]="nuevoProducto.stockActual"
+                name="stockActual"
+                class="form-input custom-input"
+              />
+            </div>
+
+            <div class="form-group-col">
+              <label for="nuevoStockMinimo" class="field-label">Stock Mínimo</label>
+              <input
+                id="nuevoStockMinimo"
+                type="number"
+                min="0"
+                step="1"
+                [(ngModel)]="nuevoProducto.stockMinimo"
+                name="stockMinimo"
+                class="form-input custom-input"
+              />
+            </div>
+
+            <div class="form-group-col">
+              <label for="nuevoPrecio" class="field-label">Precio Venta ($) *</label>
+              <input
+                id="nuevoPrecio"
+                type="number"
+                min="0.01"
+                step="0.01"
+                [(ngModel)]="nuevoProducto.precioVenta"
+                name="precioVenta"
+                required
+                placeholder="0.00"
+                class="form-input custom-input"
+              />
+            </div>
+
+            <div class="form-group-col variable-col">
+              <div class="checkbox-container">
+                <input
+                  id="nuevoPrecioVar"
+                  type="checkbox"
+                  [(ngModel)]="nuevoProducto.precioVariable"
+                  name="precioVariable"
+                  class="custom-checkbox"
+                />
+                <label for="nuevoPrecioVar" class="checkbox-label">
+                  Precio variable en venta
+                </label>
+              </div>
+              <div class="helper-box">
+                Activa si el cajero debe ingresar el precio al cobrar.
+              </div>
+            </div>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="form-submit-row" style="display: flex; gap: 12px; margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+            <button type="submit" class="btn btn-success" style="padding: 10px 24px; font-weight: 700;">
+              💾 Guardar Producto
+            </button>
+            <button type="button" class="btn btn-secondary" (click)="limpiarFormulario()">
+              Limpiar Campos
+            </button>
+            <button type="button" class="btn btn-secondary" style="margin-left: auto;" (click)="formularioRegistroVisible.set(false)">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Filtros y Búsqueda -->
+  <div class="card" style="margin-bottom: 20px;">
+    <div class="card-body search-filter-grid" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 260px;">
+        <input
+          #busquedaInputRef
+          type="text"
+          [value]="busqueda()"
+          (input)="busqueda.set($any($event.target).value)"
+          placeholder="🔍 Buscar por código, nombre o categoría..."
+          style="width: 100%; padding: 10px 14px; font-size: 0.9rem; border-radius: 8px; border: 1.5px solid #cbd5e1;"
+        />
+      </div>
+
+      <div class="filter-toggles" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button
+          type="button"
+          class="btn btn-sm"
+          [class.btn-primary]="filtro() === 'TODOS'"
+          [class.btn-secondary]="filtro() !== 'TODOS'"
+          (click)="filtro.set('TODOS')"
+        >
+          Todos ({{ productosService.productos().length }})
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          [class.btn-warning]="filtro() === 'BAJO'"
+          [class.btn-secondary]="filtro() !== 'BAJO'"
+          (click)="filtro.set('BAJO')"
+        >
+          ⚠️ Stock Bajo ({{ productosConStockBajo().length }})
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          [class.btn-danger]="filtro() === 'AGOTADO'"
+          [class.btn-secondary]="filtro() !== 'AGOTADO'"
+          (click)="filtro.set('AGOTADO')"
+        >
+          🚫 Agotados ({{ productosAgotados().length }})
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de Inventario Multi-Sucursal Unificada -->
+  <div class="card">
+    <div class="card-body table-container" style="padding: 0; overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <th style="padding: 12px 16px; text-align: left;">Código</th>
+            <th style="padding: 12px 16px; text-align: left;">Nombre del Producto</th>
+            <th style="padding: 12px 16px; text-align: left;">Grupo / Categoría</th>
+            <th style="padding: 12px 16px; text-align: right;">Precio Venta</th>
+            <th style="padding: 12px 16px; text-align: center;">Mínimo</th>
+            <th style="padding: 12px 16px; text-align: center;">
+              Stock {{ sucursalFiltro() === 'TODAS' ? '(Consolidado)' : 'en Sucursal' }}
+            </th>
+            <th style="padding: 12px 16px; text-align: center;">Estado</th>
+            <th style="padding: 12px 16px; text-align: center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (prod of productosFiltrados(); track prod.codigo) {
+            @let stock = obtenerStockMostrado(prod);
+            <tr
+              [class.row-alert]="stock.stockActual <= stock.stockMinimo"
+              style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;"
+            >
+              <td style="padding: 12px 16px;">
+                <strong style="color: #0f172a; font-family: monospace; font-size: 0.95rem;">
+                  {{ prod.codigo }}
+                </strong>
+              </td>
+              <td style="padding: 12px 16px;">
+                <div style="font-weight: 600; color: #1e293b;">{{ prod.nombre }}</div>
+                @if (prod.precioVariable) {
+                  <span style="display: inline-block; font-size: 0.72rem; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; margin-top: 2px; font-weight: 600;">
+                    Precio Variable
+                  </span>
+                }
+              </td>
+              <td style="padding: 12px 16px;">
+                <span class="badge badge-info" style="font-size: 0.78rem;">
+                  {{ prod.grupo || 'GENERAL' }}
+                </span>
+              </td>
+              <td style="padding: 12px 16px; text-align: right; font-weight: 700; color: #0f172a;">
+                {{ prod.precioVenta | currencyMxn }}
+              </td>
+              <td style="padding: 12px 16px; text-align: center; color: #64748b;">
+                {{ stock.stockMinimo }}
+              </td>
+              <td style="padding: 12px 16px; text-align: center;">
+                <span
+                  style="display: inline-block; min-width: 38px; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.95rem;"
+                  [style.background]="stock.stockActual <= 0 ? '#fee2e2' : stock.stockActual <= stock.stockMinimo ? '#fef3c7' : '#f0fdf4'"
+                  [style.color]="stock.stockActual <= 0 ? '#dc2626' : stock.stockActual <= stock.stockMinimo ? '#b45309' : '#15803d'"
+                >
+                  {{ stock.stockActual }}
+                </span>
+              </td>
+              <td style="padding: 12px 16px; text-align: center;">
+                @if (stock.stockActual <= 0) {
+                  <span class="badge badge-danger">Agotado</span>
+                } @else if (stock.stockActual <= stock.stockMinimo) {
+                  <span class="badge badge-warning">Por Agotarse</span>
+                } @else {
+                  <span class="badge badge-success">Disponible</span>
+                }
+              </td>
+              <td style="padding: 12px 16px; text-align: center;">
+                <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: center;">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-secondary"
+                    title="Descargar Código de Barras PNG"
+                    (click)="descargarCodigoProducto(prod)"
+                    style="padding: 5px 9px; font-size: 0.8rem;"
+                  >
+                    🏷️ Barras
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-secondary"
+                    title="Editar Producto & Existencias por Sucursal"
+                    (click)="abrirEditar(prod)"
+                    style="padding: 5px 9px; font-size: 0.8rem;"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    title="Eliminar Producto"
+                    (click)="onEliminar(prod.codigo)"
+                    style="padding: 5px 9px; font-size: 0.8rem;"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" style="text-align: center; color: #94a3b8; padding: 35px;">
+                No se encontraron productos registrados o que coincidan con la búsqueda.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Producto & Stock por Sucursal -->
+@if (productoEnEdicion()) {
+  <div class="modal-overlay">
+    <div class="modal-card" style="max-width: 650px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700;">✏️ Editar Producto & Stock por Sucursal</h3>
+        <button type="button" class="modal-close" (click)="productoEnEdicion.set(null)">&times;</button>
+      </div>
+
+      <form (ngSubmit)="onGuardarEdicion()" class="modal-body" style="padding: 20px; overflow-y: auto;">
+        <!-- Datos Generales -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <h4 style="margin: 0 0 10px; font-size: 0.9rem; font-weight: 700; color: #1e3a5f;">📋 Datos Generales (Compartidos)</h4>
+          
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Código</label>
+              <input type="text" [value]="productoEnEdicion()?.codigo" readonly disabled style="background: #e2e8f0; cursor: not-allowed;" />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editNombre" style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Nombre del Producto *</label>
+              <input id="editNombre" type="text" [(ngModel)]="productoEnEdicion()!.nombre" name="nombre" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editPrecio" style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Precio Venta ($) *</label>
+              <input id="editPrecio" type="number" min="0.01" step="0.01" [(ngModel)]="productoEnEdicion()!.precioVenta" name="precioVenta" required />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editGrupo" style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Grupo / Categoría</label>
+              <input id="editGrupo" type="text" [(ngModel)]="productoEnEdicion()!.grupo" name="grupo" />
+            </div>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; margin-bottom: 0;">
+            <input id="editPrecioVar" type="checkbox" [(ngModel)]="productoEnEdicion()!.precioVariable" name="precioVariable" style="width: auto; height: auto;" />
+            <label for="editPrecioVar" style="margin-bottom: 0; cursor: pointer; font-size: 0.84rem; font-weight: 600; color: #1e3a5f;">
+              Precio Variable en Venta
+            </label>
+          </div>
+        </div>
+
+        <!-- Existencias por Sucursal -->
+        <div style="border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 8px; padding: 14px;">
+          <h4 style="margin: 0 0 10px; font-size: 0.9rem; font-weight: 700; color: #0284c7;">
+            🏪 Existencias & Stock Mínimo por Sucursal
+          </h4>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            @for (suc of sucursalesService.sucursales(); track suc.id) {
+              <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <div>
+                  <strong style="font-size: 0.88rem; color: #0f172a;">{{ suc.nombre }}</strong>
+                  <div style="font-size: 0.75rem; color: #64748b;">ID: {{ suc.id }}</div>
+                </div>
+
+                <div>
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block;">Stock Actual</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    [ngModel]="stocksEdicion()[suc.id]?.stockActual || 0"
+                    (ngModelChange)="stocksEdicion()[suc.id] = { stockActual: +$event || 0, stockMinimo: stocksEdicion()[suc.id]?.stockMinimo || 1 }"
+                    [name]="'stockActual_' + suc.id"
+                    style="padding: 4px 8px; font-size: 0.88rem; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px;"
+                  />
+                </div>
+
+                <div>
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block;">Stock Mínimo</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    [ngModel]="stocksEdicion()[suc.id]?.stockMinimo || 1"
+                    (ngModelChange)="stocksEdicion()[suc.id] = { stockActual: stocksEdicion()[suc.id]?.stockActual || 0, stockMinimo: +$event || 1 }"
+                    [name]="'stockMinimo_' + suc.id"
+                    style="padding: 4px 8px; font-size: 0.88rem; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px;"
+                  />
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; margin-top: 14px; border-top: 1px solid #e2e8f0;">
+          <button type="button" class="btn btn-secondary" (click)="productoEnEdicion.set(null)">Cancelar</button>
+          <button type="submit" class="btn btn-success" style="font-weight: 700;">💾 Guardar Todos los Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- Modal de Auditoría y Conciliación de Stock -->
+@if (modalAuditoriaAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card modal-lg" style="max-width: 960px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #1e293b, #0f172a); color: white; padding: 18px 24px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">🔍</span>
+          <div>
+            <h3 style="margin: 0; color: white; font-size: 1.15rem; font-weight: 700;">
+              Auditoría de Stock: Catálogo vs Kardex ({{ sucursalFiltro() === 'TODAS' ? 'Todas las Sucursales' : 'Sucursal Seleccionada' }})
+            </h3>
+            <p style="margin: 2px 0 0; font-size: 0.8rem; color: #94a3b8;">
+              Validación y conciliación matemática entre el stock maestro actual y los movimientos registrados.
+            </p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" style="color: white;" (click)="modalAuditoriaAbierto.set(false)">&times;</button>
+      </div>
+
+      <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px;">
+        @if (mensajeAuditoria()) {
+          <div class="alert alert-info" style="margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; background: #e0f2fe; color: #0369a1; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <span>ℹ️</span> {{ mensajeAuditoria() }}
+          </div>
+        }
+
+        <!-- Resumen de Métricas -->
+        <div class="audit-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div class="metric-box" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+            <span style="font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Productos</span>
+            <div style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-top: 4px;">{{ resumenAuditoria().total }}</div>
+          </div>
+          <div class="metric-box" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px; text-align: center;">
+            <span style="font-size: 0.8rem; color: #166534; font-weight: 600; text-transform: uppercase;">✅ Conciliados</span>
+            <div style="font-size: 1.5rem; font-weight: 800; color: #16a34a; margin-top: 4px;">{{ resumenAuditoria().conciliados }}</div>
+          </div>
+          <div class="metric-box" style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 10px; padding: 14px; text-align: center;">
+            <span style="font-size: 0.8rem; color: #9f1239; font-weight: 600; text-transform: uppercase;">⚠️ Con Discrepancia</span>
+            <div style="font-size: 1.5rem; font-weight: 800; color: #e11d48; margin-top: 4px;">{{ resumenAuditoria().discrepancias }}</div>
+          </div>
+          <div class="metric-box" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 14px; text-align: center;">
+            <span style="font-size: 0.8rem; color: #075985; font-weight: 600; text-transform: uppercase;">ℹ️ Sin Movimientos</span>
+            <div style="font-size: 1.5rem; font-weight: 800; color: #0284c7; margin-top: 4px;">{{ resumenAuditoria().sinKardex }}</div>
+          </div>
+        </div>
+
+        <!-- Barra de Búsqueda, Filtros y Acción Masiva -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; flex: 1;">
+            <input
+              type="text"
+              [value]="busquedaAuditoria()"
+              (input)="busquedaAuditoria.set($any($event.target).value)"
+              placeholder="🔍 Filtrar por código o nombre..."
+              style="max-width: 260px; padding: 8px 12px; font-size: 0.88rem; border-radius: 6px; border: 1px solid #cbd5e1;"
+            />
+            <div style="display: flex; gap: 6px;">
+              <button
+                type="button"
+                class="btn btn-sm"
+                [class.btn-primary]="filtroAuditoria() === 'TODOS'"
+                [class.btn-secondary]="filtroAuditoria() !== 'TODOS'"
+                (click)="filtroAuditoria.set('TODOS')"
+              >
+                Todos ({{ resumenAuditoria().total }})
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm"
+                [class.btn-danger]="filtroAuditoria() === 'DISCREPANCIAS'"
+                [class.btn-secondary]="filtroAuditoria() !== 'DISCREPANCIAS'"
+                (click)="filtroAuditoria.set('DISCREPANCIAS')"
+              >
+                ⚠️ Discrepancias / Sin Kardex ({{ resumenAuditoria().discrepancias + resumenAuditoria().sinKardex }})
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button
+              type="button"
+              class="btn btn-primary"
+              style="padding: 8px 14px; font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"
+              [disabled]="procesandoConciliacion()"
+              (click)="onRecalcularStockDesdeMovimientos()"
+              title="Recalcula y corrige el Stock Actual del catálogo a partir del historial de movimientos (Kardex)"
+            >
+              🔄 Recalcular Stock desde Kardex
+            </button>
+
+            @if (resumenAuditoria().discrepancias > 0 || resumenAuditoria().sinKardex > 0) {
+              <button
+                type="button"
+                class="btn btn-warning"
+                style="padding: 8px 14px; font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"
+                [disabled]="procesandoConciliacion()"
+                (click)="conciliarTodasDiscrepancias()"
+                title="Crea movimientos de ajuste en el Kardex para igualar todos los productos a su stock real del catálogo"
+              >
+                ⚡ Conciliar Todo al Stock Real
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Tabla de Auditoría -->
+        <div class="table-container" style="border: 1px solid #e2e8f0; border-radius: 8px; overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+            <thead>
+              <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+                <th style="padding: 10px 14px;">Producto</th>
+                <th style="padding: 10px; text-align: center;">Stock Catálogo</th>
+                <th style="padding: 10px; text-align: center;">Último Kardex</th>
+                <th style="padding: 10px; text-align: center;">Diferencia</th>
+                <th style="padding: 10px 14px;">Historial Kardex</th>
+                <th style="padding: 10px; text-align: center;">Estado</th>
+                <th style="padding: 10px 14px; text-align: center;">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of auditoriaFiltrada(); track item.codigo) {
+                <tr [style.background]="item.estado === 'DISCREPANCIA' ? '#fff5f5' : item.estado === 'SIN_KARDEX' ? '#f0f9ff' : 'white'" style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 10px 14px;">
+                    <strong>{{ item.codigo }}</strong>
+                    <div style="font-size: 0.82rem; color: #475569;">{{ item.nombre }}</div>
+                  </td>
+                  <td style="padding: 10px; text-align: center; font-weight: 700; font-size: 1rem; color: #0f172a;">
+                    {{ item.stockCatalogo }}
+                  </td>
+                  <td style="padding: 10px; text-align: center; font-weight: 600; color: #475569;">
+                    {{ item.stockKardex !== null ? item.stockKardex : '—' }}
+                  </td>
+                  <td style="padding: 10px; text-align: center;">
+                    @if (item.estado === 'CONCILIADO') {
+                      <span style="color: #16a34a; font-weight: 700;">0 (Cuadrado)</span>
+                    } @else if (item.estado === 'DISCREPANCIA') {
+                      <strong [style.color]="item.diferencia > 0 ? '#ea580c' : '#dc2626'">
+                        {{ item.diferencia > 0 ? '+' + item.diferencia : item.diferencia }}
+                      </strong>
+                    } @else {
+                      <span style="color: #64748b; font-size: 0.82rem;">Sin Kardex</span>
+                    }
+                  </td>
+                  <td style="padding: 10px 14px; font-size: 0.82rem;">
+                    @if (item.totalMovimientos > 0) {
+                      <div>📥 Entradas: <strong>{{ item.totalEntradas }}</strong> | 📤 Salidas: <strong>{{ item.totalSalidas }}</strong></div>
+                      <div style="color: #64748b; font-size: 0.76rem; margin-top: 2px;">
+                        Último: {{ item.ultimoMovimiento?.tipo }} ({{ item.ultimoMovimiento?.fecha | fechaLocal }})
+                      </div>
+                    } @else {
+                      <span style="color: #94a3b8;">Sin movimientos previos</span>
+                    }
+                  </td>
+                  <td style="padding: 10px; text-align: center;">
+                    @if (item.estado === 'CONCILIADO') {
+                      <span class="badge badge-success" style="padding: 4px 8px; font-size: 0.78rem;">✅ Cuadrado</span>
+                    } @else if (item.estado === 'DISCREPANCIA') {
+                      <span class="badge badge-danger" style="padding: 4px 8px; font-size: 0.78rem;">⚠️ Discrepancia</span>
+                    } @else {
+                      <span class="badge badge-info" style="padding: 4px 8px; font-size: 0.78rem;">ℹ️ Sin Kardex</span>
+                    }
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center;">
+                    @if (item.estado !== 'CONCILIADO') {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        style="padding: 4px 10px; font-size: 0.78rem; font-weight: 600; white-space: nowrap;"
+                        [disabled]="procesandoConciliacion()"
+                        (click)="conciliarKardexConStock(item)"
+                        title="Ajusta el Kardex para que refleje el stock real de catálogo"
+                      >
+                        ⚡ Conciliar Kardex
+                      </button>
+                    } @else {
+                      <span style="color: #16a34a; font-size: 0.85rem;">✔ OK</span>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" style="text-align: center; color: #94a3b8; padding: 25px;">
+                    No se encontraron productos para auditar con los filtros actuales.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; background: #f8fafc;">
+        <button type="button" class="btn btn-secondary" (click)="modalAuditoriaAbierto.set(false)">
+          Cerrar Auditoría
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,114 @@
+<div class="gastos-page">
+  <div class="content-header">
+    <div>
+      <h2>🧾 Control de Gastos Operativos</h2>
+      <p>Registro de salidas de dinero, compras de suministros y pagos de servicios.</p>
+    </div>
+  </div>
+
+  <!-- Formulario Nuevo Gasto -->
+  <div class="card">
+    <div class="card-header">
+      <span>➕ Registrar Nuevo Gasto</span>
+    </div>
+    <div class="card-body">
+      <form (ngSubmit)="onRegistrarGasto()" class="form-grid">
+        <div class="form-group">
+          <label for="gastoConcepto">Concepto / Descripción *</label>
+          <input #conceptoInputRef id="gastoConcepto" type="text" [(ngModel)]="concepto" name="concepto" required placeholder="Ej: Pago de luz, bolsas..." />
+        </div>
+
+        <div class="form-group">
+          <label for="gastoMonto">Monto ($) *</label>
+          <input id="gastoMonto" type="number" min="0.01" step="0.01" [(ngModel)]="monto" name="monto" required placeholder="0.00" />
+        </div>
+
+        <div class="form-group">
+          <label for="gastoCat">Categoría *</label>
+          <select id="gastoCat" [(ngModel)]="categoria" name="categoria" required>
+            <option value="SERVICIOS">Servicios (Luz, Agua, Internet)</option>
+            <option value="SUMINISTROS">Suministros / Empaque</option>
+            <option value="NOMINA">Nómina / Sueldos</option>
+            <option value="MANTENIMIENTO">Mantenimiento</option>
+            <option value="PROVEEDORES">Proveedores / Mercancía</option>
+            <option value="OTROS">Otros Gastos</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="gastoMetodo">Método de Pago *</label>
+          <select id="gastoMetodo" [(ngModel)]="metodoPago" name="metodoPago" required>
+            <option value="EFECTIVO">💵 Efectivo (Afecta Caja de Turno)</option>
+            <option value="TARJETA">💳 Tarjeta (Gasto Bancario)</option>
+            <option value="TRANSFERENCIA">📱 Transferencia (Gasto Bancario)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="gastoPersona">Autorizado / Pagado Por</label>
+          <input id="gastoPersona" type="text" [(ngModel)]="persona" name="persona" placeholder="Ej: Juan Pérez" />
+        </div>
+
+        <div class="form-group">
+          <label for="gastoObs">Observaciones</label>
+          <input id="gastoObs" type="text" [(ngModel)]="observaciones" name="observaciones" placeholder="Detalles adicionales..." />
+        </div>
+
+        <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-danger" [disabled]="!concepto || monto <= 0">
+            💸 Registrar Gasto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Listado de Gastos -->
+  <div class="card">
+    <div class="card-header">
+      <span>📋 Gastos Registrados ({{ gastosService.gastos().length }})</span>
+      <span style="font-size: 0.9rem; font-weight: 700; color: #dc2626;">
+        Total: {{ totalAcumulado() | currencyMxn }}
+      </span>
+    </div>
+    <div class="card-body table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Concepto</th>
+            <th>Categoría</th>
+            <th>Método</th>
+            <th>Autorizó</th>
+            <th style="text-align: right;">Monto</th>
+            <th style="text-align: center;">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (g of gastosService.gastos(); track g.id) {
+            <tr>
+              <td>{{ g.fecha | fechaLocal }}</td>
+              <td><strong>{{ g.concepto }}</strong></td>
+              <td><span class="badge badge-info">{{ g.categoria }}</span></td>
+              <td>
+                @if (g.metodoPago === 'EFECTIVO') { <span class="badge badge-success">Efectivo</span> }
+                @else { <span class="badge badge-warning">{{ g.metodoPago }}</span> }
+              </td>
+              <td>{{ g.persona || '-' }}</td>
+              <td style="text-align: right;"><strong style="color: #dc2626;">{{ g.monto | currencyMxn }}</strong></td>
+              <td style="text-align: center;">
+                <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarGasto(g.id)">🗑️</button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" style="text-align: center; color: #94a3b8; padding: 25px;">
+                No hay gastos registrados.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,402 @@
+<div class="dashboard-page">
+  <div class="content-header">
+    <div>
+      <h2>📊 Panel Principal</h2>
+      <p>Resumen financiero y balance de ventas y caja en tiempo real.</p>
+    </div>
+    <button type="button" class="btn-privacy" (click)="toggleMostrarValores()">
+      <span>{{ mostrarValores() ? '👁️ Ocultar valores' : '🔒 Mostrar valores' }}</span>
+    </button>
+  </div>
+
+  <!-- Barra de Filtros de Periodo -->
+  <div class="dashboard-filter-card">
+    <div class="filter-controls-wrapper">
+      <div class="filter-label-group">
+        <span class="filter-icon">📅</span>
+        <span class="filter-label">Periodo:</span>
+      </div>
+
+      <!-- Botones de Rango Rápido -->
+      <div class="periodo-buttons">
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'HOY'"
+          (click)="setPeriodo('HOY')"
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'AYER'"
+          (click)="setPeriodo('AYER')"
+        >
+          Ayer
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'ESTA_SEMANA'"
+          (click)="setPeriodo('ESTA_SEMANA')"
+        >
+          Esta Semana
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'ESTE_MES'"
+          (click)="setPeriodo('ESTE_MES')"
+        >
+          Este Mes
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'MES_ANTERIOR'"
+          (click)="setPeriodo('MES_ANTERIOR')"
+        >
+          Mes Anterior
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'TODO'"
+          (click)="setPeriodo('TODO')"
+        >
+          Todo el Historial
+        </button>
+        <button
+          type="button"
+          class="btn-periodo"
+          [class.active]="periodo() === 'PERSONALIZADO'"
+          (click)="setPeriodo('PERSONALIZADO')"
+        >
+          Personalizado ⚙️
+        </button>
+      </div>
+
+      <!-- Selectores de Fecha para rango personalizado -->
+      @if (periodo() === 'PERSONALIZADO') {
+        <div class="custom-date-inputs">
+          <div class="date-field">
+            <label for="dashDesde">Desde:</label>
+            <input
+              id="dashDesde"
+              type="date"
+              [ngModel]="fechaDesde()"
+              (ngModelChange)="fechaDesde.set($event)"
+            />
+          </div>
+          <div class="date-field">
+            <label for="dashHasta">Hasta:</label>
+            <input
+              id="dashHasta"
+              type="date"
+              [ngModel]="fechaHasta()"
+              (ngModelChange)="fechaHasta.set($event)"
+            />
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Indicador informativo del rango activo -->
+    <div class="active-range-info">
+      <span>Filtrando datos del <strong>{{ fechaDesde() }}</strong> al <strong>{{ fechaHasta() }}</strong></span>
+    </div>
+  </div>
+
+  <!-- Grid de Tarjetas KPI Simples -->
+  <div class="kpi-grid">
+    <!-- Ingresos -->
+    <div class="kpi-card kpi-income">
+      <div class="kpi-icon">💵</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Ingresos</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().totalIngresos | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Total Ventas ({{ resumenVentasCaja().cantidadVentas }})</span>
+      </div>
+    </div>
+
+    <!-- Egresos -->
+    <div class="kpi-card kpi-expenses">
+      <div class="kpi-icon">🧾</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Egresos</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().totalGastos | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Total Gastos Operativos</span>
+      </div>
+    </div>
+
+    <!-- Retiros -->
+    <div class="kpi-card kpi-withdrawals">
+      <div class="kpi-icon">📤</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Retiros</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().totalRetiros | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Retiros (Resguardo de Caja)</span>
+      </div>
+    </div>
+
+    <!-- Efectivo Recibido -->
+    <div class="kpi-card kpi-cash">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Efectivo Recibido</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().pagosEfectivo | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Cobros en Efectivo</span>
+      </div>
+    </div>
+
+    <!-- Pagos Bancarios (Tarjeta + Transferencia) -->
+    <div class="kpi-card kpi-bank">
+      <div class="kpi-icon">💳</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Pagos Bancarios</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().pagosBancarios | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">
+          Tarjeta ({{ mostrarValores() ? (resumenVentasCaja().pagosTarjeta | currencyMxn) : '••' }}) + Transf. ({{ mostrarValores() ? (resumenVentasCaja().pagosTransferencia | currencyMxn) : '••' }})
+        </span>
+      </div>
+    </div>
+
+    <!-- Caja Actual -->
+    <div class="kpi-card kpi-cash">
+      <div class="kpi-icon">🟢</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Caja Actual</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().dineroEnCaja | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">{{ resumenVentasCaja().cajaEstadoLabel }}</span>
+      </div>
+    </div>
+
+    <!-- Caja Esperada -->
+    <div class="kpi-card kpi-neutral">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Caja Esperada</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().cajaEsperada | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Efectivo – Gastos – Retiros</span>
+      </div>
+    </div>
+
+    <!-- Diferencia en Caja (Faltante / Sobrante) -->
+    <div
+      class="kpi-card"
+      [class.kpi-alert]="resumenVentasCaja().diferenciaCaja < 0"
+      [class.kpi-success]="resumenVentasCaja().diferenciaCaja >= 0"
+    >
+      <div class="kpi-icon">
+        {{ resumenVentasCaja().diferenciaCaja >= 0 ? '✅' : '⚠️' }}
+      </div>
+      <div class="kpi-details">
+        <span class="kpi-title">
+          {{ resumenVentasCaja().diferenciaCaja >= 0 ? 'Sobrante' : 'Faltante' }}
+        </span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().diferenciaAbsoluta | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Diferencia en Caja</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sección de Información Relevante Adicional (Distribución de Cobros & Inventario) -->
+  <div class="dashboard-extra-grid">
+    <!-- Panel 1: Desglose por Método de Pago & Ticket Promedio -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <div class="header-left">
+          <span class="info-icon">💳</span>
+          <div>
+            <h4>Distribución de Cobros</h4>
+            <p>Participación por método de pago</p>
+          </div>
+        </div>
+        <div class="ticket-avg-badge">
+          <small>Ticket Promedio</small>
+          <strong>{{ mostrarValores() ? (desgloseMetodos().ticketPromedio | currencyMxn) : '••••••' }}</strong>
+        </div>
+      </div>
+
+      <!-- Barra de Distribución Multi-Color -->
+      <div class="progress-bar-container">
+        <div
+          class="progress-seg seg-cash"
+          [style.width.%]="desgloseMetodos().pctEfectivo"
+          [title]="'Efectivo: ' + desgloseMetodos().pctEfectivo + '%'"
+        ></div>
+        <div
+          class="progress-seg seg-card"
+          [style.width.%]="desgloseMetodos().pctTarjeta"
+          [title]="'Tarjeta: ' + desgloseMetodos().pctTarjeta + '%'"
+        ></div>
+        <div
+          class="progress-seg seg-transfer"
+          [style.width.%]="desgloseMetodos().pctTransferencia"
+          [title]="'Transferencia: ' + desgloseMetodos().pctTransferencia + '%'"
+        ></div>
+      </div>
+
+      <!-- Detalle por Método -->
+      <div class="method-chips-grid">
+        <div class="method-chip chip-cash">
+          <div class="chip-top">
+            <span class="dot"></span>
+            <span class="name">Efectivo</span>
+            <span class="pct">{{ desgloseMetodos().pctEfectivo }}%</span>
+          </div>
+          <strong class="chip-val">
+            {{ mostrarValores() ? (desgloseMetodos().efectivo | currencyMxn) : '••••••' }}
+          </strong>
+        </div>
+
+        <div class="method-chip chip-card">
+          <div class="chip-top">
+            <span class="dot"></span>
+            <span class="name">Tarjeta</span>
+            <span class="pct">{{ desgloseMetodos().pctTarjeta }}%</span>
+          </div>
+          <strong class="chip-val">
+            {{ mostrarValores() ? (desgloseMetodos().tarjeta | currencyMxn) : '••••••' }}
+          </strong>
+        </div>
+
+        <div class="method-chip chip-transfer">
+          <div class="chip-top">
+            <span class="dot"></span>
+            <span class="name">Transferencia</span>
+            <span class="pct">{{ desgloseMetodos().pctTransferencia }}%</span>
+          </div>
+          <strong class="chip-val">
+            {{ mostrarValores() ? (desgloseMetodos().transferencia | currencyMxn) : '••••••' }}
+          </strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Resumen de Inventario y Alertas de Stock -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <div class="header-left">
+          <span class="info-icon">📦</span>
+          <div>
+            <h4>Inventario & Stock</h4>
+            <p>Existencias y productos críticos</p>
+          </div>
+        </div>
+        <div class="quick-stats-pills">
+          <span class="stat-pill">
+            🏷️ <strong>{{ productosService.productos().length }}</strong> prods.
+          </span>
+          <span class="stat-pill">
+            🔢 <strong>{{ productosService.totalStockItems() }}</strong> uds.
+          </span>
+        </div>
+      </div>
+
+      <!-- Alertas de Stock Bajo -->
+      <div class="stock-alerts-list">
+        @if (productosService.productosConStockBajo().length > 0) {
+          <div class="alert-banner-header">
+            <span>⚠️ Stock Bajo / Agotado ({{ productosService.productosConStockBajo().length }})</span>
+            <a routerLink="/inventario" class="view-all-link">Ver catálogo ➔</a>
+          </div>
+          <div class="stock-chips">
+            @for (p of productosService.productosConStockBajo().slice(0, 4); track p.codigo) {
+              <div class="stock-chip" [class.chip-danger]="p.stockActual <= 0">
+                <span class="p-name">{{ p.nombre }}</span>
+                <span class="p-qty">
+                  Stock: <strong>{{ p.stockActual }}</strong> / Mín: {{ p.stockMinimo }}
+                </span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="stock-ok-box">
+            <span>✅ Todos los productos tienen inventario suficiente.</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de Ancho Completo: Control y Monitoreo de Pedidos Personalizados -->
+  <div class="info-card info-card--full">
+    <div class="info-card-header">
+      <div class="header-left">
+        <span class="info-icon">📋</span>
+        <div>
+          <h4>Control de Pedidos Personalizados</h4>
+          <p>Monitoreo por estado de entrega y saldo por cobrar</p>
+        </div>
+      </div>
+      <a routerLink="/pedidos" class="btn-link-action">Gestionar Pedidos ➔</a>
+    </div>
+
+    <!-- Grid de los 4 Estados -->
+    <div class="pedidos-status-grid">
+      <div class="status-box box-vencidos" [class.has-alert]="resumenPedidosDashboard().vencidos > 0">
+        <div class="box-icon">⚠️</div>
+        <div class="box-info">
+          <span class="box-label">Vencidos</span>
+          <strong class="box-count">{{ resumenPedidosDashboard().vencidos }}</strong>
+        </div>
+      </div>
+
+      <div class="status-box box-pendientes">
+        <div class="box-icon">⏳</div>
+        <div class="box-info">
+          <span class="box-label">Pendientes</span>
+          <strong class="box-count">{{ resumenPedidosDashboard().pendientes }}</strong>
+        </div>
+      </div>
+
+      <div class="status-box box-proceso">
+        <div class="box-icon">⚙️</div>
+        <div class="box-info">
+          <span class="box-label">En Proceso</span>
+          <strong class="box-count">{{ resumenPedidosDashboard().enProceso }}</strong>
+        </div>
+      </div>
+
+      <div class="status-box box-entregados">
+        <div class="box-icon">✅</div>
+        <div class="box-info">
+          <span class="box-label">Entregados</span>
+          <strong class="box-count">{{ resumenPedidosDashboard().entregados }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saldo por Cobrar en Pedidos -->
+    <div class="pedidos-summary-bar">
+      <div class="pedidos-summary-item">
+        <span>Pedidos Activos en Curso:</span>
+        <strong>{{ resumenPedidosDashboard().totalActivos }} pedido(s)</strong>
+      </div>
+      <div class="pedidos-summary-item">
+        <span>Total Saldo por Cobrar:</span>
+        <strong style="color: #ea580c; font-size: 1.05rem;">
+          {{ mostrarValores() ? (resumenPedidosDashboard().saldoPorCobrar | currencyMxn) : '••••••' }}
+        </strong>
+      </div>
+    </div>
+  </div>
+</div>

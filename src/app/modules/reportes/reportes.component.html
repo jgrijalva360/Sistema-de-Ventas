@@ -1,0 +1,465 @@
+<div class="reportes-page">
+  <div class="content-header">
+    <div>
+      <h2>📈 Reportes & Auditoría Financiera</h2>
+      <p>Generación de informes consolidados de ingresos (ventas y pedidos), gastos, cortes de caja y exportación a Excel / CSV.</p>
+    </div>
+  </div>
+
+  <!-- Filtros de Consulta -->
+  <div class="card">
+    <div class="card-header">
+      <span>🔍 Parámetros del Reporte</span>
+    </div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="repTipo">Tipo de Reporte *</label>
+          <select #repTipoRef id="repTipo" [ngModel]="tipoReporte()" (ngModelChange)="tipoReporte.set($event)">
+            <option value="GLOBAL">🌐 Reporte Global Consolidado (Ventas + Pedidos vs Gastos)</option>
+            <option value="VENTAS">💵 Reporte Detallado de Ventas (Mostrador)</option>
+            <option value="PEDIDOS">📦 Reporte Detallado de Pedidos Personalizados</option>
+            <option value="GASTOS">🧾 Reporte de Gastos</option>
+            <option value="CORTES">🔒 Reporte de Cortes de Caja</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="repDesde">Fecha Desde *</label>
+          <input id="repDesde" type="date" [ngModel]="fechaDesde()" (ngModelChange)="fechaDesde.set($event)" />
+        </div>
+
+        <div class="form-group">
+          <label for="repHasta">Fecha Hasta *</label>
+          <input id="repHasta" type="date" [ngModel]="fechaHasta()" (ngModelChange)="fechaHasta.set($event)" />
+        </div>
+
+        <div class="form-group">
+          <label for="repSuc">Sucursal</label>
+          <select id="repSuc" [ngModel]="sucursalSeleccionada()" (ngModelChange)="sucursalSeleccionada.set($event)">
+            <option value="TODAS">Todas las Sucursales</option>
+            @for (suc of sucursalesService.sucursales(); track suc.id) {
+              <option [value]="suc.id">{{ suc.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-secondary" (click)="setRangoRapido('HOY')">Hoy</button>
+            <button type="button" class="btn btn-sm btn-secondary" (click)="setRangoRapido('7_DIAS')">Últimos 7 días</button>
+            <button type="button" class="btn btn-sm btn-secondary" (click)="setRangoRapido('ESTE_MES')">Este Mes</button>
+            <button type="button" class="btn btn-sm btn-secondary" (click)="setRangoRapido('TODO')">Todo el Historial</button>
+          </div>
+          <button type="button" class="btn btn-success" (click)="exportarCSV()">
+            📥 Exportar a CSV (Excel)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. VISTA GLOBAL CONSOLIDADA (VENTAS VS GASTOS) -->
+  @if (tipoReporte() === 'GLOBAL') {
+    <div class="corte-kpis" style="margin-bottom: 20px;">
+      <div class="corte-kpi corte-kpi--up">
+        <span>💰 Total Ingresos (Ventas)</span>
+        <strong>{{ totalGlobalIngresos() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          {{ ventasFiltradas().length }} venta(s) registradas
+        </small>
+      </div>
+      <div class="corte-kpi">
+        <span>💵 Efectivo</span>
+        <strong>{{ totalGlobalEfectivo() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Cobrado en efectivo
+        </small>
+      </div>
+      <div class="corte-kpi">
+        <span>💳 Tarjeta</span>
+        <strong>{{ totalGlobalTarjeta() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Cobrado con tarjeta
+        </small>
+      </div>
+      <div class="corte-kpi">
+        <span>📲 Transferencia</span>
+        <strong>{{ totalGlobalTransferencia() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Cobrado por transferencia
+        </small>
+      </div>
+      <div class="corte-kpi corte-kpi--down">
+        <span>🧾 Total Gastos</span>
+        <strong>{{ totalGastosCalculado() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">{{ gastosFiltrados().length }} gasto(s) registrados</small>
+      </div>
+      <div class="corte-kpi" [class.corte-kpi--up]="balanceNetoCalculado() >= 0" [class.corte-kpi--down]="balanceNetoCalculado() < 0">
+        <span>📊 Balance Neto (Utilidad)</span>
+        <strong>{{ balanceNetoCalculado() | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">Ingresos totales menos gastos</small>
+      </div>
+    </div>
+
+    <!-- Tabla Consolidada de Movimientos -->
+    <div class="card">
+      <div class="card-header">
+        <span>📋 Movimientos Consolidados del Periodo</span>
+        <small style="color: #64748b;">{{ movimientosGlobales().length }} movimiento(s)</small>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Folio / ID</th>
+              <th>Fecha y Hora</th>
+              <th>Descripción / Productos Vendidos</th>
+              <th>Cliente / Contacto</th>
+              <th>Sucursal</th>
+              <th>Método Pago</th>
+              <th style="text-align: right;">Ingreso (+)</th>
+              <th style="text-align: right;">Egreso (-)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of movimientosGlobales(); track (m.id + m.fecha + m.tipo)) {
+              <tr>
+                <td>
+                  @if (m.tipo === 'VENTA') {
+                    <span class="badge badge-info">🛒 Venta</span>
+                  } @else if (m.tipo === 'PEDIDO') {
+                    <span class="badge badge-success">📦 Pedido</span>
+                  } @else {
+                    <span class="badge badge-danger">🧾 Gasto</span>
+                  }
+                </td>
+                <td><strong>{{ m.id }}</strong></td>
+                <td>{{ m.fecha | fechaLocal }}</td>
+                <td class="col-descripcion">
+                  <div class="desc-texto">
+                    {{ m.descripcion }}
+                  </div>
+                </td>
+                <td>{{ m.contacto }}</td>
+                <td>{{ m.sucursalNombre }}</td>
+                <td><span class="badge badge-secondary" style="font-size: 0.72rem;">{{ m.metodoPago }}</span></td>
+                <td style="text-align: right;">
+                  @if (m.ingreso > 0) {
+                    <strong style="color: #15803d;">+{{ m.ingreso | currencyMxn }}</strong>
+                  } @else {
+                    <span style="color: #94a3b8;">-</span>
+                  }
+                </td>
+                <td style="text-align: right;">
+                  @if (m.egreso > 0) {
+                    <strong style="color: #dc2626;">-{{ m.egreso | currencyMxn }}</strong>
+                  } @else {
+                    <span style="color: #94a3b8;">-</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" style="text-align:center; padding:25px; color:#94a3b8;">No se registraron movimientos en el periodo seleccionado.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- 2. VISTA DETALLADA DE VENTAS -->
+  @if (tipoReporte() === 'VENTAS') {
+    <div class="corte-kpis" style="margin-bottom: 20px;">
+      <div class="corte-kpi">
+        <span>Total Ventas Mostrador</span>
+        <strong>{{ totalVentasCalculado() | currencyMxn }}</strong>
+        <small>{{ ventasFiltradas().length }} ticket(s)</small>
+      </div>
+      <div class="corte-kpi corte-kpi--up">
+        <span>Efectivo Total</span>
+        <strong>{{ totalVentasEfectivo() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>Tarjeta Total</span>
+        <strong>{{ totalVentasTarjeta() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>Transferencia</span>
+        <strong>{{ totalVentasTransferencia() | currencyMxn }}</strong>
+      </div>
+    </div>
+
+    <!-- Tabla de Ventas -->
+    <div class="card">
+      <div class="card-header">
+        <span>🛒 Historial Detallado de Ventas</span>
+        <small style="color: #64748b;">{{ ventasFiltradas().length }} venta(s)</small>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Fecha y Hora</th>
+              <th>Sucursal</th>
+              <th>Cajero</th>
+              <th>Productos Vendidos / Detalle</th>
+              <th style="text-align: right;">Total</th>
+              <th style="text-align: right;">Efectivo</th>
+              <th style="text-align: right;">Tarjeta</th>
+              <th style="text-align: right;">Transferencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (v of ventasFiltradas(); track v.id) {
+              <tr>
+                <td><strong>{{ v.id }}</strong></td>
+                <td>{{ v.fecha | fechaLocal }}</td>
+                <td>{{ v.sucursalNombre }}</td>
+                <td>{{ v.usuario || 'N/A' }}</td>
+                <td class="col-productos">
+                  @if (v.items && v.items.length > 0) {
+                    <div class="productos-lista-resumen">
+                      @for (item of v.items; track (item.codigo + item.nombre)) {
+                        <div class="item-prod-badge">
+                          <span class="item-cant">{{ item.cantidad }}x</span>
+                          <span class="item-nom">{{ item.nombre }}</span>
+                          <small class="item-sub">({{ (item.subtotal || (item.cantidad * item.precioUnitario)) | currencyMxn }})</small>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <span style="color: #94a3b8; font-style: italic;">Sin productos detallados</span>
+                  }
+                </td>
+                <td style="text-align: right;"><strong>{{ (v.total || 0) | currencyMxn }}</strong></td>
+                <td style="text-align: right;">{{ (v.pagos.efectivo || 0) | currencyMxn }}</td>
+                <td style="text-align: right;">{{ (v.pagos.tarjeta || 0) | currencyMxn }}</td>
+                <td style="text-align: right;">{{ (v.pagos.transferencia || 0) | currencyMxn }}</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" style="text-align:center; padding:25px; color:#94a3b8;">Sin ventas en el periodo seleccionado.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- 3. VISTA DETALLADA DE PEDIDOS PERSONALIZADOS -->
+  @if (tipoReporte() === 'PEDIDOS') {
+    <div class="corte-kpis" style="margin-bottom: 20px;">
+      <div class="corte-kpi corte-kpi--up">
+        <span>Total Cobrado en Periodo</span>
+        <strong>{{ totalPedidosCobrado() | currencyMxn }}</strong>
+        <small>{{ cobrosPedidosFiltrados().length }} cobro(s) / anticipo(s)</small>
+      </div>
+      <div class="corte-kpi">
+        <span>💵 Cobrado en Efectivo</span>
+        <strong>{{ totalPedidosEfectivo() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>💳 Cobrado en Tarjeta</span>
+        <strong>{{ totalPedidosTarjeta() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>📲 Cobrado en Transferencia</span>
+        <strong>{{ totalPedidosTransferencia() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>Total Acordado (Pedidos Registrados)</span>
+        <strong>{{ totalPedidosAcordado() | currencyMxn }}</strong>
+        <small>{{ pedidosFiltrados().length }} pedido(s)</small>
+      </div>
+      <div class="corte-kpi corte-kpi--down">
+        <span>Saldo Restante por Cobrar</span>
+        <strong>{{ totalPedidosSaldoPendiente() | currencyMxn }}</strong>
+        <small>De pedidos en el periodo</small>
+      </div>
+    </div>
+
+    <!-- Tabla de Pedidos -->
+    <div class="card">
+      <div class="card-header">
+        <span>📦 Listado Detallado de Pedidos</span>
+        <small style="color: #64748b;">{{ pedidosFiltrados().length }} pedido(s)</small>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Cliente</th>
+              <th>Teléfono</th>
+              <th>Fecha Registro</th>
+              <th>Fecha Entrega</th>
+              <th>Productos / Insumos</th>
+              <th>Estado</th>
+              <th>Sucursal</th>
+              <th style="text-align: right;">Total Acordado</th>
+              <th style="text-align: right;">Anticipo / Cobrado</th>
+              <th style="text-align: right;">Saldo Restante</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of pedidosFiltrados(); track p.id) {
+              <tr>
+                <td><strong>{{ p.id }}</strong></td>
+                <td><strong>{{ p.clienteNombre }}</strong></td>
+                <td>{{ p.clienteTelefono || '-' }}</td>
+                <td>{{ p.fechaRegistro | fechaLocal }}</td>
+                <td>{{ p.fechaEntrega ? (p.fechaEntrega | fechaLocal) : 'Sin fecha' }}</td>
+                <td class="col-productos">
+                  @if (p.materiasPrimas && p.materiasPrimas.length > 0) {
+                    <div class="productos-lista-resumen">
+                      @for (mat of p.materiasPrimas; track (mat.nombre + mat.cantidad)) {
+                        <div class="item-prod-badge">
+                          <span class="item-cant">{{ mat.cantidad }}x</span>
+                          <span class="item-nom">{{ mat.nombre }}</span>
+                        </div>
+                      }
+                    </div>
+                  } @else if (p.especificaciones) {
+                    <small style="color: #475569; font-size: 0.8rem;">{{ p.especificaciones }}</small>
+                  } @else {
+                    <span style="color: #94a3b8; font-style: italic;">Sin detalle</span>
+                  }
+                </td>
+                <td>
+                  <span class="badge"
+                    [class.badge-warning]="p.estado === 'PENDIENTE'"
+                    [class.badge-info]="p.estado === 'EN_PROCESO' || p.estado === 'LISTO' || p.estado === 'TERMINADO'"
+                    [class.badge-success]="p.estado === 'ENTREGADO'"
+                    [class.badge-danger]="p.estado === 'CANCELADO'">
+                    {{ p.estado }}
+                  </span>
+                </td>
+                <td>{{ p.sucursalNombre }}</td>
+                <td style="text-align: right;"><strong>{{ (p.totalAcordado || 0) | currencyMxn }}</strong></td>
+                <td style="text-align: right; color: #15803d;"><strong>{{ (p.anticipo || 0) | currencyMxn }}</strong></td>
+                <td style="text-align: right;">
+                  <strong [style.color]="(p.saldoRestante || 0) > 0 ? '#b91c1c' : '#15803d'">
+                    {{ (p.saldoRestante || 0) | currencyMxn }}
+                  </strong>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="11" style="text-align:center; padding:25px; color:#94a3b8;">Sin pedidos registrados en el periodo seleccionado.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- 4. VISTA DE GASTOS -->
+  @if (tipoReporte() === 'GASTOS') {
+    <div class="corte-kpis" style="margin-bottom: 20px;">
+      <div class="corte-kpi corte-kpi--down">
+        <span>Total Gastos</span>
+        <strong>{{ totalGastosCalculado() | currencyMxn }}</strong>
+        <small>{{ gastosFiltrados().length }} gasto(s)</small>
+      </div>
+      <div class="corte-kpi">
+        <span>💵 Gastos en Efectivo</span>
+        <strong>{{ totalGastosEfectivo() | currencyMxn }}</strong>
+      </div>
+      <div class="corte-kpi">
+        <span>💳 Gastos Tarjeta / Transf</span>
+        <strong>{{ totalGastosBanco() | currencyMxn }}</strong>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span>🧾 Historial de Gastos y Egresos</span>
+        <small style="color: #64748b;">{{ gastosFiltrados().length }} gasto(s)</small>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Concepto</th>
+              <th>Categoría</th>
+              <th>Método</th>
+              <th>Persona</th>
+              <th>Sucursal</th>
+              <th style="text-align: right;">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of gastosFiltrados(); track g.id) {
+              <tr>
+                <td>{{ g.fecha | fechaLocal }}</td>
+                <td><strong>{{ g.concepto }}</strong></td>
+                <td><span class="badge badge-info">{{ g.categoria }}</span></td>
+                <td>{{ g.metodoPago }}</td>
+                <td>{{ g.persona || '-' }}</td>
+                <td>{{ g.sucursalNombre }}</td>
+                <td style="text-align: right; color: #dc2626;"><strong>{{ g.monto | currencyMxn }}</strong></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="7" style="text-align:center; padding:25px; color:#94a3b8;">Sin gastos en el periodo.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- 5. VISTA DE CORTES DE CAJA -->
+  @if (tipoReporte() === 'CORTES') {
+    <div class="card">
+      <div class="card-header">
+        <span>🔒 Historial de Cortes de Caja</span>
+        <small style="color: #64748b;">{{ cortesFiltrados().length }} corte(s)</small>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Apertura</th>
+              <th>Cierre</th>
+              <th>Usuario</th>
+              <th>Sucursal</th>
+              <th style="text-align: right;">Caja Inicial</th>
+              <th style="text-align: right;">Ventas Netas</th>
+              <th style="text-align: right;">Gastos</th>
+              <th style="text-align: right;">Caja Esperada</th>
+              <th style="text-align: right;">Caja Contada</th>
+              <th style="text-align: right;">Diferencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of cortesFiltrados(); track c.id) {
+              <tr>
+                <td><strong>{{ c.id }}</strong></td>
+                <td>{{ c.fechaApertura | fechaLocal }}</td>
+                <td>{{ c.fechaCierre | fechaLocal }}</td>
+                <td>{{ c.usuario }}</td>
+                <td>{{ c.sucursalNombre }}</td>
+                <td style="text-align: right;">{{ (c.cajaInicial || 0) | currencyMxn }}</td>
+                <td style="text-align: right; color: #15803d;"><strong>{{ (c.totalVentasNetas || 0) | currencyMxn }}</strong></td>
+                <td style="text-align: right; color: #dc2626;">{{ (c.totalGastos || 0) | currencyMxn }}</td>
+                <td style="text-align: right;">{{ (c.cajaEsperada || 0) | currencyMxn }}</td>
+                <td style="text-align: right;"><strong>{{ (c.cajaContada || 0) | currencyMxn }}</strong></td>
+                <td style="text-align: right;">
+                  <span class="badge" [class.badge-success]="(c.diferencia || 0) >= 0" [class.badge-danger]="(c.diferencia || 0) < 0">
+                    {{ (c.diferencia || 0) | currencyMxn }}
+                  </span>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="11" style="text-align:center; padding:25px; color:#94a3b8;">Sin cortes registrados en el periodo seleccionado.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>
+

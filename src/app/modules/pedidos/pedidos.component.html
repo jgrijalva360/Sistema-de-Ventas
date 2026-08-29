@@ -1,0 +1,1183 @@
+<div class="pedidos-container">
+  <!-- Encabezado Principal -->
+  <div class="pedidos-topbar">
+    <h1 class="page-title">Gestión de Pedidos</h1>
+    <div class="topbar-actions">
+      <button
+        type="button"
+        class="btn-toggle-print"
+        (click)="consolidarEnVentas()"
+        title="Verificar y asegurar que todos los anticipos y abonos de pedidos estén reflejados en Ventas"
+      >
+        <span>🔄 Sincronizar en Ventas</span>
+      </button>
+      <button
+        type="button"
+        class="btn-toggle-print"
+        [class.active]="autoImprimirTicket()"
+        (click)="toggleAutoImprimir()"
+        [title]="autoImprimirTicket() ? 'Impresión automática ACTIVADA (clic para desactivar)' : 'Impresión automática DESACTIVADA (clic para activar)'"
+      >
+        <span>{{ autoImprimirTicket() ? '🖨️ Ticket: SÍ' : '🚫 Ticket: NO' }}</span>
+      </button>
+      <button type="button" class="btn-nuevo-pedido" (click)="abrirModalNuevo()">
+        <span class="btn-plus">➕</span> Nuevo Pedido
+      </button>
+    </div>
+  </div>
+
+  <!-- Tarjetas KPI / Contadores de Estado -->
+  <div class="kpi-cards-grid">
+    <!-- Total Pedidos -->
+    <div class="kpi-card kpi-total" (click)="filtroEstado.set('TODOS')" [class.active]="filtroEstado() === 'TODOS'">
+      <div class="kpi-icon-box box-total">📋</div>
+      <div class="kpi-info">
+        <span class="kpi-label">TOTAL PEDIDOS</span>
+        <strong class="kpi-value">{{ totalPedidos() }}</strong>
+      </div>
+    </div>
+
+    <!-- Pendientes -->
+    <div class="kpi-card kpi-pendientes" (click)="filtroEstado.set('PENDIENTE')" [class.active]="filtroEstado() === 'PENDIENTE'">
+      <div class="kpi-icon-box box-pendientes">⏳</div>
+      <div class="kpi-info">
+        <span class="kpi-label">PENDIENTES</span>
+        <strong class="kpi-value">{{ pendientesCount() }}</strong>
+      </div>
+    </div>
+
+    <!-- En Proceso -->
+    <div class="kpi-card kpi-proceso" (click)="filtroEstado.set('EN_PROCESO')" [class.active]="filtroEstado() === 'EN_PROCESO'">
+      <div class="kpi-icon-box box-proceso">⚙️</div>
+      <div class="kpi-info">
+        <span class="kpi-label">EN PROCESO</span>
+        <strong class="kpi-value">{{ enProcesoCount() }}</strong>
+      </div>
+    </div>
+
+    <!-- Terminados -->
+    <div class="kpi-card kpi-terminados" (click)="filtroEstado.set('TERMINADO')" [class.active]="filtroEstado() === 'TERMINADO'">
+      <div class="kpi-icon-box box-terminados">📦</div>
+      <div class="kpi-info">
+        <span class="kpi-label">TERMINADOS</span>
+        <strong class="kpi-value">{{ terminadosCount() }}</strong>
+      </div>
+    </div>
+
+    <!-- Entregados -->
+    <div class="kpi-card kpi-entregados" (click)="filtroEstado.set('ENTREGADO')" [class.active]="filtroEstado() === 'ENTREGADO'">
+      <div class="kpi-icon-box box-entregados">✅</div>
+      <div class="kpi-info">
+        <span class="kpi-label">ENTREGADOS</span>
+        <strong class="kpi-value">{{ entregadosCount() }}</strong>
+      </div>
+    </div>
+
+    <!-- Vencidos -->
+    <div class="kpi-card kpi-vencidos" (click)="filtroEstado.set('VENCIDO')" [class.active]="filtroEstado() === 'VENCIDO'">
+      <div class="kpi-icon-box box-vencidos">⚠️</div>
+      <div class="kpi-info">
+        <span class="kpi-label">VENCIDOS</span>
+        <strong class="kpi-value">{{ vencidosCount() }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sección de Filtros -->
+  <div class="filtros-card">
+    <h3 class="filtros-title">Filtros de Pedidos y Reportes</h3>
+    <div class="filtros-grid">
+      <div class="filtro-item flex-2">
+        <label for="fBusqueda">Buscar por Cliente / Folio / Detalle</label>
+        <input
+          #busquedaInputRef
+          id="fBusqueda"
+          type="text"
+          [ngModel]="busquedaTexto()"
+          (ngModelChange)="busquedaTexto.set($event)"
+          placeholder="Escriba para buscar..."
+        />
+      </div>
+
+      <div class="filtro-item flex-1">
+        <label for="fEstado">Estado del Pedido</label>
+        <select id="fEstado" [ngModel]="filtroEstado()" (ngModelChange)="filtroEstado.set($event)">
+          <option value="TODOS">Todos los estados</option>
+          <option value="PENDIENTE">Pendiente</option>
+          <option value="EN_PROCESO">En Proceso</option>
+          <option value="TERMINADO">Terminado</option>
+          <option value="ENTREGADO">Entregado</option>
+          <option value="VENCIDO">Vencidos</option>
+        </select>
+      </div>
+
+      <div class="filtro-item flex-1">
+        <label for="fDesde">Desde</label>
+        <input id="fDesde" type="date" [ngModel]="filtroDesde()" (ngModelChange)="filtroDesde.set($event)" />
+      </div>
+
+      <div class="filtro-item flex-1">
+        <label for="fHasta">Hasta</label>
+        <input id="fHasta" type="date" [ngModel]="filtroHasta()" (ngModelChange)="filtroHasta.set($event)" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de Pedidos -->
+  <div class="table-card">
+    <div class="table-header-bar">
+      <h3 class="table-title">Listado de Pedidos Personalizados</h3>
+      <button type="button" class="btn-reporte" (click)="generarReporteCompleto()">
+        Generar Reporte Completo
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="pedidos-table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Especificaciones</th>
+            <th style="text-align: right;">Monto Total</th>
+            <th style="text-align: right;">Anticipo / Abonos</th>
+            <th style="text-align: right;">Saldo Pendiente</th>
+            <th style="text-align: center;">Estado</th>
+            <th style="text-align: center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (ped of pedidosFiltrados(); track ped.id) {
+            <tr (click)="abrirModalDetalle(ped)" class="pedido-row-clickable" title="Clic para ver detalle y seguimiento">
+              <td class="col-folio"><strong>{{ ped.id }}</strong></td>
+              <td class="col-fecha">{{ formatearFecha(ped.fechaRegistro) }}</td>
+              <td class="col-cliente">{{ ped.clienteNombre }}</td>
+              <td class="col-esp" [title]="ped.especificaciones">{{ ped.especificaciones }}</td>
+              <td class="col-monto" style="text-align: right;"><strong>{{ ped.totalAcordado | currencyMxn }}</strong></td>
+              <td class="col-anticipo" style="text-align: right;">{{ ped.anticipo | currencyMxn }}</td>
+              <td class="col-saldo" style="text-align: right;" [class.text-green]="(ped.saldoRestante || 0) <= 0" [class.text-red]="(ped.saldoRestante || 0) > 0">
+                <span class="saldo-badge" [class.badge-verde]="(ped.saldoRestante || 0) <= 0" [class.badge-rojo]="(ped.saldoRestante || 0) > 0">
+                  {{ (ped.saldoRestante || 0) | currencyMxn }}
+                </span>
+              </td>
+              <td class="col-estado" style="text-align: center;">
+                <span class="status-pill" [class]="getEstadoPillClass(ped)">
+                  {{ getEstadoLabel(ped) }}
+                </span>
+              </td>
+              <td class="col-acciones" style="text-align: center;">
+                <div class="actions-row">
+                  <button type="button" class="btn-action btn-edit" (click)="abrirModalEditar(ped); $event.stopPropagation()" title="Editar Pedido">
+                    ✏️ Editar
+                  </button>
+                  <button type="button" class="btn-action btn-ticket" (click)="verTicket(ped); $event.stopPropagation()" title="Ver / Imprimir Ticket">
+                    🖩 Ticket
+                  </button>
+                  <button type="button" class="btn-action btn-delete" (click)="eliminar(ped.id); $event.stopPropagation()" title="Eliminar Pedido">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="9" class="empty-table-msg">
+                No se encontraron pedidos con los filtros seleccionados.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nuevo Pedido -->
+@if (modalNuevoAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card modal-nuevo-pedido">
+      <div class="modal-header">
+        <h3 class="modal-title-custom">🎨 Registrar Nuevo Pedido Personalizado</h3>
+        <button type="button" class="modal-close" (click)="modalNuevoAbierto.set(false)">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Fila 1: Cliente, Teléfono, Fecha de Entrega -->
+        <div class="form-row-3">
+          <div class="form-group">
+            <label for="pCli">Nombre del Cliente *</label>
+            <input
+              id="pCli"
+              type="text"
+              [(ngModel)]="nuevoCliente"
+              placeholder="Nombre completo del cliente"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="pTel">Teléfono / Contacto</label>
+            <input
+              id="pTel"
+              type="text"
+              [(ngModel)]="nuevoTelefono"
+              placeholder="Teléfono o WhatsApp"
+            />
+          </div>
+          <div class="form-group">
+            <label for="pEntrega">Fecha Estimada de Entrega</label>
+            <input
+              id="pEntrega"
+              type="datetime-local"
+              [(ngModel)]="nuevaFechaEntrega"
+            />
+          </div>
+        </div>
+
+        <!-- Fila 2: Especificaciones -->
+        <div class="form-group" style="margin-top: 10px;">
+          <label for="pEsp">Especificaciones y Detalles *</label>
+          <textarea
+            id="pEsp"
+            rows="3"
+            [(ngModel)]="nuevasEspecificaciones"
+            placeholder="Describa el diseño, medidas, colores, textos y detalles acordados..."
+          ></textarea>
+        </div>
+
+        <!-- Fila 3: Sección de Insumos y Servicios -->
+        <div class="insumos-section-box">
+          <div class="insumos-section-header">
+            <h4 class="insumos-section-title">📦 Materia Prima, Insumos y Servicios del Pedido</h4>
+            <div class="insumos-btn-group">
+              <button type="button" class="btn-add-insumo" (click)="agregarInsumoInventario()">
+                <span>+ Insumo (Inventario)</span>
+              </button>
+              <button type="button" class="btn-add-extra" (click)="agregarServicioExtra()">
+                <span>+ Servicio / Insumo Extra</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Contenedor de lista de items -->
+          <div class="insumos-table-container">
+            <div class="insumos-table-header">
+              <span class="col-header-desc">INSUMO O SERVICIO</span>
+              <span class="col-header-cant">CANT.</span>
+              <span class="col-header-unit">PRECIO U.</span>
+              <span class="col-header-sub">SUBTOTAL</span>
+              <span class="col-header-del"></span>
+            </div>
+
+            <div class="insumos-rows-list">
+              @for (item of itemsPedido(); track $index; let i = $index) {
+                <div class="insumo-row-item">
+                  <!-- Columna Descripción / Autocomplete -->
+                  <div class="col-desc-input">
+                    @if (item.tipo === 'INVENTARIO') {
+                      <div class="autocomplete-wrapper">
+                        <div class="input-icon-wrapper">
+                          <span class="search-icon">🔍</span>
+                          <input
+                            type="text"
+                            [value]="item.busqueda || ''"
+                            (input)="item.busqueda = $any($event.target).value; item.mostrarSugerencias = true"
+                            (focus)="item.mostrarSugerencias = true"
+                            placeholder="Escribe o busca un insumo..."
+                            class="input-insumo"
+                          />
+                        </div>
+
+                        @if (item.mostrarSugerencias) {
+                          <div class="autocomplete-dropdown">
+                            @for (prod of getSugerencias(item.busqueda); track prod.codigo) {
+                              <div
+                                class="dropdown-item"
+                                (mousedown)="seleccionarProductoInsumo(item, prod)"
+                              >
+                                <div class="prod-name">{{ prod.nombre }}</div>
+                                <div class="prod-meta">
+                                  <span class="prod-code">{{ prod.codigo }}</span>
+                                  <span class="prod-price">{{ prod.precioVenta | currencyMxn }}</span>
+                                  <span class="prod-stock" [class.text-red]="prod.stockActual <= (prod.stockMinimo || 0)">
+                                    Stock: {{ prod.stockActual }}
+                                  </span>
+                                </div>
+                              </div>
+                            } @empty {
+                              <div class="dropdown-empty">No se encontraron productos</div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <input
+                        type="text"
+                        [(ngModel)]="item.nombre"
+                        placeholder="Nombre del servicio o insumo extra..."
+                        class="input-insumo input-extra"
+                      />
+                    }
+                  </div>
+
+                  <!-- Columna Cantidad -->
+                  <div class="col-cant-input">
+                    <input
+                      type="number"
+                      [(ngModel)]="item.cantidad"
+                      (ngModelChange)="onItemChange(item)"
+                      min="0.1"
+                      step="1"
+                      class="form-control-sm text-center"
+                    />
+                  </div>
+
+                  <!-- Columna Precio Unitario -->
+                  <div class="col-unit-input">
+                    <input
+                      type="number"
+                      [(ngModel)]="item.precioUnitario"
+                      (ngModelChange)="onItemChange(item)"
+                      min="0"
+                      step="0.01"
+                      class="form-control-sm text-right"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <!-- Columna Subtotal -->
+                  <div class="col-sub-input">
+                    <input
+                      type="text"
+                      [value]="item.subtotal | currencyMxn"
+                      readonly
+                      class="form-control-sm text-right bg-readonly"
+                    />
+                  </div>
+
+                  <!-- Botón Eliminar -->
+                  <div class="col-del-btn">
+                    <button type="button" class="btn-row-del" (click)="removerItem(i)" title="Eliminar fila">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Nota Informativa -->
+            <div class="insumos-info-note">
+              <span class="note-icon">💡</span>
+              <span class="note-text">
+                <strong>Nota:</strong> Los insumos del inventario descontarán stock al pasar a estado <strong>En Proceso</strong>. Los servicios o insumos extras no afectan el stock. La suma de subtotales actualiza automáticamente el Total Acordado.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fila 4: Totales y Anticipo -->
+        <div class="form-row-3" style="margin-top: 14px;">
+          <div class="form-group">
+            <label for="pTot">Monto Total Acordado ($) *</label>
+            <input
+              id="pTot"
+              type="number"
+              min="0"
+              step="0.01"
+              [(ngModel)]="nuevoTotal"
+              placeholder="0.00"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="pAnt">Anticipo Inicial ($) *</label>
+            <input
+              id="pAnt"
+              type="number"
+              min="0"
+              step="0.01"
+              [(ngModel)]="nuevoAnticipo"
+              placeholder="0.00"
+            />
+          </div>
+          <div class="form-group">
+            <label for="pMet">Método de Pago del Anticipo</label>
+            <select id="pMet" [(ngModel)]="metodoPagoAnticipo">
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TARJETA">Tarjeta</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Saldo Pendiente Estimado -->
+        <div class="saldo-pendiente-block">
+          <span class="saldo-label">Saldo Pendiente Estimado:</span>
+          <strong class="saldo-value" [class.text-red]="saldoPendienteNuevo > 0" [class.text-green]="saldoPendienteNuevo <= 0">
+            {{ saldoPendienteNuevo | currencyMxn }}
+          </strong>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancelar" (click)="modalNuevoAbierto.set(false)">Cancelar</button>
+        <button type="button" class="btn btn-guardar" (click)="guardarNuevoPedido()">Guardar Pedido</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Ticket / Comprobante de Pedido (Optimizado para 80mm) -->
+@if (pedidoSeleccionado()) {
+  @if (modalTicketAbierto()) {
+    <div class="modal-overlay ticket-modal-overlay">
+      <div class="modal-card ticket-modal-card">
+        <div class="modal-header ticket-no-print">
+          <h3>🧾 Comprobante de Pedido</h3>
+          <button type="button" class="modal-close" (click)="cerrarModalTicket()">&times;</button>
+        </div>
+
+        <div class="ticket-wrapper">
+          <ng-container *ngTemplateOutlet="ticketPedidoTemplate"></ng-container>
+        </div>
+
+        <div class="modal-actions ticket-no-print">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModalTicket()">✕ Cerrar</button>
+          <button type="button" class="btn btn-primary" (click)="imprimirTicket()">🖨️ Imprimir Ticket (80mm)</button>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <!-- Contenedor invisible en pantalla pero activo para la orden directa de window.print() -->
+    <div class="ticket-print-only">
+      <ng-container *ngTemplateOutlet="ticketPedidoTemplate"></ng-container>
+    </div>
+  }
+
+  <!-- Plantilla Modular del Ticket de Pedido 80mm -->
+  <ng-template #ticketPedidoTemplate>
+    <div class="ticket-thermal-80mm" id="ticketImpresion">
+      <!-- Encabezado del Comercio -->
+      <div class="ticket-header-block">
+        <h2 class="ticket-business-name">
+          {{ configService.config().businessName || 'SISTEMA DE VENTAS' }}
+        </h2>
+        @if (pedidoSeleccionado()?.sucursalNombre) {
+          <div class="ticket-sucursal">Sucursal: {{ pedidoSeleccionado()?.sucursalNombre }}</div>
+        }
+        @if (configService.config().businessPhone) {
+          <div class="ticket-phone">Tel: {{ configService.config().businessPhone }}</div>
+        }
+      </div>
+
+      <div class="ticket-separator">================================</div>
+
+      <!-- Metadatos del Pedido -->
+      <div class="ticket-meta-block">
+        <div class="ticket-meta-row">
+          <span>FOLIO:</span>
+          <strong>{{ pedidoSeleccionado()?.id }}</strong>
+        </div>
+        <div class="ticket-meta-row">
+          <span>FECHA REGISTRO:</span>
+          <span>{{ formatearFechaHora(pedidoSeleccionado()?.fechaRegistro) }}</span>
+        </div>
+        @if (pedidoSeleccionado()?.fechaEntrega) {
+          <div class="ticket-meta-row">
+            <span>FECHA ENTREGA:</span>
+            <strong>{{ formatearFechaEntregaConHora(pedidoSeleccionado()?.fechaEntrega) }}</strong>
+          </div>
+        }
+        <div class="ticket-meta-row">
+          <span>CLIENTE:</span>
+          <strong>{{ pedidoSeleccionado()?.clienteNombre }}</strong>
+        </div>
+        @if (pedidoSeleccionado()?.clienteTelefono) {
+          <div class="ticket-meta-row">
+            <span>TEL:</span>
+            <span>{{ pedidoSeleccionado()?.clienteTelefono }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="ticket-separator">--------------------------------</div>
+
+      <!-- Especificaciones del Pedido -->
+      <div class="ticket-esp-block">
+        <div class="ticket-esp-title">ESPECIFICACIONES / TRABAJO:</div>
+        <p class="ticket-esp-text">{{ pedidoSeleccionado()?.especificaciones }}</p>
+      </div>
+
+      <!-- Insumos y Servicios si existen -->
+      @if (pedidoSeleccionado()?.materiasPrimas && pedidoSeleccionado()!.materiasPrimas.length > 0) {
+        <div class="ticket-separator">--------------------------------</div>
+        <div class="ticket-insumos-block">
+          <div class="ticket-esp-title">MATERIALES / SERVICIOS:</div>
+          @for (mp of pedidoSeleccionado()?.materiasPrimas; track $index) {
+            <div class="ticket-meta-row">
+              <span>{{ mp.cantidad }}x {{ mp.nombre }}</span>
+              <span>{{ mp.subtotal | currencyMxn }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="ticket-separator">================================</div>
+
+      <!-- Totales y Saldos -->
+      <div class="ticket-totals-block">
+        <div class="ticket-tot-row ticket-grand-total">
+          <span>MONTO TOTAL:</span>
+          <span>{{ pedidoSeleccionado()?.totalAcordado | currencyMxn }}</span>
+        </div>
+        <div class="ticket-tot-row">
+          <span>Anticipo / Abono:</span>
+          <span>{{ pedidoSeleccionado()?.anticipo | currencyMxn }}</span>
+        </div>
+        <div class="ticket-tot-row ticket-grand-total" style="font-size: 1.05rem;">
+          <span>SALDO RESTANTE:</span>
+          <span [style.color]="(pedidoSeleccionado()?.saldoRestante || 0) > 0 ? '#b91c1c' : '#15803d'">
+            {{ pedidoSeleccionado()?.saldoRestante | currencyMxn }}
+          </span>
+        </div>
+        <div class="ticket-tot-row">
+          <span>Estado:</span>
+          <strong>{{ getEstadoLabel(pedidoSeleccionado()!) }}</strong>
+        </div>
+      </div>
+
+      <div class="ticket-separator">================================</div>
+
+      <!-- Pie del Ticket -->
+      <div class="ticket-footer-block">
+        <p class="ticket-legend">
+          {{ configService.config().fiscalLegend || '¡Gracias por su preferencia!' }}
+        </p>
+        <p class="ticket-notice">Presente este comprobante para recoger o liquidar su pedido.</p>
+      </div>
+
+      <div class="ticket-cut-margin">.</div>
+    </div>
+  </ng-template>
+}
+
+<!-- Modal Liquidar Saldo -->
+@if (modalLiquidarAbierto() && pedidoSeleccionado()) {
+  <div class="modal-overlay">
+    <div class="modal-card" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3>💰 Liquidar y Entregar Pedido</h3>
+        <button type="button" class="modal-close" (click)="modalLiquidarAbierto.set(false)">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px;">
+          Folio: <strong>{{ pedidoSeleccionado()?.id }}</strong><br />
+          Cliente: <strong>{{ pedidoSeleccionado()?.clienteNombre }}</strong>
+        </p>
+
+        <div class="form-group">
+          <label>Saldo Pendiente a Cobrar:</label>
+          <div style="font-size: 1.4rem; font-weight: 900; color: #15803d; margin: 4px 0 12px;">
+            {{ pedidoSeleccionado()?.saldoRestante | currencyMxn }}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="metLiq">Forma de Pago del Saldo:</label>
+          <select id="metLiq" [(ngModel)]="metodoPagoLiquidacion">
+            <option value="EFECTIVO">💵 Efectivo</option>
+            <option value="TARJETA">💳 Tarjeta</option>
+            <option value="TRANSFERENCIA">📱 Transferencia</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" (click)="modalLiquidarAbierto.set(false)">Cancelar</button>
+        <button type="button" class="btn btn-success" (click)="confirmarLiquidacion()">
+          ✅ Cobrar Saldo y Entregar
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal Detalle y Seguimiento de Pedido -->
+@if (modalDetalleAbierto() && pedidoDetalle()) {
+  <div class="modal-overlay">
+    <div class="modal-card modal-detalle-pedido">
+      <div class="modal-header">
+        <h3 class="modal-title-custom">🎨 Detalle de Pedido</h3>
+        <button type="button" class="modal-close" (click)="cerrarModalDetalle()">&times;</button>
+      </div>
+
+      <div class="modal-body modal-detalle-body">
+        <!-- 1. Cabecera con Folio, Estado y Botones -->
+        <div class="detalle-top-card">
+          <div class="detalle-top-info">
+            <div class="folio-row">
+              <h2 class="detalle-folio">{{ pedidoDetalle()?.id }}</h2>
+              <span class="status-pill" [class]="getEstadoPillClass(pedidoDetalle()!)">
+                {{ getEstadoLabel(pedidoDetalle()!) }}
+              </span>
+            </div>
+            <div class="detalle-reg-date">
+              Registrado el {{ formatearFechaHora(pedidoDetalle()?.fechaRegistro) }}
+            </div>
+          </div>
+          <div class="detalle-top-actions">
+            <button type="button" class="btn-editar-pedido" (click)="abrirModalEditar()">
+              ✏️ Editar / Corregir Pedido
+            </button>
+            <button type="button" class="btn-imprimir-nota" (click)="imprimirTicketDesdeDetalle()">
+              🖨️ Imprimir Ticket / Nota
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Línea de Tiempo / Stepper de Estado -->
+        <div class="detalle-stepper-card">
+          <div class="stepper-title">
+            📌 Estado Actual del Pedido: <strong>{{ getEstadoLabel(pedidoDetalle()!) | uppercase }}</strong>
+          </div>
+          <div class="stepper-track">
+            <!-- Paso 1: Pendiente -->
+            <div
+              class="stepper-step"
+              [class.completed]="pedidoDetalle()?.estado === 'EN_PROCESO' || pedidoDetalle()?.estado === 'TERMINADO' || pedidoDetalle()?.estado === 'LISTO' || pedidoDetalle()?.estado === 'ENTREGADO'"
+              [class.active]="pedidoDetalle()?.estado === 'PENDIENTE'"
+              (click)="cambiarEstadoDesdeDetalle('PENDIENTE')"
+              title="Cambiar a Pendiente"
+            >
+              <div class="step-circle step-pendiente">
+                <span class="step-icon">📋</span>
+              </div>
+              <span class="step-label">Pendiente</span>
+            </div>
+
+            <div class="stepper-line" [class.active-line]="pedidoDetalle()?.estado === 'EN_PROCESO' || pedidoDetalle()?.estado === 'TERMINADO' || pedidoDetalle()?.estado === 'LISTO' || pedidoDetalle()?.estado === 'ENTREGADO'"></div>
+
+            <!-- Paso 2: En Proceso -->
+            <div
+              class="stepper-step"
+              [class.completed]="pedidoDetalle()?.estado === 'TERMINADO' || pedidoDetalle()?.estado === 'LISTO' || pedidoDetalle()?.estado === 'ENTREGADO'"
+              [class.active]="pedidoDetalle()?.estado === 'EN_PROCESO'"
+              (click)="cambiarEstadoDesdeDetalle('EN_PROCESO')"
+              title="Cambiar a En Proceso"
+            >
+              <div class="step-circle step-proceso">
+                <span class="step-icon">⚙️</span>
+              </div>
+              <span class="step-label">En Proceso</span>
+            </div>
+
+            <div class="stepper-line" [class.active-line]="pedidoDetalle()?.estado === 'TERMINADO' || pedidoDetalle()?.estado === 'LISTO' || pedidoDetalle()?.estado === 'ENTREGADO'"></div>
+
+            <!-- Paso 3: Terminado -->
+            <div
+              class="stepper-step"
+              [class.completed]="pedidoDetalle()?.estado === 'ENTREGADO'"
+              [class.active]="pedidoDetalle()?.estado === 'TERMINADO' || pedidoDetalle()?.estado === 'LISTO'"
+              (click)="cambiarEstadoDesdeDetalle('TERMINADO')"
+              title="Cambiar a Terminado"
+            >
+              <div class="step-circle step-terminado">
+                <span class="step-icon">📦</span>
+              </div>
+              <span class="step-label">Terminado</span>
+            </div>
+
+            <div class="stepper-line" [class.active-line]="pedidoDetalle()?.estado === 'ENTREGADO'"></div>
+
+            <!-- Paso 4: Entregado -->
+            <div
+              class="stepper-step"
+              [class.active]="pedidoDetalle()?.estado === 'ENTREGADO'"
+              (click)="cambiarEstadoDesdeDetalle('ENTREGADO')"
+              title="Cambiar a Entregado"
+            >
+              <div class="step-circle step-entregado">
+                <span class="step-icon">✅</span>
+              </div>
+              <span class="step-label">Entregado</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Información del Cliente y Especificaciones -->
+        <div class="detalle-section-card">
+          <div class="card-section-header">
+            <h4 class="card-section-title">👤 Información del Cliente y Especificaciones</h4>
+          </div>
+          <div class="cliente-info-grid">
+            <div class="info-block">
+              <span class="info-label">CLIENTE</span>
+              <strong class="info-val">{{ pedidoDetalle()?.clienteNombre }}</strong>
+            </div>
+            <div class="info-block">
+              <span class="info-label">TELÉFONO</span>
+              <span class="info-val">{{ pedidoDetalle()?.clienteTelefono || 'No registrado' }}</span>
+            </div>
+            <div class="info-block">
+              <span class="info-label">ENTREGA ESTIMADA</span>
+              <span class="info-val delivery-val">
+                📅 {{ formatearFechaEntregaConHora(pedidoDetalle()?.fechaEntrega) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="specs-box">
+            <div class="specs-title">🎨 ESPECIFICACIONES / DETALLES DEL DISEÑO:</div>
+            <p class="specs-content">{{ pedidoDetalle()?.especificaciones }}</p>
+          </div>
+        </div>
+
+        <!-- 4. Materias Primas e Insumos Registrados -->
+        <div class="detalle-section-card">
+          <div class="card-section-header">
+            <h4 class="card-section-title">
+              📦 Materias Primas e Insumos Registrados
+              @if (pedidoDetalle()?.insumosDescontados) {
+                <span class="badge-stock-ok">✅ Insumos Descontados del Stock</span>
+              } @else {
+                <span class="badge-stock-wait">⏳ Pendiente de Descontar</span>
+              }
+            </h4>
+          </div>
+
+          <div class="table-responsive">
+            <table class="detalle-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Concepto / Producto</th>
+                  <th style="text-align: center;">Cant.</th>
+                  <th style="text-align: right;">P. Unit</th>
+                  <th style="text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (mp of pedidoDetalle()?.materiasPrimas; track $index) {
+                  <tr>
+                    <td>
+                      <span class="badge-tipo" [class.badge-inv]="mp.tipo === 'INVENTARIO'" [class.badge-extra]="mp.tipo === 'EXTRA'">
+                        {{ mp.tipo === 'INVENTARIO' ? 'Inventario' : 'Servicio / Extra' }}
+                      </span>
+                    </td>
+                    <td>
+                      @if (mp.codigo) {
+                        <strong>[{{ mp.codigo }}]</strong>
+                      }
+                      {{ mp.nombre }}
+                    </td>
+                    <td style="text-align: center;">{{ mp.cantidad }}</td>
+                    <td style="text-align: right;">{{ mp.precioUnitario | currencyMxn }}</td>
+                    <td style="text-align: right;"><strong>{{ mp.subtotal | currencyMxn }}</strong></td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5" class="empty-msg">No se registraron insumos específicos en este pedido.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. Estado Financiero y Historial de Pagos -->
+        <div class="detalle-section-card">
+          <div class="card-section-header">
+            <h4 class="card-section-title">💳 Estado Financiero y Historial de Pagos</h4>
+          </div>
+
+          <!-- 3 Tarjetas Financieras -->
+          <div class="fin-kpi-grid">
+            <div class="fin-kpi-box fin-total">
+              <span class="fin-label">MONTO TOTAL</span>
+              <strong class="fin-val">{{ pedidoDetalle()?.totalAcordado | currencyMxn }}</strong>
+            </div>
+            <div class="fin-kpi-box fin-pagado">
+              <span class="fin-label">TOTAL PAGADO</span>
+              <strong class="fin-val">{{ pedidoDetalle()?.anticipo | currencyMxn }}</strong>
+            </div>
+            <div class="fin-kpi-box fin-saldo">
+              <span class="fin-label">SALDO PENDIENTE</span>
+              <strong class="fin-val">{{ pedidoDetalle()?.saldoRestante | currencyMxn }}</strong>
+            </div>
+          </div>
+
+          <!-- Historial de Abonos -->
+          <div class="historial-abonos-section">
+            <div class="historial-title">HISTORIAL DE ABONOS RECIBIDOS:</div>
+            <div class="table-responsive">
+              <table class="detalle-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Método de Pago</th>
+                    <th style="text-align: right;">Monto Abonado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (abo of pedidoDetalle()?.abonos; track abo.id) {
+                    <tr>
+                      <td>{{ formatearFechaHora(abo.fecha) }}</td>
+                      <td><strong>{{ abo.concepto }}</strong></td>
+                      <td>
+                        <span class="badge-metodo">{{ abo.metodoPago }}</span>
+                      </td>
+                      <td style="text-align: right; color: #15803d; font-weight: 800;">
+                        + {{ abo.monto | currencyMxn }}
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4" class="empty-msg">No hay abonos registrados aún.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Formulario de Nuevo Abono -->
+          @if ((pedidoDetalle()?.saldoRestante || 0) > 0) {
+            <div class="nuevo-abono-form-box">
+              <div class="abono-form-title">+ REGISTRAR NUEVO ABONO:</div>
+              <div class="abono-form-row">
+                <input
+                  type="number"
+                  [(ngModel)]="montoNuevoAbono"
+                  min="1"
+                  [max]="pedidoDetalle()?.saldoRestante || 0"
+                  step="0.01"
+                  placeholder="Monto a abonar ($)"
+                  class="input-abono-monto"
+                />
+                <select [(ngModel)]="metodoPagoNuevoAbono" class="select-abono-metodo">
+                  <option value="EFECTIVO">Efectivo</option>
+                  <option value="TARJETA">Tarjeta</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
+                </select>
+                <button type="button" class="btn-agregar-abono" (click)="registrarAbonoModal()">
+                  💰 Agregar Abono
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal Editar Pedido -->
+@if (modalEditarAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card modal-nuevo-pedido">
+      <div class="modal-header">
+        <h3 class="modal-title-custom">✏️ Editar Pedido {{ editandoId }}</h3>
+        <button type="button" class="modal-close" (click)="modalEditarAbierto.set(false)">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Nombre del Cliente *</label>
+            <input type="text" [(ngModel)]="editCliente" placeholder="Nombre completo" required />
+          </div>
+          <div class="form-group">
+            <label>Teléfono / Contacto</label>
+            <input type="text" [(ngModel)]="editTelefono" placeholder="Teléfono o WhatsApp" />
+          </div>
+          <div class="form-group">
+            <label>Fecha Estimada de Entrega</label>
+            <input type="datetime-local" [(ngModel)]="editFechaEntrega" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 10px;">
+          <label>Especificaciones y Detalles *</label>
+          <textarea rows="3" [(ngModel)]="editEspecificaciones" placeholder="Detalles del diseño..."></textarea>
+        </div>
+
+        <div class="insumos-section-box">
+          <div class="insumos-section-header">
+            <h4 class="insumos-section-title">📦 Insumos y Servicios</h4>
+            <div class="insumos-btn-group">
+              <button type="button" class="btn-add-insumo" (click)="agregarItemEditarInventario()">
+                + Insumo (Inventario)
+              </button>
+              <button type="button" class="btn-add-extra" (click)="agregarItemEditarExtra()">
+                + Servicio / Extra
+              </button>
+            </div>
+          </div>
+
+          <div class="insumos-table-container">
+            <div class="insumos-table-header">
+              <span>INSUMO O SERVICIO</span>
+              <span>CANT.</span>
+              <span>PRECIO U.</span>
+              <span>SUBTOTAL</span>
+              <span></span>
+            </div>
+
+            <div class="insumos-rows-list">
+              @for (item of editItems(); track $index; let i = $index) {
+                <div class="insumo-row-item">
+                  <div class="col-desc-input">
+                    @if (item.tipo === 'INVENTARIO') {
+                      <div class="autocomplete-wrapper">
+                        <div class="input-icon-wrapper">
+                          <span class="search-icon">🔍</span>
+                          <input
+                            type="text"
+                            [value]="item.busqueda || ''"
+                            (input)="item.busqueda = $any($event.target).value; item.mostrarSugerencias = true"
+                            (focus)="item.mostrarSugerencias = true"
+                            placeholder="Escribe o busca un insumo..."
+                            class="input-insumo"
+                          />
+                        </div>
+                        @if (item.mostrarSugerencias) {
+                          <div class="autocomplete-dropdown">
+                            @for (prod of getSugerencias(item.busqueda); track prod.codigo) {
+                              <div class="dropdown-item" (mousedown)="seleccionarProductoInsumoEditar(item, prod)">
+                                <div class="prod-name">{{ prod.nombre }}</div>
+                                <div class="prod-meta">
+                                  <span class="prod-code">{{ prod.codigo }}</span>
+                                  <span class="prod-price">{{ prod.precioVenta | currencyMxn }}</span>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <input type="text" [(ngModel)]="item.nombre" placeholder="Servicio o insumo extra..." class="input-insumo input-extra" />
+                    }
+                  </div>
+                  <div class="col-cant-input">
+                    <input type="number" [(ngModel)]="item.cantidad" (ngModelChange)="onEditItemChange(item)" min="0.1" class="form-control-sm text-center" />
+                  </div>
+                  <div class="col-unit-input">
+                    <input type="number" [(ngModel)]="item.precioUnitario" (ngModelChange)="onEditItemChange(item)" min="0" step="0.01" class="form-control-sm text-right" />
+                  </div>
+                  <div class="col-sub-input">
+                    <input type="text" [value]="item.subtotal | currencyMxn" readonly class="form-control-sm text-right bg-readonly" />
+                  </div>
+                  <div class="col-del-btn">
+                    <button type="button" class="btn-row-del" (click)="removerItemEditar(i)">✕</button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px; max-width: 250px;">
+          <label>Monto Total Acordado ($) *</label>
+          <input type="number" [(ngModel)]="editTotal" min="0" step="0.01" class="form-control" required />
+        </div>
+
+        <!-- Resumen Financiero y Gestión de Abonos en Edición -->
+        <div class="detalle-card-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+          <h4 class="section-title">💳 Control de Abonos y Finanzas</h4>
+          <div class="finanzas-grid">
+            <div class="fin-kpi-box fin-total">
+              <span class="fin-label">MONTO TOTAL</span>
+              <strong class="fin-val">{{ editTotal | currencyMxn }}</strong>
+            </div>
+            <div class="fin-kpi-box fin-pagado">
+              <span class="fin-label">TOTAL ABONADO</span>
+              <strong class="fin-val">{{ (pedidoEditando()?.anticipo || 0) | currencyMxn }}</strong>
+            </div>
+            <div class="fin-kpi-box fin-saldo">
+              <span class="fin-label">SALDO PENDIENTE</span>
+              <strong class="fin-val">{{ ((editTotal || 0) - (pedidoEditando()?.anticipo || 0) > 0 ? (editTotal || 0) - (pedidoEditando()?.anticipo || 0) : 0) | currencyMxn }}</strong>
+            </div>
+          </div>
+
+          <!-- Historial de Abonos Registrados -->
+          <div class="historial-abonos-section">
+            <div class="historial-title">HISTORIAL DE ABONOS RECIBIDOS:</div>
+            <div class="table-responsive">
+              <table class="detalle-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Método de Pago</th>
+                    <th style="text-align: right;">Monto Abonado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (abo of pedidoEditando()?.abonos; track abo.id) {
+                    <tr>
+                      <td>{{ formatearFechaHora(abo.fecha) }}</td>
+                      <td><strong>{{ abo.concepto }}</strong></td>
+                      <td>
+                        <span class="badge-metodo">{{ abo.metodoPago }}</span>
+                      </td>
+                      <td style="text-align: right; color: #15803d; font-weight: 800;">
+                        + {{ abo.monto | currencyMxn }}
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4" class="empty-msg">No hay abonos registrados aún.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Formulario para Registrar Nuevo Abono -->
+          @if (((editTotal || 0) - (pedidoEditando()?.anticipo || 0)) > 0) {
+            <div class="nuevo-abono-form-box">
+              <div class="abono-form-title">+ REGISTRAR NUEVO ABONO A ESTE PEDIDO:</div>
+              <div class="abono-form-row">
+                <input
+                  type="number"
+                  [(ngModel)]="montoAbonoEditar"
+                  min="1"
+                  [max]="(editTotal || 0) - (pedidoEditando()?.anticipo || 0)"
+                  step="0.01"
+                  placeholder="Monto a abonar ($)"
+                  class="input-abono-monto"
+                />
+                <select [(ngModel)]="metodoPagoAbonoEditar" class="select-abono-metodo">
+                  <option value="EFECTIVO">💵 Efectivo</option>
+                  <option value="TARJETA">💳 Tarjeta</option>
+                  <option value="TRANSFERENCIA">📱 Transferencia</option>
+                </select>
+                <input
+                  type="text"
+                  [(ngModel)]="conceptoAbonoEditar"
+                  placeholder="Concepto (ej. Abono a cuenta)"
+                  style="flex: 2; min-width: 140px; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem;"
+                />
+                <button type="button" class="btn-agregar-abono" (click)="registrarAbonoEnEdicion()">
+                  💰 Agregar Abono
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px 14px; font-size: 0.86rem; color: #166534; font-weight: 600; margin-top: 10px;">
+              ✅ Este pedido se encuentra totalmente liquidado (Saldo $0.00).
+            </div>
+          }
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancelar" (click)="modalEditarAbierto.set(false)">Cancelar</button>
+        <button type="button" class="btn btn-guardar" (click)="guardarEdicionPedido()">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal Previsualización de Consolidación de Abonos en Ventas -->
+@if (modalConsolidarAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card" style="max-width: 850px; width: 100%;">
+      <div class="modal-header">
+        <div>
+          <h3>🔄 Sincronización y Consolidación de Abonos en Ventas</h3>
+          <p class="modal-subtitle">
+            Revisión previa de pagos de pedidos que se registrarán en el módulo de Ventas.
+          </p>
+        </div>
+        <button type="button" class="modal-close" (click)="modalConsolidarAbierto.set(false)">&times;</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Resumen KPI -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #64748b; font-weight: 700; display: block;">PEDIDOS ANALIZADOS</span>
+            <strong style="font-size: 1.25rem; color: #0f172a;">{{ analisisConsolidacion()?.pedidosAnalizados || 0 }}</strong>
+          </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #64748b; font-weight: 700; display: block;">ABONOS YA EN VENTAS</span>
+            <strong style="font-size: 1.25rem; color: #16a34a;">{{ analisisConsolidacion()?.ventasExistentes || 0 }}</strong>
+          </div>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #1d4ed8; font-weight: 700; display: block;">VENTAS POR AGREGAR</span>
+            <strong style="font-size: 1.25rem; color: #1d4ed8;">{{ analisisConsolidacion()?.ventasNuevas?.length || 0 }}</strong>
+          </div>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px;">
+            <span style="font-size: 0.76rem; color: #047857; font-weight: 700; display: block;">MONTO TOTAL A REGISTRAR</span>
+            <strong style="font-size: 1.25rem; color: #047857;">{{ (analisisConsolidacion()?.montoTotalNuevas || 0) | currencyMxn }}</strong>
+          </div>
+        </div>
+
+        @if ((analisisConsolidacion()?.ventasNuevas?.length || 0) > 0) {
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 8px;">
+              DETALLE DE LAS VENTAS QUE SE GENERARÁN ({{ analisisConsolidacion()?.ventasNuevas?.length }}):
+            </div>
+            <div class="table-responsive" style="max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <table class="detalle-table" style="margin: 0; width: 100%;">
+                <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
+                  <tr>
+                    <th>Folio Generado</th>
+                    <th>Pedido / Cliente</th>
+                    <th>Concepto</th>
+                    <th>Método</th>
+                    <th>Fecha</th>
+                    <th style="text-align: right;">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of analisisConsolidacion()?.ventasNuevas; track item.id) {
+                    <tr>
+                      <td><code style="font-weight: 700; color: #0284c7; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;">{{ item.id }}</code></td>
+                      <td>
+                        <strong>{{ item.pedidoId }}</strong>
+                        <div style="font-size: 0.78rem; color: #64748b;">{{ item.clienteNombre }}</div>
+                      </td>
+                      <td>{{ item.concepto }}</td>
+                      <td><span class="badge-metodo">{{ item.metodoPago }}</span></td>
+                      <td style="font-size: 0.82rem; color: #475569;">{{ formatearFechaHora(item.fecha) }}</td>
+                      <td style="text-align: right; font-weight: 800; color: #16a34a;">
+                        + {{ item.monto | currencyMxn }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        } @else {
+          <div style="text-align: center; padding: 32px 16px; background: #f0fdf4; border: 1.5px dashed #86efac; border-radius: 8px;">
+            <div style="font-size: 2.5rem; margin-bottom: 8px;">✨</div>
+            <h4 style="margin: 0 0 6px 0; color: #166534; font-size: 1.1rem; font-weight: 800;">¡Todos los abonos están al día!</h4>
+            <p style="margin: 0; color: #15803d; font-size: 0.9rem;">
+              Todos los anticipos y abonos de tus pedidos ya cuentan con su venta correspondiente registrada en el sistema. No se requieren cambios.
+            </p>
+          </div>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" (click)="modalConsolidarAbierto.set(false)" [disabled]="aplicandoConsolidacion()">
+          Cerrar
+        </button>
+        @if ((analisisConsolidacion()?.ventasNuevas?.length || 0) > 0) {
+          <button
+            type="button"
+            class="btn btn-guardar"
+            style="background: #0284c7; color: white;"
+            (click)="confirmarConsolidacion()"
+            [disabled]="aplicandoConsolidacion()"
+          >
+            {{ aplicandoConsolidacion() ? '⏳ Registrando...' : '✅ Confirmar y Registrar en Ventas (' + (analisisConsolidacion()?.ventasNuevas?.length) + ')' }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+

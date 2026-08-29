@@ -1,0 +1,215 @@
+<div class="cortes-page">
+  <div class="content-header">
+    <div>
+      <h2>🔒 Control de Cortes de Caja & Turnos</h2>
+      <p>Apertura, arqueo en tiempo real, corte de caja y balance financiero de turnos.</p>
+    </div>
+  </div>
+
+  <!-- Sección 1: Apertura de Turno (Si no hay corte abierto) -->
+  @if (!cortesService.hayCorteAbierto()) {
+  <div class="card">
+    <div class="card-header">
+      <span>🔓 Apertura de Turno de Caja</span>
+    </div>
+    <div class="card-body">
+      <p style="margin-bottom: 14px; font-size: 0.92rem; color: var(--slate);">
+        Actualmente la caja está cerrada. Registra el fondo de caja inicial para comenzar las operaciones del turno.
+      </p>
+      <form (ngSubmit)="onAbrirCorte()" class="form-grid">
+        <div class="form-group">
+          <label for="apCajero">Usuario / Cajero *</label>
+          <input id="apCajero" type="text" [(ngModel)]="usuarioApertura" name="usuario" required />
+        </div>
+        <div class="form-group">
+          <label for="apCajaIni">Fondo de Caja Inicial ($) *</label>
+          <input #cajaInicialRef id="apCajaIni" type="number" min="0" step="0.01" [(ngModel)]="cajaInicialApertura"
+            name="cajaInicial" required />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="apObs">Observaciones de Apertura</label>
+          <input id="apObs" type="text" [(ngModel)]="observacionesApertura" name="observaciones"
+            placeholder="Ej: Billetes de baja denominación..." />
+        </div>
+        <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-success">🔓 Abrir Turno de Caja</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  }
+
+  <!-- Sección 2: Turno Activo y Arqueo en Tiempo Real (Si hay corte abierto) -->
+  @if (cortesService.hayCorteAbierto()) {
+  <div class="card">
+    <div class="card-header" style="background: #0f172a; color: white;">
+      <span>🟢 Turno Activo en Tiempo Real</span>
+      <span class="badge badge-success">EN CURSO</span>
+    </div>
+    <div class="card-body">
+      <div class="shift-meta-row">
+        <div><span>Responsable:</span> <strong>{{ cortesService.corteActivo()?.usuario }}</strong></div>
+        <div><span>Sucursal:</span> <strong>{{ cortesService.corteActivo()?.sucursalNombre }}</strong></div>
+        <div><span>Apertura:</span> <strong>{{ cortesService.corteActivo()?.fechaApertura | fechaLocal }}</strong></div>
+        <div><span>Caja Inicial:</span> <strong>{{ cortesService.corteActivo()?.cajaInicial | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      <!-- KPIs en Tiempo Real del Turno Activo -->
+      <div class="corte-kpis">
+        <div class="corte-kpi">
+          <span>Ventas Netas</span>
+          <strong>{{ resumenEnVivo().totalVentasNetas | currencyMxn }}</strong>
+          <small>{{ resumenEnVivo().ventasCount }} ticket(s)</small>
+        </div>
+        <div class="corte-kpi corte-kpi--up">
+          <span>Efectivo Cobrado</span>
+          <strong>{{ resumenEnVivo().pagosEfectivo | currencyMxn }}</strong>
+        </div>
+        <div class="corte-kpi">
+          <span>Tarjeta Cobrada</span>
+          <strong>{{ resumenEnVivo().pagosTarjeta | currencyMxn }}</strong>
+        </div>
+        <div class="corte-kpi">
+          <span>Transferencia</span>
+          <strong>{{ resumenEnVivo().pagosTransferencia | currencyMxn }}</strong>
+        </div>
+        <div class="corte-kpi corte-kpi--down">
+          <span>Gastos en Efectivo</span>
+          <strong>{{ resumenEnVivo().gastosEfectivo | currencyMxn }}</strong>
+          <small>{{ resumenEnVivo().gastosCount }} gasto(s)</small>
+        </div>
+        <div class="corte-kpi" style="background: #e0f2fe; border-color: #7dd3fc;">
+          <span style="color: #0369a1;">Caja Esperada en Efectivo</span>
+          <strong style="color: #0284c7; font-size: 1.3rem;">
+            {{ resumenEnVivo().cajaEsperada | currencyMxn }}
+          </strong>
+        </div>
+      </div>
+
+      <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);" />
+
+      <!-- Panel de Arqueo y Cierre -->
+      <h4 style="margin-bottom: 12px; font-size: 1rem; color: var(--dark);">
+        📝 Realizar Arqueo y Cierre de Turno
+      </h4>
+
+      <form (ngSubmit)="onCerrarCorte()" class="form-grid">
+        <div class="form-group">
+          <label for="cPeriod">Periodicidad del Corte *</label>
+          <select id="cPeriod" [(ngModel)]="periodicidad" name="periodicidad">
+            <option value="DIARIO">Diario</option>
+            <option value="SEMANAL">Semanal</option>
+            <option value="QUINCENAL">Quincenal</option>
+            <option value="MENSUAL">Mensual</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="cRetiros">Retiros de Caja ($)</label>
+          <input id="cRetiros" type="number" min="0" step="0.01" [ngModel]="retiros()"
+            (ngModelChange)="retiros.set($event !== null && $event !== '' ? +$event : 0)" name="retiros" />
+        </div>
+
+        <div class="form-group">
+          <label for="cIngresos">Ingresos Extra a Caja ($)</label>
+          <input id="cIngresos" type="number" min="0" step="0.01" [ngModel]="ingresosCaja()"
+            (ngModelChange)="ingresosCaja.set($event !== null && $event !== '' ? +$event : 0)" name="ingresosCaja" />
+        </div>
+
+        <div class="form-group">
+          <label for="cContada">Caja Física Contada ($) *</label>
+          <input #cajaContadaRef id="cContada" type="number" min="0" step="0.01" [ngModel]="cajaContada()"
+            (ngModelChange)="cajaContada.set($event !== null && $event !== '' ? +$event : null)" name="cajaContada"
+            required placeholder="Total billetes + monedas" style="font-weight: 800; border-color: #0284c7;" />
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="cObs">Observaciones de Cierre</label>
+          <input id="cObs" type="text" [(ngModel)]="observacionesCierre" name="observaciones"
+            placeholder="Justificación de diferencias..." />
+        </div>
+
+        <!-- Diferencia en Vivo -->
+        @if (cajaContada() !== null && cajaContada() !== undefined) {
+        <div class="difference-banner" [class.diff-ok]="diferenciaCalculada() === 0"
+          [class.diff-bad]="diferenciaCalculada() !== 0">
+          <span>Diferencia de Arqueo:</span>
+          <strong>{{ diferenciaCalculada() | currencyMxn }}</strong>
+          <small>
+            @if (diferenciaCalculada() === 0) { (Caja Cuadrada Exacta) }
+            @else if (diferenciaCalculada() > 0) { (Sobrante en caja) }
+            @else { (Faltante en caja) }
+          </small>
+        </div>
+        }
+
+        <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-danger btn-lg"
+            [disabled]="cajaContada() === null || (cajaContada() || 0) < 0">
+            🔒 Cerrar Corte de Caja
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  }
+
+  <!-- Sección 3: Historial de Cortes -->
+  <div class="card">
+    <div class="card-header">
+      <span>📜 Historial de Cortes de Caja ({{ cortesService.cortesHistorial().length }})</span>
+    </div>
+    <div class="card-body table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Sucursal</th>
+            <th>Usuario</th>
+            <th>Apertura</th>
+            <th>Cierre</th>
+            <th style="text-align: right;">Caja Inicial</th>
+            <th style="text-align: right;">Ventas Netas</th>
+            <th style="text-align: right;">Efectivo</th>
+            <th style="text-align: right;">Gastos Efec.</th>
+            <th style="text-align: right;">Caja Esperada</th>
+            <th style="text-align: right;">Caja Contada</th>
+            <th style="text-align: right;">Diferencia</th>
+            <th style="text-align: center;">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (corte of cortesService.cortesHistorial(); track corte.id) {
+          <tr>
+            <td><strong>{{ corte.id }}</strong></td>
+            <td>{{ corte.sucursalNombre }}</td>
+            <td>{{ corte.usuario }}</td>
+            <td>{{ corte.fechaApertura | fechaLocal }}</td>
+            <td>{{ corte.fechaCierre | fechaLocal }}</td>
+            <td style="text-align: right;">{{ corte.cajaInicial | currencyMxn }}</td>
+            <td style="text-align: right;"><strong>{{ corte.totalVentasNetas | currencyMxn }}</strong></td>
+            <td style="text-align: right;">{{ corte.pagosEfectivo | currencyMxn }}</td>
+            <td style="text-align: right; color: #dc2626;">{{ corte.gastosEfectivo | currencyMxn }}</td>
+            <td style="text-align: right;">{{ corte.cajaEsperada | currencyMxn }}</td>
+            <td style="text-align: right;"><strong>{{ corte.cajaContada | currencyMxn }}</strong></td>
+            <td style="text-align: right;"
+              [style.color]="corte.diferencia < 0 ? '#dc2626' : (corte.diferencia > 0 ? '#15803d' : '#0f172a')">
+              <strong>{{ corte.diferencia | currencyMxn }}</strong>
+            </td>
+            <td style="text-align: center;">
+              <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarCorte(corte.id)">🗑️</button>
+            </td>
+          </tr>
+          } @empty {
+          <tr>
+            <td colspan="13" style="text-align: center; color: #94a3b8; padding: 25px;">
+              No hay cortes de caja cerrados registrados.
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

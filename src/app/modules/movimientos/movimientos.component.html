@@ -1,0 +1,247 @@
+<div class="movimientos-page">
+  <div class="content-header">
+    <div>
+      <h2>🔄 Movimientos de Inventario (Kardex)</h2>
+      <p>Registro de entradas, salidas, ajustes de existencias y traspasos entre sucursales.</p>
+    </div>
+  </div>
+
+  <!-- Formulario de Movimiento -->
+  <div class="card">
+    <div class="card-header">
+      <span>➕ Registrar Movimiento de Stock</span>
+    </div>
+    <div class="card-body">
+      @if (mensajeExito()) {
+      <div class="alert alert-success"
+        style="margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #dcfce7; color: #15803d; font-weight: 600;">
+        ✅ {{ mensajeExito() }}
+      </div>
+      }
+      @if (mensajeError()) {
+      <div class="alert alert-danger"
+        style="margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #fee2e2; color: #b91c1c; font-weight: 600;">
+        ❌ {{ mensajeError() }}
+      </div>
+      }
+
+      <form (ngSubmit)="onRegistrarMovimiento()" class="form-grid">
+        <!-- Fila 1: Buscador de Producto a lo ancho -->
+        <div class="form-group search-autocomplete-container col-span-full">
+          <label for="movProducto">Producto (Código o Nombre) *</label>
+          <div class="input-with-action">
+            <input #movProductoRef id="movProducto" type="text" [value]="busquedaProducto()"
+              (input)="onInputChange($event)" (focus)="onInputFocus()" (blur)="cerrarSugerencias()"
+              (keydown.arrowdown)="navegarSugerencias(1, $event)" (keydown.arrowup)="navegarSugerencias(-1, $event)"
+              (keydown.enter)="onEnterProducto($event)" (keydown.escape)="mostrarSugerencias.set(false)"
+              placeholder="Escribe el nombre o código del producto..." autocomplete="off" required />
+            @if (codigoSeleccionado()) {
+            <button type="button" class="btn-clear-prod" (click)="limpiarSeleccion()"
+              title="Borrar selección">&times;</button>
+            }
+          </div>
+
+          <!-- Lista desplegable de sugerencias filtradas en tiempo real -->
+          @if (mostrarSugerencias() && sugerenciasProductos().length > 0) {
+          <div class="suggestions-dropdown">
+            @for (prod of sugerenciasProductos(); track prod.codigo; let i = $index) {
+            <div class="suggestion-item" [class.active]="i === indiceSeleccionado()"
+              (mousedown)="seleccionarProducto(prod)">
+              <div class="sug-info">
+                <span class="sug-title">{{ prod.nombre }}</span>
+                <div class="sug-sub">
+                  <span class="sug-code">{{ prod.codigo }}</span>
+                  @if (prod.grupo) {
+                  <span class="sug-group">{{ prod.grupo }}</span>
+                  }
+                  <span class="sug-unit">{{ prod.unidad || 'Pieza' }}</span>
+                </div>
+              </div>
+              <div class="sug-stock-box">
+                <span class="sug-stock-val">
+                  Stock Total: {{ prod.stockActual }}
+                </span>
+              </div>
+            </div>
+            }
+          </div>
+          }
+
+          <!-- Detalle informativo del producto seleccionado -->
+          @if (productoSeleccionado(); as prod) {
+          <div class="selected-product-badge">
+            <div class="badge-header">
+              <strong>📦 {{ prod.nombre }}</strong>
+              <span class="stock-pill" [class.stock-low]="stockActualProducto() <= (prod.stockMinimo || 0)">
+                Stock en sucursal: {{ stockActualProducto() }} {{ prod.unidad || 'pzas' }}
+              </span>
+            </div>
+            <div class="badge-details">
+              <span>Código: <code>{{ prod.codigo }}</code></span>
+              @if (prod.grupo) {
+              <span>Grupo: <em>{{ prod.grupo }}</em></span>
+              }
+              <span>Stock Consolidado (Todas): <strong>{{ prod.stockActual }}</strong></span>
+            </div>
+          </div>
+          }
+        </div>
+
+        <!-- Fila 2: Sucursal Origen, Tipo de Movimiento y Cantidad -->
+        <div class="form-group">
+          <label for="movSucursalOrigen">{{ tipoMov() === 'TRASPASO' ? 'Sucursal Origen *' : 'Sucursal Afectada *' }}</label>
+          <select id="movSucursalOrigen" [ngModel]="sucursalOrigen()" (ngModelChange)="sucursalOrigen.set($event)" name="sucursalOrigen" required>
+            @for (suc of sucursalesService.sucursales(); track suc.id) {
+              <option [value]="suc.id">{{ suc.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="movTipo">Tipo de Movimiento *</label>
+          <select id="movTipo" [ngModel]="tipoMov()" (ngModelChange)="tipoMov.set($event)" name="tipo" required>
+            <option value="ENTRADA">📥 Entrada (Compra / Surtido)</option>
+            <option value="SALIDA">📤 Salida (Merma / Daño)</option>
+            <option value="AJUSTE">⚙️ Ajuste de Inventario Físico</option>
+            <option value="TRASPASO">🔄 Traspaso a otra Sucursal</option>
+          </select>
+        </div>
+
+        @if (tipoMov() === 'TRASPASO') {
+          <div class="form-group">
+            <label for="movSucDestino">Sucursal Destino *</label>
+            <select id="movSucDestino" [ngModel]="sucursalDestinoTraspaso()" (ngModelChange)="sucursalDestinoTraspaso.set($event)" name="sucDestino" required>
+              <option value="">-- Selecciona Destino --</option>
+              @for (suc of sucursalesService.sucursales(); track suc.id) {
+                @if (suc.id !== sucursalOrigen()) {
+                  <option [value]="suc.id">{{ suc.nombre }}</option>
+                }
+              }
+            </select>
+          </div>
+        }
+
+        <div class="form-group">
+          <label for="movCant">
+            {{ tipoMov() === 'AJUSTE' ? 'Nuevo Stock Real *' : 'Cantidad *' }}
+          </label>
+          <input id="movCant" type="number" [ngModel]="cantidad()" (ngModelChange)="cantidad.set(+$event)"
+            name="cantidad" [min]="tipoMov() === 'AJUSTE' ? 0 : 1" step="1" required />
+        </div>
+
+        <!-- Fila 3: Motivo / Observaciones a lo ancho -->
+        <div class="form-group col-span-full">
+          <label for="movMotivo">Motivo / Proveedor / Observaciones</label>
+          <input id="movMotivo" type="text" [ngModel]="motivo()" (ngModelChange)="motivo.set($event)" name="motivo"
+            placeholder="Ej: Compra a proveedor, conteo físico, traspaso urgente..." />
+        </div>
+
+        <div class="form-actions"
+          style="grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-top: 4px;">
+          <button type="submit" class="btn btn-primary"
+            [disabled]="!codigoSeleccionado() || cantidad() < 0 || guardando()">
+            @if (guardando()) {
+            <span>Guardando...</span>
+            } @else {
+            <span>💾 {{ tipoMov() === 'TRASPASO' ? 'Ejecutar Traspaso' : 'Registrar Movimiento' }}</span>
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Historial de Movimientos (Kardex) -->
+  <div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <span>📋 Historial de Movimientos ({{ movimientosFiltrados().length }})</span>
+        
+        <!-- Filtro por Sucursal en el Kardex -->
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label for="filtroKardexSuc" style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin: 0;">Filtrar:</label>
+          <select
+            id="filtroKardexSuc"
+            [ngModel]="sucursalFiltroKardex()"
+            (ngModelChange)="sucursalFiltroKardex.set($event)"
+            style="padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-weight: 600; color: #0284c7;"
+          >
+            <option value="TODAS">🌐 Todas las Sucursales</option>
+            @for (suc of sucursalesService.sucursales(); track suc.id) {
+              <option [value]="suc.id">🏪 {{ suc.nombre }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button type="button" class="btn btn-secondary btn-sm" (click)="onDepurarDuplicados()"
+          [disabled]="depurandoDuplicados() || guardando()"
+          title="Analiza y depura registros duplicados en la base de datos">
+          @if (depurandoDuplicados()) {
+          <span>🧹 Depurando...</span>
+          } @else {
+          <span>🧹 Depurar Duplicados</span>
+          }
+        </button>
+      </div>
+    </div>
+    <div class="card-body table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Folio / ID</th>
+            <th>Fecha y Hora</th>
+            <th>Sucursal</th>
+            <th>Tipo</th>
+            <th>Producto</th>
+            <th style="text-align: center;">Cantidad</th>
+            <th style="text-align: center;">Stock Ant.</th>
+            <th style="text-align: center;">Stock Nuevo</th>
+            <th>Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (mov of movimientosFiltrados(); track mov.id) {
+          <tr>
+            <td>
+              <span class="badge-code">{{ mov.id }}</span>
+            </td>
+            <td>{{ mov.fecha | fechaLocal }}</td>
+            <td>
+              <span class="badge badge-info" style="font-size: 0.76rem;">{{ obtenerNombreSucursal(mov.sucursalId) }}</span>
+            </td>
+            <td>
+              <span class="badge" [class.badge-success]="mov.tipo === 'ENTRADA' || mov.tipo === 'INICIAL'"
+                [class.badge-danger]="mov.tipo === 'SALIDA'" [class.badge-warning]="mov.tipo === 'AJUSTE'">
+                {{ mov.tipo === 'INICIAL' ? '🏁 INICIAL' : mov.tipo === 'ENTRADA' ? '📥 ENTRADA' : mov.tipo ===
+                'SALIDA' ? '📤 SALIDA' : '⚙️ AJUSTE' }}
+              </span>
+            </td>
+            <td>
+              <strong>{{ obtenerNombreProducto(mov) }}</strong>
+              <div style="font-size: 0.78rem; color: var(--slate);">{{ mov.codigo }}</div>
+            </td>
+            <td style="text-align: center;">
+              <strong [style.color]="mov.tipo === 'ENTRADA' ? '#16a34a' : mov.tipo === 'SALIDA' ? '#dc2626' : '#d97706'">
+                {{ mov.tipo === 'SALIDA' ? '-' : '+' }}{{ mov.cantidad }}
+              </strong>
+            </td>
+            <td style="text-align: center;">{{ mov.stockAnterior !== undefined ? mov.stockAnterior : '—' }}</td>
+            <td style="text-align: center;">
+              <strong>{{ mov.stockNuevo !== undefined ? mov.stockNuevo : '—' }}</strong>
+            </td>
+            <td>{{ mov.motivo || '—' }}</td>
+          </tr>
+          } @empty {
+          <tr>
+            <td colspan="9" style="text-align: center; color: var(--slate); padding: 30px;">
+              No hay movimientos de inventario registrados para la sucursal seleccionada.
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
