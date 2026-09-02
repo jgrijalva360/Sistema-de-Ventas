@@ -225,3 +225,62 @@ export interface BitacoraEvento {
   nivel?: 'INFO' | 'WARNING' | 'DANGER' | 'SUCCESS';
 }
 
+// ── Modelos SaaS y Control de Usuarios ─────────────────────────
+export type RolUsuario = 'SUPERADMIN' | 'ADMIN' | 'ENCARGADO' | 'CAJERO';
+
+export interface UsuarioSistema {
+  uid: string;
+  email: string;
+  nombre: string;
+  empresaId: string;
+  rol: RolUsuario;
+  sucursalId?: string;
+  sucursalNombre?: string;
+  activo: boolean;
+  fechaCreacion: string;
+  ultimoAcceso?: string;
+}
+
+export type PlanSuscripcion = 'TRIAL' | 'BASICO' | 'PRO' | 'ENTERPRISE';
+export type EstadoSuscripcion = 'ACTIVA' | 'PRUEBA' | 'VENCIDA' | 'CANCELADA';
+
+export interface SuscripcionEmpresa {
+  empresaId: string;
+  nombreNegocio: string;
+  contactoEmail: string;
+  contactoTelefono?: string;
+  plan: PlanSuscripcion;
+  estado: EstadoSuscripcion;
+  fechaInicio: string;
+  fechaVencimiento: string;
+  diasPrueba?: number;
+  limites: {
+    maxUsuarios: number;
+    maxSucursales: number;
+  };
+  codigoActivacionUsado?: string;
+  ultimoPago?: {
+    idPago?: string;
+    monto?: number;
+    metodo?: string;
+    fecha?: string;
+    referenciaExterna?: string;
+  };
+  actualizadoEn?: string;
+}
+
+export interface PlanCatalogo {
+  id: PlanSuscripcion;
+  titulo: string;
+  subtitulo: string;
+  precio: number;
+  moneda: string;
+  periodo: 'MENSUAL' | 'ANUAL';
+  meses: number;
+  destacado?: boolean;
+  caracteristicas: string[];
+  maxUsuarios: number;
+  maxSucursales: number;
+  mpPreferenceUrl?: string;
+}
+

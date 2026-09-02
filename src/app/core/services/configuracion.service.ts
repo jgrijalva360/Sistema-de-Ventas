@@ -295,12 +295,6 @@ export class ConfiguracionService {
 
       this.productosService.setProductos(productos);
       await this.firestoreService.guardarColeccionChunked('productos', productos);
-      const catRef = this.firestoreService.getRefDocConfig('catalogoProductos');
-      await setDoc(catRef, this.firestoreService.sanitizarParaFirestore({
-        items: productos,
-        total: productos.length,
-        actualizadoEn: new Date().toISOString()
-      }), { merge: true });
       productosRestaurados = productos.length;
     }
 

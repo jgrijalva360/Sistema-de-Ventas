@@ -1,0 +1,191 @@
+.suscripcion-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 20px;
+  font-family: inherit;
+}
+
+.suscripcion-card {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 520px;
+  width: 100%;
+  padding: 36px 28px;
+  text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+
+  .icon-header {
+    font-size: 3.5rem;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    color: #0f172a;
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 0 0 8px;
+  }
+
+  .subtitle {
+    color: #64748b;
+    font-size: 0.92rem;
+    margin: 0 0 20px;
+    line-height: 1.45;
+  }
+
+  .info-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 24px;
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      .label {
+        font-size: 0.78rem;
+        color: #64748b;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .badge {
+        background: #fee2e2;
+        color: #ef4444;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+      }
+    }
+  }
+
+  .activation-section {
+    background: #f0f9ff;
+    border: 1.5px solid #bae6fd;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+    text-align: left;
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0369a1;
+      margin: 0 0 6px;
+    }
+
+    p {
+      font-size: 0.82rem;
+      color: #0284c7;
+      margin: 0 0 12px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+
+      input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1.5px solid #93c5fd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        outline: none;
+
+        &:focus {
+          border-color: #0284c7;
+        }
+      }
+
+      .btn-primary {
+        background: #0284c7;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0 18px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.15s;
+
+        &:hover {
+          background: #0369a1;
+        }
+
+        &:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .msg-error {
+      margin-top: 10px;
+      color: #dc2626;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .msg-success {
+      margin-top: 10px;
+      color: #16a34a;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+  }
+
+  .contact-box {
+    margin-top: 18px;
+
+    p {
+      font-size: 0.85rem;
+      color: #475569;
+      margin: 0 0 10px;
+    }
+
+    .btn-whatsapp {
+      display: inline-block;
+      width: 100%;
+      background: #25d366;
+      color: white;
+      text-decoration: none;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+      transition: transform 0.15s, background 0.15s;
+
+      &:hover {
+        background: #20ba59;
+        transform: translateY(-1px);
+      }
+    }
+  }
+
+  .logout-link {
+    margin-top: 24px;
+
+    button {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: underline;
+
+      &:hover {
+        color: #64748b;
+      }
+    }
+  }
+}

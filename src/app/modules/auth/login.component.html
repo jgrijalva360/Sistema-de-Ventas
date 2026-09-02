@@ -41,10 +41,13 @@
         </button>
       </div>
 
-      <div class="login-footer">
+      <div class="login-footer" style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px;">
         <button type="button" class="link-btn" (click)="onForgotPassword()">
           ¿Olvidaste tu contraseña?
         </button>
+        <a routerLink="/" style="color: #0284c7; font-size: 0.85rem; font-weight: 700; text-decoration: none; margin-top: 6px;">
+          ← Volver a la página principal / Crear cuenta
+        </a>
       </div>
     </form>
   </div>

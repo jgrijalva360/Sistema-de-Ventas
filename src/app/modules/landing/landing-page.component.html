@@ -1,0 +1,230 @@
+<div class="landing-page">
+  <!-- Navbar Pública -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <span class="brand-icon">🛒</span>
+        <div class="brand-text">
+          <span class="brand-name">STOCKUP</span>
+          <span class="brand-tag">POS Cloud</span>
+        </div>
+      </div>
+
+      <nav class="nav-links">
+        <a href="#beneficios">Beneficios</a>
+        <a href="#funciones">Funciones</a>
+        <a href="#precios">Planes & Precios</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a routerLink="/login" class="btn btn-outline">Iniciar Sesión</a>
+        <button type="button" class="btn btn-primary" (click)="abrirRegistroConPlan()">
+          🚀 Prueba Gratis 15 Días
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="hero-content">
+      <div class="hero-badge">⚡ Sistema Punto de Venta en la Nube</div>
+      <h1>El Punto de Venta más rápido, intuitivo y moderno para tu negocio</h1>
+      <p class="hero-sub">
+        Controla tus ventas, inventario en tiempo real, múltiples sucursales, pedidos personalizados y cortes de caja desde cualquier dispositivo (PC, tablet o celular).
+      </p>
+
+      <div class="hero-cta">
+        <button type="button" class="btn btn-lg btn-primary" (click)="abrirRegistroConPlan()">
+          ✨ Comienza tu Prueba Gratis de 15 Días
+        </button>
+        <a href="#precios" class="btn btn-lg btn-secondary">
+          💳 Ver Planes y Precios
+        </a>
+      </div>
+
+      <div class="hero-perks">
+        <span>✓ Sin tarjeta de crédito para iniciar</span>
+        <span>✓ Configuración en menos de 2 minutos</span>
+        <span>✓ Soporte técnico incluido</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Beneficios Clave -->
+  <section id="beneficios" class="benefits-section">
+    <div class="section-title">
+      <h2>Todo lo que tu negocio necesita en un solo lugar</h2>
+      <p>Diseñado para acelerar tus ventas y evitar pérdidas de inventario.</p>
+    </div>
+
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon">💵</div>
+        <h3>Ventas en Segundos (POS)</h3>
+        <p>Búsqueda inteligente de productos, lector de código de barras, cobro mixto (efectivo, tarjeta, transferencia) y emisión rápida de tickets.</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="benefit-icon">📦</div>
+        <h3>Inventario & Kardex en Tiempo Real</h3>
+        <p>Control exacto de existencias, alertas automáticas de stock bajo y registro detallado de entradas, salidas y traspasos.</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="benefit-icon">🏢</div>
+        <h3>Multi-Sucursales & Multi-Usuario</h3>
+        <p>Conecta todas tus sucursales a una misma base de datos. Asigna roles a tus cajeros y encargados con permisos seguros.</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="benefit-icon">🎨</div>
+        <h3>Pedidos & Anticipos</h3>
+        <p>Seguimiento de pedidos personalizados, control de anticipos, abonos parciales y liquidación contra entrega.</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="benefit-icon">🔒</div>
+        <h3>Cortes de Caja Blindados</h3>
+        <p>Arqueo de turno por cajero, cálculo de dinero esperado vs contado y detección automática de sobrantes o faltantes.</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="benefit-icon">☁️</div>
+        <h3>Respaldos & Sincronización Cloud</h3>
+        <p>Tus datos siempre seguros y respaldados automáticamente. Accede desde tu casa, oficina o celular cuando lo necesites.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Planes & Precios (Mercado Pago) -->
+  <section id="precios" class="pricing-section">
+    <div class="section-title">
+      <span class="badge-pill">Planes Transparentes</span>
+      <h2>Elige el plan perfecto para crecer</h2>
+      <p>Paga mensual o anual con tarjeta, SPEI o en tiendas Oxxo mediante Mercado Pago.</p>
+    </div>
+
+    <div class="pricing-grid">
+      @for (plan of mpService.planesDisponibles(); track plan.id) {
+        <div class="pricing-card" [class.popular]="plan.destacado">
+          @if (plan.destacado) {
+            <div class="popular-ribbon">⭐ MÁS RECOMENDADO</div>
+          }
+
+          <div class="card-header">
+            <h3>{{ plan.titulo }}</h3>
+            <p class="card-desc">{{ plan.subtitulo }}</p>
+          </div>
+
+          <div class="price-box">
+            <span class="currency">$</span>
+            <span class="amount">{{ plan.precio | number }}</span>
+            <span class="unit">{{ plan.moneda }} / {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
+          </div>
+
+          <ul class="features">
+            @for (feat of plan.caracteristicas; track feat) {
+              <li>
+                <span class="icon-check">✓</span>
+                <span>{{ feat }}</span>
+              </li>
+            }
+          </ul>
+
+          <button
+            type="button"
+            class="btn btn-block"
+            [class.btn-primary]="plan.destacado"
+            [class.btn-outline]="!plan.destacado"
+            (click)="abrirRegistroConPlan(plan)"
+          >
+            {{ plan.destacado ? '🚀 Contratar Plan Pro' : 'Elegir ' + plan.titulo }}
+          </button>
+        </div>
+      }
+    </div>
+
+    <div class="payment-guarantee">
+      <span>🤝 Procesado de forma 100% segura por <strong>Mercado Pago</strong></span>
+      <div class="payment-icons">
+        <span>💳 Tarjetas de Crédito y Débito</span>
+        <span>⚡ Transferencia SPEI</span>
+        <span>🏪 Efectivo en Oxxo</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <span class="brand-icon">🛒</span>
+        <strong>STOCKUP POS</strong>
+        <p>Software de Punto de Venta en la Nube para PyMEs y Negocios en Crecimiento.</p>
+      </div>
+      <div class="footer-copy">
+        © 2026 Stockup POS. Todos los derechos reservados.
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- Modal de Registro de Nueva Empresa -->
+@if (modalRegistroAbierto()) {
+  <div class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-top">
+        <div>
+          <h3>🚀 Crea tu cuenta de negocio</h3>
+          <p>
+            @if (planSeleccionado(); as p) {
+              Contratando: <strong>{{ p.titulo }} (${{ p.precio }} {{ p.moneda }})</strong>
+            } @else {
+              Comenzando: <strong>Prueba Gratuita de 15 Días</strong>
+            }
+          </p>
+        </div>
+        <button type="button" class="btn-close" (click)="cerrarModal()">&times;</button>
+      </div>
+
+      <form (ngSubmit)="registrarseYContinuar()" class="modal-form">
+        @if (errorRegistro()) {
+          <div class="alert-box">
+            ⚠️ {{ errorRegistro() }}
+          </div>
+        }
+
+        <div class="form-group">
+          <label>Nombre de tu Negocio o Tienda *</label>
+          <input type="text" [(ngModel)]="nombreNegocio" name="nombreNegocio" placeholder="Ej: Abarrotes San Juan, Boutique Luna..." required />
+        </div>
+
+        <div class="form-group">
+          <label>Correo Electrónico (Tu cuenta Admin) *</label>
+          <input type="email" [(ngModel)]="email" name="email" placeholder="dueno@tunegocio.com" required />
+        </div>
+
+        <div class="form-group">
+          <label>Contraseña de Acceso (mínimo 6 caracteres) *</label>
+          <input type="password" [(ngModel)]="password" name="password" placeholder="••••••••" required minlength="6" />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModal()" [disabled]="registrando()">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="registrando()">
+            @if (registrando()) {
+              <span>Creando cuenta y conectando...</span>
+            } @else {
+              <span>
+                {{ planSeleccionado() ? '💳 Continuar al Pago Seguro' : '🎉 Iniciar Prueba Gratis' }}
+              </span>
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

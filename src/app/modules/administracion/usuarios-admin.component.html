@@ -1,0 +1,200 @@
+<div class="admin-page">
+  <div class="content-header">
+    <div>
+      <h2>👥 Centro de Administración & Suscripción</h2>
+      <p>Control de colaboradores, roles de acceso, sucursales asignadas y vigencia de membresía.</p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="abrirModalNuevo()">
+      ➕ Nuevo Colaborador
+    </button>
+  </div>
+
+  <!-- Tarjeta de Estado de la Suscripción -->
+  <div class="card sub-status-card" [class.warning-sub]="suscripcionService.estaPorVencer()" [class.expired-sub]="suscripcionService.estaVencida()">
+    <div class="sub-header">
+      <div class="sub-title">
+        <span class="sub-icon">👑</span>
+        <div>
+          <h3>Membresía del Sistema (Plan {{ suscripcionService.suscripcion()?.plan || 'TRIAL' }})</h3>
+          <p>Organización: <strong>{{ suscripcionService.suscripcion()?.nombreNegocio || 'Mi Negocio' }}</strong></p>
+        </div>
+      </div>
+      <div class="sub-badge" [class.badge-active]="!suscripcionService.estaVencida()" [class.badge-danger]="suscripcionService.estaVencida()">
+        {{ suscripcionService.estaVencida() ? '🔴 VENCIDA' : (suscripcionService.esTrial() ? '🟡 PERÍODO DE PRUEBA' : '🟢 ACTIVA') }}
+      </div>
+    </div>
+
+    <div class="sub-metrics">
+      <div class="metric-item">
+        <span class="lbl">Días Restantes</span>
+        <strong class="val" [style.color]="suscripcionService.estaPorVencer() ? '#ea580c' : '#0284c7'">
+          {{ suscripcionService.diasRestantes() }} día(s)
+        </strong>
+      </div>
+      <div class="metric-item">
+        <span class="lbl">Vence el</span>
+        <strong class="val">{{ (suscripcionService.suscripcion()?.fechaVencimiento | date:'dd/MM/yyyy') || '—' }}</strong>
+      </div>
+      <div class="metric-item">
+        <span class="lbl">Usuarios</span>
+        <strong class="val">{{ usuarios().length }} / {{ suscripcionService.limites().maxUsuarios }}</strong>
+      </div>
+      <div class="metric-item">
+        <span class="lbl">Sucursales</span>
+        <strong class="val">{{ sucursalesService.sucursales().length }} / {{ suscripcionService.limites().maxSucursales }}</strong>
+      </div>
+    </div>
+
+    <!-- Canjear código de renovación -->
+    <div class="renew-box" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div>
+        <span style="font-size: 0.85rem; font-weight: 700; color: #1e293b;">Extender / Renovar Suscripción con Código:</span>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <input type="text" [(ngModel)]="codigoRenovacion" placeholder="Código (ej. PRO30, ANUAL-PRO...)" style="padding: 6px 12px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-weight: 600;" />
+          <button type="button" class="btn btn-secondary btn-sm" (click)="aplicarCodigoSuscripcion()" [disabled]="renovando() || !codigoRenovacion.trim()">
+            {{ renovando() ? 'Validando...' : 'Aplicar Código' }}
+          </button>
+        </div>
+        @if (msgRenovacion()) {
+          <div style="font-size: 0.82rem; margin-top: 6px; font-weight: 600;">{{ msgRenovacion() }}</div>
+        }
+      </div>
+
+      <a routerLink="/planes" class="btn btn-primary" style="text-decoration: none; font-weight: 700; font-size: 0.88rem; background: #009ee3; border-color: #009ee3;">
+        💳 Ver Planes y Renovar con Mercado Pago
+      </a>
+    </div>
+  </div>
+
+  <!-- Listado de Colaboradores -->
+  <div class="card">
+    <div class="card-header">
+      <span>👤 Colaboradores & Accesos ({{ usuarios().length }})</span>
+    </div>
+    <div class="card-body table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre / Colaborador</th>
+            <th>Email / Cuenta</th>
+            <th>Rol de Acceso</th>
+            <th>Sucursal Asignada</th>
+            <th style="text-align: center;">Estado</th>
+            <th style="text-align: center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (u of usuarios(); track u.uid) {
+            <tr>
+              <td>
+                <strong>{{ u.nombre }}</strong>
+                @if (u.uid === authService.currentUser()?.uid) {
+                  <span class="badge badge-success" style="margin-left: 6px;">Tú</span>
+                }
+              </td>
+              <td><code>{{ u.email }}</code></td>
+              <td>
+                <select [value]="u.rol" (change)="cambiarRol(u, $event)" [disabled]="u.uid === authService.currentUser()?.uid" class="select-rol">
+                  <option value="ADMIN">🛡️ Administrador</option>
+                  <option value="ENCARGADO">👔 Encargado / Supervisor</option>
+                  <option value="CAJERO">🛒 Cajero / Vendedor</option>
+                </select>
+              </td>
+              <td>
+                <span>🏪 {{ u.sucursalNombre || 'Matriz' }}</span>
+              </td>
+              <td style="text-align: center;">
+                @if (u.activo) {
+                  <span class="badge badge-success">Activo</span>
+                } @else {
+                  <span class="badge badge-danger">Inactivo</span>
+                }
+              </td>
+              <td style="text-align: center;">
+                @if (u.uid !== authService.currentUser()?.uid) {
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    [class.btn-danger]="u.activo"
+                    [class.btn-success]="!u.activo"
+                    (click)="toggleActivo(u)"
+                  >
+                    {{ u.activo ? 'Desactivar' : 'Activar' }}
+                  </button>
+                } @else {
+                  <span style="color: #94a3b8; font-size: 0.8rem;">Principal</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 25px; color: #94a3b8;">
+                No hay otros colaboradores registrados.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nuevo Colaborador -->
+@if (modalAbierto()) {
+  <div class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>➕ Alta de Nuevo Colaborador</h3>
+        <button type="button" class="modal-close" (click)="modalAbierto.set(false)">&times;</button>
+      </div>
+
+      <form (ngSubmit)="crearColaborador()" class="modal-body form-grid">
+        @if (errorModal()) {
+          <div class="form-group" style="grid-column: 1 / -1; background: #fee2e2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+            ⚠️ {{ errorModal() }}
+          </div>
+        }
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>Nombre Completo *</label>
+          <input type="text" [(ngModel)]="nombreNuevo" name="nombreNuevo" placeholder="Ej: Juan Pérez" required />
+        </div>
+
+        <div class="form-group">
+          <label>Correo Electrónico *</label>
+          <input type="email" [(ngModel)]="emailNuevo" name="emailNuevo" placeholder="cajero@mitienda.com" required />
+        </div>
+
+        <div class="form-group">
+          <label>Contraseña Inicial (mín 6 car.) *</label>
+          <input type="password" [(ngModel)]="passNuevo" name="passNuevo" placeholder="••••••••" required minlength="6" />
+        </div>
+
+        <div class="form-group">
+          <label>Rol de Permisos *</label>
+          <select [(ngModel)]="rolNuevo" name="rolNuevo">
+            <option value="CAJERO">🛒 Cajero / Vendedor (Solo Ventas y Caja)</option>
+            <option value="ENCARGADO">👔 Encargado (Inventario, Gastos y Ventas)</option>
+            <option value="ADMIN">🛡️ Administrador (Acceso Total)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Sucursal Asignada</label>
+          <select [(ngModel)]="sucursalIdNuevo" name="sucursalIdNuevo">
+            @for (suc of sucursalesService.sucursales(); track suc.id) {
+              <option [value]="suc.id">{{ suc.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="modal-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+          <button type="button" class="btn btn-secondary" (click)="modalAbierto.set(false)" [disabled]="guardando()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="guardando()">
+            {{ guardando() ? 'Creando cuenta...' : '💾 Crear Colaborador' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

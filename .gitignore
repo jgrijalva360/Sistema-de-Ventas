@@ -8,6 +8,7 @@
 
 # Node
 /node_modules
+/functions/node_modules
 npm-debug.log
 yarn-error.log
 
@@ -43,6 +44,9 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
-# Environment variables
-./src/environments
-
+# Environment variables and secrets
+/src/environments
+.env
+.env.*
+functions/.env
+functions/.env.*

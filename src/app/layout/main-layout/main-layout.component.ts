@@ -1,5 +1,5 @@
 import { Component, signal, OnInit, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterOutlet, RouterLink } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { HeaderComponent } from '../header/header.component';
 import { SyncService } from '../../core/services/sync.service';
@@ -13,16 +13,27 @@ import { SucursalesService } from '../../core/services/sucursales.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { AuthService } from '../../core/services/auth.service';
 import { BitacoraService } from '../../core/services/bitacora.service';
+import { SuscripcionService } from '../../core/services/suscripcion.service';
 
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, HeaderComponent],
+  imports: [RouterOutlet, RouterLink, SidebarComponent, HeaderComponent],
   template: `
     <div class="app-layout">
       <app-sidebar [isOpen]="isSidebarOpen()" (closeSidebar)="isSidebarOpen.set(false)" />
 
       <div class="main-wrapper">
+        <!-- Banner Preventivo de Vencimiento de Suscripción -->
+        @if (suscripcionService.estaPorVencer()) {
+          <div class="sub-alert-banner">
+            <span>⏳ <strong>Aviso de Membresía:</strong> Tu suscripción a Stockup vence en <strong>{{ suscripcionService.diasRestantes() }} día(s)</strong>.</span>
+            @if (authService.esAdmin()) {
+              <a routerLink="/administracion" class="btn-sub-renew">Renovar Membresía</a>
+            }
+          </div>
+        }
+
         <app-header (toggleMenu)="isSidebarOpen.set(!isSidebarOpen())" />
 
         <main class="page-content">
@@ -44,6 +55,30 @@ import { BitacoraService } from '../../core/services/bitacora.service';
     .app-layout {
       display: flex;
       min-height: 100vh;
+    }
+
+    .sub-alert-banner {
+      background: linear-gradient(90deg, #b45309, #d97706);
+      color: white;
+      padding: 10px 20px;
+      font-size: 0.88rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+
+      .btn-sub-renew {
+        background: white;
+        color: #b45309;
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 4px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        &:hover { background: #fef3c7; }
+      }
     }
 
     .main-wrapper {
@@ -110,7 +145,8 @@ export class MainLayoutComponent implements OnInit {
   public isSidebarOpen = signal<boolean>(false);
 
   public syncService = inject(SyncService);
-  private authService = inject(AuthService);
+  public authService = inject(AuthService);
+  public suscripcionService = inject(SuscripcionService);
   private productosService = inject(ProductosService);
   private ventasService = inject(VentasService);
   private gastosService = inject(GastosService);

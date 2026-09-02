@@ -2,9 +2,8 @@ import { Injectable, signal, computed } from '@angular/core';
 import { Producto, StockSucursal } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { SyncService } from './sync.service';
-import { getDoc, setDoc } from 'firebase/firestore';
 import { Subscription } from 'rxjs';
-import { docStream$ } from '../utils/realtime.util';
+import { collectionStream$ } from '../utils/realtime.util';
 import { BitacoraService } from './bitacora.service';
 
 @Injectable({
@@ -96,32 +95,56 @@ export class ProductosService {
   }
 
   async cargarProductos(): Promise<Producto[]> {
+    // 1. Cargar desde chunks_productos
+    const rawList = await this.firestoreService.cargarColeccionChunked<any>('productos');
+    if (rawList.length > 0) {
+      const list = rawList.map((p) => this.normalizarProducto(p));
+      this.productosSignal.set(list);
+      return list;
+    }
+
+    // 2. Fallback de migración única: si venía del documento viejo catalogoProductos
     try {
       const catRef = this.firestoreService.getRefDocConfig('catalogoProductos');
+      const { getDoc } = await import('firebase/firestore');
       const snap = await getDoc(catRef);
       if (snap.exists() && Array.isArray(snap.data()['items']) && snap.data()['items'].length > 0) {
         const list = (snap.data()['items'] as any[]).map((p) => this.normalizarProducto(p));
         this.productosSignal.set(list);
+        await this.persistirCatalogo(list);
         return list;
       }
     } catch (_) {}
 
-    const rawList = await this.firestoreService.cargarColeccionChunked<any>('productos');
-    const list = rawList.map((p) => this.normalizarProducto(p));
-    this.productosSignal.set(list);
-    return list;
+    this.productosSignal.set([]);
+    return [];
   }
 
   iniciarEscuchadorLive(): void {
     if (this.subLiveDoc) this.subLiveDoc.unsubscribe();
 
-    const catRef = this.firestoreService.getRefDocConfig('catalogoProductos');
-    this.subLiveDoc = docStream$(catRef).subscribe({
-      next: (snap) => {
-        if (snap.exists() && Array.isArray(snap.data()['items'])) {
-          const items = (snap.data()['items'] as any[]).map((p) => this.normalizarProducto(p));
-          if (items.length > 0) {
-            this.productosSignal.set(items);
+    const chunksCollRef = this.firestoreService.getRefColeccion('chunks_productos');
+    this.subLiveDoc = collectionStream$(chunksCollRef).subscribe({
+      next: (snapshot) => {
+        if (!snapshot.empty) {
+          const chunkDocs = snapshot.docs
+            .filter((d) => d.id.startsWith('chunk_'))
+            .sort((a, b) => {
+              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+              return idxA - idxB;
+            });
+
+          const actualizados: Producto[] = [];
+          chunkDocs.forEach((d) => {
+            const data = d.data();
+            if (Array.isArray(data['items'])) {
+              actualizados.push(...data['items']);
+            }
+          });
+
+          if (actualizados.length > 0) {
+            this.productosSignal.set(actualizados.map((p) => this.normalizarProducto(p)));
           }
         }
       },
@@ -130,17 +153,8 @@ export class ProductosService {
   }
 
   private async persistirCatalogo(catalogo: Producto[]): Promise<void> {
-    const catRef = this.firestoreService.getRefDocConfig('catalogoProductos');
     const cleanCatalogo = catalogo.map((p) => this.normalizarProducto(p));
-
-    await Promise.all([
-      this.firestoreService.guardarColeccionChunked('productos', cleanCatalogo),
-      setDoc(catRef, {
-        items: cleanCatalogo,
-        total: cleanCatalogo.length,
-        actualizadoEn: new Date().toISOString()
-      }, { merge: true })
-    ]);
+    await this.firestoreService.guardarColeccionChunked('productos', cleanCatalogo);
   }
 
   obtenerStockSucursal(prod: Producto, sucursalId?: string): StockSucursal {

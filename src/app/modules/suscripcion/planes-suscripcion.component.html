@@ -1,0 +1,107 @@
+<div class="planes-container">
+  <div class="planes-header">
+    <span class="badge-tag">Membresía Stockup POS</span>
+    <h2>Elige el plan ideal para tu negocio</h2>
+    <p>Todos los planes incluyen sincronización en tiempo real, respaldos en la nube y soporte técnico.</p>
+  </div>
+
+  <div class="planes-grid">
+    @for (plan of mpService.planesDisponibles(); track plan.id) {
+      <div class="plan-card" [class.destacado]="plan.destacado">
+        @if (plan.destacado) {
+          <div class="badge-popular">⭐ MÁS POPULAR</div>
+        }
+
+        <div class="plan-top">
+          <h3>{{ plan.titulo }}</h3>
+          <p class="plan-sub">{{ plan.subtitulo }}</p>
+        </div>
+
+        <div class="plan-precio">
+          <span class="signo">$</span>
+          <span class="monto">{{ plan.precio | number }}</span>
+          <span class="moneda">{{ plan.moneda }}</span>
+          <span class="periodo">/ {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
+        </div>
+
+        <ul class="features-list">
+          @for (item of plan.caracteristicas; track item) {
+            <li>
+              <span class="check-icon">✓</span>
+              <span>{{ item }}</span>
+            </li>
+          }
+        </ul>
+
+        <button
+          type="button"
+          class="btn-plan"
+          [class.btn-destacado]="plan.destacado"
+          (click)="seleccionarPlan(plan)"
+        >
+          💳 Contratar con Mercado Pago
+        </button>
+      </div>
+    }
+  </div>
+
+  <div class="payment-methods-footer">
+    <span>🔒 Pagos 100% Seguros procesados por <strong>Mercado Pago</strong></span>
+    <div class="methods-badges">
+      <span class="method-tag">💳 Tarjetas de Débito / Crédito</span>
+      <span class="method-tag">⚡ Transferencia SPEI</span>
+      <span class="method-tag">🏪 Efectivo en Oxxo / 7-Eleven</span>
+      <span class="method-tag">🤝 Saldo Mercado Pago</span>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Checkout Mercado Pago -->
+@if (modalConfirmacion(); as p) {
+  <div class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="mp-brand">
+          <span class="mp-logo">🤝</span>
+          <h3>Checkout Seguro Mercado Pago</h3>
+        </div>
+        <button type="button" class="btn-close" (click)="cerrarModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="order-summary">
+          <div class="order-row">
+            <span>Concepto:</span>
+            <strong>Membresía {{ p.titulo }} ({{ p.periodo === 'ANUAL' ? '12 Meses' : '1 Mes' }})</strong>
+          </div>
+          <div class="order-row">
+            <span>Organización:</span>
+            <strong>{{ suscripcionService.suscripcion()?.nombreNegocio || 'Mi Negocio' }}</strong>
+          </div>
+          <div class="order-row total-row">
+            <span>Total a Pagar:</span>
+            <strong class="total-price">${{ p.precio | number }} {{ p.moneda }}</strong>
+          </div>
+        </div>
+
+        <div class="mp-security-note">
+          <span>🛡️ Serás redirigido a la pasarela cifrada de Mercado Pago para completar tu pago de forma segura.</span>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModal()" [disabled]="procesandoPlan()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-mp"
+            (click)="confirmarPagoMercadoPago()"
+            [disabled]="procesandoPlan()"
+          >
+            {{ procesandoPlan() ? 'Conectando con Mercado Pago...' : '🚀 Proceder al Pago con Mercado Pago' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

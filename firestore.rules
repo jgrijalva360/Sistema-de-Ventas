@@ -1,13 +1,40 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /sistema/{userId}/{document=**} {
-      allow read, write: if request.auth != null;
+    // Funciones auxiliares
+    function estaAutenticado() {
+      return request.auth != null;
     }
+    function getUsuarioDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    function esMiembroDeEmpresa(empresaId) {
+      return estaAutenticado() && (
+        request.auth.uid == empresaId || 
+        getUsuarioDoc().empresaId == empresaId
+      );
+    }
+    // 1. Perfiles de Usuario (/usuarios/{uid})
+    match /usuarios/{userId} {
+      // Cualquier usuario autenticado puede leer/crear/actualizar su perfil o el admin de su empresa
+      allow read: if estaAutenticado();
+      allow write: if estaAutenticado();
+    }
+    // 2. Control de Suscripciones (/suscripciones/{empresaId})
+    match /suscripciones/{empresaId} {
+      // Los miembros de la empresa pueden leer su estado de suscripción y renovarla
+      allow read: if estaAutenticado();
+      allow write: if estaAutenticado();
+    }
+    // 3. Base de Datos de la Empresa (/sistema/{empresaId}/...)
+    // Incluye chunks_productos, chunks_ventas, chunks_pedidos, chunks_cortes, config, etc.
+    match /sistema/{empresaId}/{document=**} {
+      allow read, write: if estaAutenticado() && esMiembroDeEmpresa(empresaId);
+    }
+    // 4. Versión Global del Sistema (/sistema_global/...)
     match /sistema_global/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if estaAutenticado();
     }
   }
 }

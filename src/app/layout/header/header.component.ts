@@ -36,7 +36,10 @@ import { AuthService } from '../../core/services/auth.service';
         <!-- Usuario Activo & Logout -->
         <div class="user-badge">
           <span class="user-avatar">👤</span>
-          <span class="user-email">{{ authService.currentUser()?.email || 'Usuario' }}</span>
+          <div style="display: flex; flex-direction: column; line-height: 1.2;">
+            <span class="user-email">{{ authService.nombreUsuario() }}</span>
+            <small style="font-size: 0.7rem; font-weight: 700; color: #0284c7;">{{ authService.rol() }}</small>
+          </div>
           <button type="button" class="btn-logout" (click)="authService.logout()" title="Cerrar Sesión">
             🚪 Salir
           </button>

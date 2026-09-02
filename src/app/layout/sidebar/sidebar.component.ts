@@ -1,6 +1,7 @@
 import { Component, input, output, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { SyncService } from '../../core/services/sync.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -29,34 +30,48 @@ import { SyncService } from '../../core/services/sync.service';
           <span class="nav-icon">🎨</span>
           <span>Pedidos</span>
         </a>
-        <a routerLink="/inventario" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">📦</span>
-          <span>Inventario</span>
-        </a>
-        <a routerLink="/movimientos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">🔄</span>
-          <span>Movimientos</span>
-        </a>
-        <a routerLink="/gastos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">🧾</span>
-          <span>Gastos</span>
-        </a>
+
+        @if (authService.esEncargado()) {
+          <a routerLink="/inventario" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">📦</span>
+            <span>Inventario</span>
+          </a>
+          <a routerLink="/movimientos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">🔄</span>
+            <span>Movimientos</span>
+          </a>
+          <a routerLink="/gastos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">🧾</span>
+            <span>Gastos</span>
+          </a>
+        }
+
         <a routerLink="/cortes" routerLinkActive="active" (click)="closeNav()" class="nav-item">
           <span class="nav-icon">🔒</span>
           <span>Cortes de Caja</span>
         </a>
-        <a routerLink="/reportes" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">📈</span>
-          <span>Reportes</span>
-        </a>
-        <a routerLink="/bitacora" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">📜</span>
-          <span>Bitácora</span>
-        </a>
-        <a routerLink="/configuracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">⚙️</span>
-          <span>Configuración</span>
-        </a>
+
+        @if (authService.esEncargado()) {
+          <a routerLink="/reportes" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">📈</span>
+            <span>Reportes</span>
+          </a>
+        }
+
+        @if (authService.esAdmin()) {
+          <a routerLink="/bitacora" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">📜</span>
+            <span>Bitácora</span>
+          </a>
+          <a routerLink="/administracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">👥</span>
+            <span>Administración</span>
+          </a>
+          <a routerLink="/configuracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span>Configuración</span>
+          </a>
+        }
       </nav>
 
       <!-- Badge de Versión en el Sidebar -->
@@ -196,6 +211,7 @@ export class SidebarComponent {
   public closeSidebar = output<void>();
 
   public syncService = inject(SyncService);
+  public authService = inject(AuthService);
 
   closeNav() {
     this.closeSidebar.emit();

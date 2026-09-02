@@ -4,6 +4,7 @@ import { ConfiguracionService } from '../../core/services/configuracion.service'
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { SyncService } from '../../core/services/sync.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SuscripcionService } from '../../core/services/suscripcion.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
 import { VentasService } from '../../core/services/ventas.service';
 import { PedidosService, AnalisisConsolidacion } from '../../core/services/pedidos.service';
@@ -26,6 +27,7 @@ export class ConfiguracionComponent implements AfterViewInit {
   public movimientosService = inject(MovimientosService);
   public ventasService = inject(VentasService);
   public pedidosService = inject(PedidosService);
+  public suscripcionService = inject(SuscripcionService);
   private authService = inject(AuthService);
 
   // Form Negocio (sincronizado reactivamente)
@@ -130,6 +132,12 @@ export class ConfiguracionComponent implements AfterViewInit {
   }
 
   abrirModalSucursal(): void {
+    const validacion = this.suscripcionService.puedeCrearSucursal(this.sucursalesService.sucursales().length);
+    if (!validacion.permitido) {
+      alert(`⚠️ ${validacion.mensaje}`);
+      return;
+    }
+
     this.sucursalEditando.set(null);
     this.sucursalNombre = '';
     this.sucursalDireccion = '';
