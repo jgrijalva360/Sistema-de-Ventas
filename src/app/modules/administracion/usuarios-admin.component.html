@@ -112,15 +112,26 @@
               </td>
               <td style="text-align: center;">
                 @if (u.uid !== authService.currentUser()?.uid) {
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    [class.btn-danger]="u.activo"
-                    [class.btn-success]="!u.activo"
-                    (click)="toggleActivo(u)"
-                  >
-                    {{ u.activo ? 'Desactivar' : 'Activar' }}
-                  </button>
+                  <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      [class.btn-warning]="u.activo"
+                      [class.btn-success]="!u.activo"
+                      (click)="toggleActivo(u)"
+                      title="{{ u.activo ? 'Pausar acceso temporalmente' : 'Reactivar acceso' }}"
+                    >
+                      {{ u.activo ? 'Pausar' : 'Activar' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-danger"
+                      (click)="eliminarColaborador(u)"
+                      title="Eliminar colaborador definitivamente"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 } @else {
                   <span style="color: #94a3b8; font-size: 0.8rem;">Principal</span>
                 }

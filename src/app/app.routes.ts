@@ -19,6 +19,7 @@ import { PlanesSuscripcionComponent } from './modules/suscripcion/planes-suscrip
 import { PagoResultadoComponent } from './modules/suscripcion/pago-resultado.component';
 import { UsuariosAdminComponent } from './modules/administracion/usuarios-admin.component';
 import { LandingPageComponent } from './modules/landing/landing-page.component';
+import { SuperAdminComponent } from './modules/super-admin/super-admin.component';
 
 export const routes: Routes = [
   {
@@ -49,7 +50,7 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
-    path: 'app',
+    path: '',
     component: MainLayoutComponent,
     canActivate: [authGuard, subscriptionGuard],
     children: [
@@ -65,63 +66,8 @@ export const routes: Routes = [
       { path: 'bitacora', component: BitacoraComponent, canActivate: [roleGuard(['ADMIN'])] },
       { path: 'configuracion', component: ConfiguracionComponent, canActivate: [roleGuard(['ADMIN'])] },
       { path: 'administracion', component: UsuariosAdminComponent, canActivate: [roleGuard(['ADMIN'])] },
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
+      { path: 'super-admin', component: SuperAdminComponent, canActivate: [roleGuard(['SUPERADMIN'])] }
     ]
-  },
-  {
-    path: 'dashboard',
-    redirectTo: 'app/dashboard',
-    pathMatch: 'full'
-  },
-  {
-    path: 'ventas',
-    redirectTo: 'app/ventas',
-    pathMatch: 'full'
-  },
-  {
-    path: 'inventario',
-    redirectTo: 'app/inventario',
-    pathMatch: 'full'
-  },
-  {
-    path: 'pedidos',
-    redirectTo: 'app/pedidos',
-    pathMatch: 'full'
-  },
-  {
-    path: 'cortes',
-    redirectTo: 'app/cortes',
-    pathMatch: 'full'
-  },
-  {
-    path: 'reportes',
-    redirectTo: 'app/reportes',
-    pathMatch: 'full'
-  },
-  {
-    path: 'configuracion',
-    redirectTo: 'app/configuracion',
-    pathMatch: 'full'
-  },
-  {
-    path: 'administracion',
-    redirectTo: 'app/administracion',
-    pathMatch: 'full'
-  },
-  {
-    path: 'bitacora',
-    redirectTo: 'app/bitacora',
-    pathMatch: 'full'
-  },
-  {
-    path: 'movimientos',
-    redirectTo: 'app/movimientos',
-    pathMatch: 'full'
-  },
-  {
-    path: 'gastos',
-    redirectTo: 'app/gastos',
-    pathMatch: 'full'
   },
   {
     path: '**',

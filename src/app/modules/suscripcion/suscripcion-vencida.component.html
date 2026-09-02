@@ -6,7 +6,8 @@
 
     <h2>Tu suscripción ha expirado</h2>
     <p class="subtitle">
-      El período de uso de tu membresía o prueba para <strong>{{ suscripcionService.suscripcion()?.nombreNegocio || 'tu negocio' }}</strong> ha concluido.
+      El período de uso de tu membresía o prueba para <strong>{{ suscripcionService.suscripcion()?.nombreNegocio || 'tu
+        negocio' }}</strong> ha concluido.
     </p>
 
     <div class="info-box">
@@ -26,29 +27,25 @@
       <p>Ingresa la clave proporcionada por tu asesor para desbloquear tu acceso de inmediato:</p>
 
       <div class="input-row">
-        <input
-          type="text"
-          [(ngModel)]="codigoActivacion"
-          placeholder="Ej: PRO30, ANUAL-PRO..."
-          [disabled]="activando()"
-          (keyup.enter)="activarCodigo()"
-        />
+        <input type="text" [(ngModel)]="codigoActivacion" placeholder="Ej: PRO30, ANUAL-PRO..." [disabled]="activando()"
+          (keyup.enter)="activarCodigo()" />
         <button class="btn btn-primary" (click)="activarCodigo()" [disabled]="activando() || !codigoActivacion.trim()">
           {{ activando() ? 'Verificando...' : 'Desbloquear' }}
         </button>
       </div>
 
       @if (errorMsg()) {
-        <div class="msg-error">⚠️ {{ errorMsg() }}</div>
+      <div class="msg-error">⚠️ {{ errorMsg() }}</div>
       }
       @if (successMsg()) {
-        <div class="msg-success">{{ successMsg() }}</div>
+      <div class="msg-success">{{ successMsg() }}</div>
       }
     </div>
 
     <!-- Botón a Planes Mercado Pago -->
     <div style="margin-bottom: 20px;">
-      <a routerLink="/planes" class="btn btn-primary" style="display: block; text-decoration: none; padding: 12px; font-weight: 800; border-radius: 10px; background: #009ee3; color: white;">
+      <a routerLink="/planes" class="btn btn-primary"
+        style="display: block; text-decoration: none; padding: 12px; font-weight: 800; border-radius: 10px; background: #009ee3; color: white;">
         💳 Ver Planes y Renovar con Mercado Pago
       </a>
     </div>
@@ -56,11 +53,8 @@
     <!-- Contacto Directo WhatsApp -->
     <div class="contact-box">
       <p>¿Deseas contratar o renovar tu suscripción mensual / anual?</p>
-      <a
-        href="https://wa.me/521234567890?text=Hola,%20deseo%20renovar%20mi%20suscripción%20del%20sistema%20de%20ventas"
-        target="_blank"
-        class="btn btn-whatsapp"
-      >
+      <a href="https://wa.me/525563682544?text=Hola,%20deseo%20renovar%20mi%20suscripción%20del%20sistema%20de%20ventas"
+        target="_blank" class="btn btn-whatsapp">
         💬 Contactar a Soporte y Ventas por WhatsApp
       </a>
     </div>

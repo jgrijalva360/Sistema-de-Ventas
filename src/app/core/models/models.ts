@@ -281,6 +281,22 @@ export interface PlanCatalogo {
   caracteristicas: string[];
   maxUsuarios: number;
   maxSucursales: number;
+  maxProductos?: number;
   mpPreferenceUrl?: string;
 }
+
+export interface CodigoPromocional {
+  id?: string;
+  codigo: string;
+  diasOtorgados: number;
+  planAsignado: PlanSuscripcion;
+  usosMaximos: number;
+  usosActuales: number;
+  activo: boolean;
+  fechaCreacion: string;
+  expiraEn?: string;
+  descripcion?: string;
+  empresasQueCanjearon?: string[];
+}
+
 

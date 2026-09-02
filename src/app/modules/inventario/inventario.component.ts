@@ -5,6 +5,7 @@ import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
 import { ProductosService } from '../../core/services/productos.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
+import { SuscripcionService } from '../../core/services/suscripcion.service';
 import { Producto, StockSucursal } from '../../core/models/models';
 import { renderBarcodeToCanvas } from '../../shared/utils/barcode.util';
 
@@ -68,6 +69,7 @@ export class InventarioComponent implements AfterViewInit {
   public productosService = inject(ProductosService);
   public movimientosService = inject(MovimientosService);
   public sucursalesService = inject(SucursalesService);
+  public suscripcionService = inject(SuscripcionService);
 
   ngAfterViewInit(): void {
     setTimeout(() => this.busquedaInputRef?.nativeElement.focus(), 100);
@@ -126,10 +128,15 @@ export class InventarioComponent implements AfterViewInit {
   // ── Métodos de Gestión y Registro de Productos ───────────────
   toggleFormularioRegistro(): void {
     const nuevoEstado = !this.formularioRegistroVisible();
-    this.formularioRegistroVisible.set(nuevoEstado);
     if (nuevoEstado) {
+      const validacion = this.suscripcionService.puedeCrearProducto(this.productosService.productos().length);
+      if (!validacion.permitido) {
+        alert(`⚠️ ${validacion.mensaje}`);
+        return;
+      }
       setTimeout(() => this.nuevoCodigoInputRef?.nativeElement.focus(), 150);
     }
+    this.formularioRegistroVisible.set(nuevoEstado);
   }
 
   sugerirCodigo(): void {
@@ -200,6 +207,12 @@ export class InventarioComponent implements AfterViewInit {
   }
 
   async onGuardarNuevo(): Promise<void> {
+    const validacion = this.suscripcionService.puedeCrearProducto(this.productosService.productos().length);
+    if (!validacion.permitido) {
+      alert(`⚠️ ${validacion.mensaje}`);
+      return;
+    }
+
     if (!this.nuevoProducto.codigo || !this.nuevoProducto.nombre) {
       alert('Por favor ingresa el código y nombre del producto.');
       return;

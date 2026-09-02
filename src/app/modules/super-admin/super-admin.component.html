@@ -1,0 +1,572 @@
+<div class="super-admin-page">
+  <!-- Encabezado del Panel Master SaaS -->
+  <div class="page-header">
+    <div class="header-titles">
+      <h1>🛡️ Panel Master SaaS (Super Administrador)</h1>
+      <p>Gestión global de empresas clientes, estados de suscripción y renovaciones manuales.</p>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" (click)="cargarEmpresas()" [disabled]="cargando()">
+      {{ cargando() ? '🔄 Actualizando...' : '🔄 Refrescar Lista' }}
+    </button>
+  </div>
+
+  <!-- Pestañas de Navegación Master SaaS -->
+  <div class="saas-tabs" style="display: flex; gap: 12px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+    <button
+      type="button"
+      class="tab-btn"
+      [class.active]="pestanaActiva() === 'EMPRESAS'"
+      (click)="pestanaActiva.set('EMPRESAS')"
+    >
+      🏢 Empresas & Clientes ({{ empresas().length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.active]="pestanaActiva() === 'CODIGOS'"
+      (click)="pestanaActiva.set('CODIGOS')"
+    >
+      🎟️ Códigos Promocionales ({{ codigos().length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.active]="pestanaActiva() === 'PLANES'"
+      (click)="pestanaActiva.set('PLANES')"
+    >
+      💳 Catálogo de Planes & Precios
+    </button>
+  </div>
+
+  @if (pestanaActiva() === 'EMPRESAS') {
+    <!-- Métricas Globales del Negocio SaaS -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="m-icon">🏢</div>
+        <div class="m-info">
+          <span class="m-lbl">Total Empresas Registradas</span>
+          <strong class="m-val">{{ empresas().length }}</strong>
+        </div>
+      </div>
+
+      <div class="metric-card active-card">
+        <div class="m-icon">🟢</div>
+        <div class="m-info">
+          <span class="m-lbl">Suscripciones Activas (De Pago)</span>
+          <strong class="m-val">{{ totalEmpresasActivas() }}</strong>
+        </div>
+      </div>
+
+      <div class="metric-card trial-card">
+        <div class="m-icon">🟡</div>
+        <div class="m-info">
+          <span class="m-lbl">En Período de Prueba (15 Días)</span>
+          <strong class="m-val">{{ totalEnTrial() }}</strong>
+        </div>
+      </div>
+
+      <div class="metric-card expired-card">
+        <div class="m-icon">🔴</div>
+        <div class="m-info">
+          <span class="m-lbl">Suscripciones Vencidas</span>
+          <strong class="m-val">{{ totalVencidas() }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtros y Búsqueda -->
+    <div class="filter-card">
+      <div class="filter-group flex-1">
+        <label>Buscar Empresa o Correo:</label>
+        <input
+          type="text"
+          [ngModel]="filtroTexto()"
+          (ngModelChange)="filtroTexto.set($event)"
+          placeholder="Nombre de negocio, email o ID de empresa..."
+        />
+      </div>
+
+      <div class="filter-group">
+        <label>Filtrar por Plan:</label>
+        <select [ngModel]="filtroPlan()" (ngModelChange)="filtroPlan.set($event)">
+          <option value="TODOS">Todos los Planes</option>
+          <option value="TRIAL">Prueba (Trial)</option>
+          <option value="BASICO">Plan Básico ($299)</option>
+          <option value="PRO">Plan Pro ($499)</option>
+          <option value="ENTERPRISE">Plan Anual VIP ($4,990)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Estado:</label>
+        <select [ngModel]="filtroEstado()" (ngModelChange)="filtroEstado.set($event)">
+          <option value="TODOS">Todos los Estados</option>
+          <option value="ACTIVA">Activas</option>
+          <option value="PRUEBA">Prueba</option>
+          <option value="VENCIDA">Vencidas</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tabla de Clientes SaaS -->
+    <div class="table-card">
+      <table class="saas-table">
+        <thead>
+          <tr>
+            <th>Negocio / Empresa</th>
+            <th>Contacto</th>
+            <th>Plan Actual</th>
+            <th>Estado</th>
+            <th>Días Restantes</th>
+            <th>Fecha Vencimiento</th>
+            <th style="text-align: right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (emp of empresasFiltradas(); track emp.empresaId) {
+            <tr>
+              <td>
+                <div class="business-cell">
+                  <strong>{{ emp.nombreNegocio || 'Sin Nombre' }}</strong>
+                  <span class="tenant-id">ID: {{ emp.empresaId }}</span>
+                </div>
+              </td>
+              <td>
+                <div class="contact-cell">
+                  <span>{{ emp.contactoEmail || '—' }}</span>
+                  @if (emp.contactoTelefono) {
+                    <small>{{ emp.contactoTelefono }}</small>
+                  }
+                </div>
+              </td>
+              <td>
+                <span class="plan-badge plan-{{ (emp.plan || 'TRIAL').toLowerCase() }}">
+                  {{ emp.plan || 'TRIAL' }}
+                </span>
+              </td>
+              <td>
+                @if (emp.estado === 'ACTIVA') {
+                  <span class="status-pill status-active">🟢 ACTIVA</span>
+                } @else if (emp.estado === 'PRUEBA') {
+                  <span class="status-pill status-trial">🟡 PRUEBA</span>
+                } @else {
+                  <span class="status-pill status-expired">🔴 VENCIDA</span>
+                }
+              </td>
+              <td>
+                <strong [style.color]="calcularDiasRestantes(emp.fechaVencimiento) <= 5 ? '#dc2626' : '#0284c7'">
+                  {{ calcularDiasRestantes(emp.fechaVencimiento) }} día(s)
+                </strong>
+              </td>
+              <td>
+                <span class="date-txt">
+                  {{ (emp.fechaVencimiento | date:'dd/MM/yyyy HH:mm') || '—' }}
+                </span>
+              </td>
+              <td style="text-align: right;">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  (click)="abrirModalEditar(emp)"
+                  title="Extender o cambiar plan manualmente"
+                >
+                  ⚙️ Gestionar Vigencia
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-state">
+                No se encontraron empresas registradas con los filtros actuales.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else if (pestanaActiva() === 'CODIGOS') {
+    <!-- Sección de Códigos Promocionales -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div>
+        <h2 style="margin: 0; font-size: 1.3rem; font-weight: 800; color: #0f172a;">🎟️ Códigos Promocionales y de Activación</h2>
+        <p style="margin: 4px 0 0; font-size: 0.88rem; color: #64748b;">
+          Crea cupones con días de regalo (ej: 30 días de Plan Pro) para marketing, influencers o convenios.
+        </p>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="abrirModalNuevoCodigo()">
+        ➕ Crear Nuevo Código
+      </button>
+    </div>
+
+    <div class="table-card">
+      <table class="saas-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Días de Regalo</th>
+            <th>Plan Otorgado</th>
+            <th>Usos (Actual / Máx)</th>
+            <th>Estado</th>
+            <th>Fecha Expiración</th>
+            <th>Descripción / Campaña</th>
+            <th style="text-align: right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of codigos(); track c.codigo) {
+            <tr>
+              <td>
+                <strong style="font-size: 1.05rem; letter-spacing: 0.5px; color: #0284c7; background: #e0f2fe; padding: 4px 10px; border-radius: 6px; font-family: monospace;">
+                  {{ c.codigo }}
+                </strong>
+              </td>
+              <td>
+                <strong>+{{ c.diasOtorgados }} Días</strong>
+              </td>
+              <td>
+                <span class="plan-badge plan-{{ (c.planAsignado || 'PRO').toLowerCase() }}">
+                  {{ c.planAsignado }}
+                </span>
+              </td>
+              <td>
+                <span>{{ c.usosActuales || 0 }} / {{ c.usosMaximos > 0 ? c.usosMaximos : '∞ Ilimitado' }}</span>
+              </td>
+              <td>
+                @if (c.activo) {
+                  <span class="status-pill status-active">🟢 ACTIVO</span>
+                } @else {
+                  <span class="status-pill status-expired">🔴 PAUSADO</span>
+                }
+              </td>
+              <td>
+                <span>{{ (c.expiraEn | date:'dd/MM/yyyy') || 'Sin expiración' }}</span>
+              </td>
+              <td>
+                <small style="color: #64748b;">{{ c.descripcion || '—' }}</small>
+              </td>
+              <td style="text-align: right;">
+                <div style="display: inline-flex; gap: 6px;">
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    [class.btn-secondary]="c.activo"
+                    [class.btn-primary]="!c.activo"
+                    (click)="toggleActivoCodigo(c)"
+                  >
+                    {{ c.activo ? 'Pausar' : 'Activar' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    style="background: #fee2e2; color: #dc2626; border-color: #fca5a5;"
+                    (click)="eliminarCodigo(c)"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="empty-state">
+                No hay códigos promocionales creados. Haz clic en "Crear Nuevo Código" para generar tu primer cupón.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else if (pestanaActiva() === 'PLANES') {
+    <!-- Sección de Planes & Precios -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div>
+        <h2 style="margin: 0; font-size: 1.3rem; font-weight: 800; color: #0f172a;">💳 Catálogo de Planes & Precios</h2>
+        <p style="margin: 4px 0 0; font-size: 0.88rem; color: #64748b;">
+          Modifica los precios, características y límites de los planes. Los cambios se sincronizan en vivo en la Landing Page, pantalla de renovación y Mercado Pago.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+      @for (plan of mpService.planesDisponibles(); track plan.id) {
+        <div style="background: white; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <span class="plan-badge plan-{{ plan.id.toLowerCase() }}" style="margin-bottom: 6px;">{{ plan.id }}</span>
+                <h3 style="margin: 4px 0 0; font-size: 1.3rem; font-weight: 800;">{{ plan.titulo }}</h3>
+              </div>
+              @if (plan.destacado) {
+                <span style="background: #fef3c7; color: #b45309; font-size: 0.72rem; font-weight: 800; padding: 4px 8px; border-radius: 6px;">⭐ DESTACADO</span>
+              }
+            </div>
+
+            <p style="font-size: 0.85rem; color: #64748b; margin: 0 0 16px; min-height: 38px;">{{ plan.subtitulo }}</p>
+
+            <div style="background: #f8fafc; padding: 14px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+              <div style="font-size: 1.8rem; font-weight: 900; color: #0f172a;">
+                ${{ plan.precio | number }} <span style="font-size: 0.85rem; font-weight: 700; color: #64748b;">{{ plan.moneda }} / {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
+              </div>
+              <div style="display: flex; gap: 14px; margin-top: 8px; font-size: 0.8rem; font-weight: 700; color: #475569; flex-wrap: wrap;">
+                <span>👥 {{ plan.maxUsuarios }} usuario(s)</span>
+                <span>🏪 {{ plan.maxSucursales }} sucursal(es)</span>
+                <span>📦 {{ plan.maxProductos || (plan.id === 'BASICO' ? 500 : (plan.id === 'PRO' ? 5000 : 50000)) }} productos</span>
+              </div>
+            </div>
+
+            <strong style="font-size: 0.82rem; color: #334155; text-transform: uppercase;">Características incluidas:</strong>
+            <ul style="list-style: none; padding: 0; margin: 8px 0 20px; display: flex; flex-direction: column; gap: 6px;">
+              @for (feat of plan.caracteristicas; track feat) {
+                <li style="font-size: 0.85rem; color: #475569; display: flex; gap: 8px;">
+                  <span style="color: #10b981; font-weight: 900;">✓</span>
+                  <span>{{ feat }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-primary"
+            style="width: 100%; justify-content: center; font-weight: 700;"
+            (click)="abrirModalEditarPlan(plan)"
+          >
+            ✏️ Modificar Plan & Precio
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- Modal de Edición de Plan de Catálogo -->
+@if (modalEditarPlan(); as plan) {
+  <div class="modal-backdrop">
+    <div class="modal-box" style="max-width: 580px;">
+      <div class="modal-top">
+        <div>
+          <h3>✏️ Modificar {{ plan.titulo }}</h3>
+          <p>Los cambios se reflejarán en toda la plataforma inmediatamente</p>
+        </div>
+        <button type="button" class="btn-close" (click)="cerrarModalEditarPlan()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        @if (errorPlanModal()) {
+          <div class="alert-error">{{ errorPlanModal() }}</div>
+        }
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="form-group">
+            <label>Título del Plan: *</label>
+            <input type="text" [(ngModel)]="planEditTitulo" placeholder="Ej: Plan Pro Plus" />
+          </div>
+
+          <div class="form-group">
+            <label>Precio de Venta ($ MXN): *</label>
+            <input type="number" [(ngModel)]="planEditPrecio" placeholder="499" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Subtítulo / Breve descripción:</label>
+          <input type="text" [(ngModel)]="planEditSubtitulo" placeholder="Ideal para negocios con sucursales..." />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Máx Usuarios:</label>
+            <input type="number" [(ngModel)]="planEditMaxUsuarios" />
+          </div>
+
+          <div class="form-group">
+            <label>Máx Sucursales:</label>
+            <input type="number" [(ngModel)]="planEditMaxSucursales" />
+          </div>
+
+          <div class="form-group">
+            <label>Máx Productos:</label>
+            <input type="number" [(ngModel)]="planEditMaxProductos" />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="form-group">
+            <label>Período de Facturación:</label>
+            <select [(ngModel)]="planEditPeriodo">
+              <option value="MENSUAL">Mensual (1 Mes)</option>
+              <option value="ANUAL">Anual (12 Meses)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 22px;">
+            <input type="checkbox" id="destacadoCheck" [(ngModel)]="planEditDestacado" style="width: 18px; height: 18px;" />
+            <label for="destacadoCheck" style="margin: 0; cursor: pointer;">⭐ Marcar como Plan Más Recomendado</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Características del Plan (Una por línea):</label>
+          <textarea
+            [(ngModel)]="planEditCaracteristicasTexto"
+            rows="6"
+            placeholder="Hasta 6 usuarios&#10;Hasta 3 sucursales&#10;Kardex en vivo..."
+            style="padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.88rem; font-family: inherit;"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModalEditarPlan()" [disabled]="guardandoPlan()">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" (click)="guardarCambiosPlan()" [disabled]="guardandoPlan()">
+          {{ guardandoPlan() ? 'Guardando...' : '💾 Guardar y Publicar Cambios' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal de Edición Manual de Suscripción -->
+@if (modalEditar(); as emp) {
+  <div class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-top">
+        <div>
+          <h3>⚙️ Gestionar Suscripción de Cliente</h3>
+          <p>{{ emp.nombreNegocio }} ({{ emp.contactoEmail }})</p>
+        </div>
+        <button type="button" class="btn-close" (click)="cerrarModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        @if (mensajeModal()) {
+          <div class="alert-error">{{ mensajeModal() }}</div>
+        }
+
+        <div class="form-group">
+          <label>Plan de Suscripción Asignado:</label>
+          <select [(ngModel)]="planSeleccionado">
+            <option value="TRIAL">Prueba (Trial 15 Días)</option>
+            <option value="BASICO">Plan Básico ($299 MXN)</option>
+            <option value="PRO">Plan Pro ($499 MXN)</option>
+            <option value="ENTERPRISE">Plan Anual VIP ($4,990 MXN)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Estado de Membresía:</label>
+          <select [(ngModel)]="estadoSeleccionado">
+            <option value="ACTIVA">🟢 ACTIVA (Acceso Permitido)</option>
+            <option value="PRUEBA">🟡 EN PRUEBA</option>
+            <option value="VENCIDA">🔴 VENCIDA (Bloquear Acceso)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Sumar / Extender Días a la Vigencia:</label>
+          <div class="days-buttons">
+            <button type="button" class="btn-pill" (click)="diasSumar = 15" [class.selected]="diasSumar === 15">+15 Días</button>
+            <button type="button" class="btn-pill" (click)="diasSumar = 30" [class.selected]="diasSumar === 30">+30 Días (1 Mes)</button>
+            <button type="button" class="btn-pill" (click)="diasSumar = 90" [class.selected]="diasSumar === 90">+90 Días (3 Meses)</button>
+            <button type="button" class="btn-pill" (click)="diasSumar = 365" [class.selected]="diasSumar === 365">+365 Días (1 Año)</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input type="number" [(ngModel)]="diasSumar" style="width: 100px;" />
+            <span style="font-size: 0.85rem; color: #64748b;">días a agregar a partir de hoy o de su fecha de vencimiento actual.</span>
+          </div>
+        </div>
+
+        <div class="current-info-box">
+          <div><strong>Vence actualmente:</strong> {{ (emp.fechaVencimiento | date:'dd/MM/yyyy HH:mm') || '—' }}</div>
+          <div><strong>Días restantes actuales:</strong> {{ calcularDiasRestantes(emp.fechaVencimiento) }} días</div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModal()" [disabled]="guardando()">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" (click)="guardarCambiosVigencia()" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando...' : '💾 Aplicar Cambios de Vigencia' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal de Crear Nuevo Código Promocional -->
+@if (modalNuevoCodigo()) {
+  <div class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-top">
+        <div>
+          <h3>🎟️ Crear Código Promocional / Cupón</h3>
+          <p>Genera un código que cualquier empresa podrá canjear</p>
+        </div>
+        <button type="button" class="btn-close" (click)="cerrarModalNuevoCodigo()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        @if (errorCodigoModal()) {
+          <div class="alert-error">{{ errorCodigoModal() }}</div>
+        }
+
+        <div class="form-group">
+          <label>Código del Cupón (Mayúsculas, ej: PROMO30, INAUGURACION, VIP2026): *</label>
+          <input
+            type="text"
+            [(ngModel)]="codigoNuevo"
+            placeholder="EJ: VERANO30"
+            style="font-family: monospace; font-weight: 800; text-transform: uppercase;"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Plan que otorgará al canjearse:</label>
+          <select [(ngModel)]="planCodigo">
+            <option value="BASICO">Plan Básico ($299)</option>
+            <option value="PRO">Plan Pro ($499)</option>
+            <option value="ENTERPRISE">Plan Anual VIP ($4,990)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Días de Acceso Gratis a Otorgar:</label>
+          <div class="days-buttons">
+            <button type="button" class="btn-pill" (click)="diasCodigo = 15" [class.selected]="diasCodigo === 15">15 Días</button>
+            <button type="button" class="btn-pill" (click)="diasCodigo = 30" [class.selected]="diasCodigo === 30">30 Días (1 Mes)</button>
+            <button type="button" class="btn-pill" (click)="diasCodigo = 60" [class.selected]="diasCodigo === 60">60 Días (2 Meses)</button>
+            <button type="button" class="btn-pill" (click)="diasCodigo = 365" [class.selected]="diasCodigo === 365">365 Días (1 Año)</button>
+          </div>
+          <input type="number" [(ngModel)]="diasCodigo" style="margin-top: 8px; width: 120px;" />
+        </div>
+
+        <div class="form-group">
+          <label>Límite Máximo de Usos (0 = Ilimitado):</label>
+          <input type="number" [(ngModel)]="usosMaximosCodigo" placeholder="10" />
+        </div>
+
+        <div class="form-group">
+          <label>Fecha Límite de Expiración (Opcional):</label>
+          <input type="date" [(ngModel)]="expiraEnCodigo" />
+        </div>
+
+        <div class="form-group">
+          <label>Descripción / Campaña (Para tu control interno):</label>
+          <input type="text" [(ngModel)]="descripcionCodigo" placeholder="Ej: Campaña Facebook Septiembre..." />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModalNuevoCodigo()" [disabled]="guardandoCodigo()">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" (click)="guardarNuevoCodigo()" [disabled]="guardandoCodigo()">
+          {{ guardandoCodigo() ? 'Creando...' : '🎉 Guardar y Activar Cupón' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

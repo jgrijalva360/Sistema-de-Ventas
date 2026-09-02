@@ -162,6 +162,22 @@ export class UsuariosAdminComponent implements OnInit {
     await this.cargarUsuarios();
   }
 
+  async eliminarColaborador(u: UsuarioSistema): Promise<void> {
+    if (u.uid === this.authService.currentUser()?.uid) {
+      alert('No puedes eliminar tu propia cuenta de Administrador principal.');
+      return;
+    }
+
+    if (confirm(`⚠️ ¿Estás seguro de eliminar a "${u.nombre}" (${u.email})? Esta acción revocará su acceso de forma permanente.`)) {
+      try {
+        await this.authService.eliminarUsuarioEmpresa(u.uid);
+        await this.cargarUsuarios();
+      } catch (err: any) {
+        alert('❌ Error al eliminar colaborador: ' + (err.message || err));
+      }
+    }
+  }
+
   async aplicarCodigoSuscripcion(): Promise<void> {
     if (!this.codigoRenovacion.trim()) return;
     this.renovando.set(true);

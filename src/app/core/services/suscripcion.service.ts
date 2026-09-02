@@ -26,7 +26,7 @@ export class SuscripcionService {
         return { maxUsuarios: 99, maxSucursales: 10, maxProductos: 50000, nombre: 'Plan Anual VIP' };
       case 'TRIAL':
       default:
-        return { maxUsuarios: 5, maxSucursales: 3, maxProductos: 1000, nombre: 'Período de Prueba' };
+        return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 300, nombre: 'Período de Prueba' };
     }
   });
 
@@ -78,9 +78,20 @@ export class SuscripcionService {
     return { permitido: true };
   }
 
+  public puedeCrearProducto(cantidadActual: number): { permitido: boolean; mensaje?: string } {
+    const max = this.limites().maxProductos;
+    if (cantidadActual >= max) {
+      return {
+        permitido: false,
+        mensaje: `Has alcanzado el límite máximo de ${max} productos permitidos en tu ${this.limites().nombre}. Mejora tu plan para ampliar tu catálogo.`
+      };
+    }
+    return { permitido: true };
+  }
+
   private subLive?: Subscription;
 
-  constructor(private fb: FirebaseService) {}
+  constructor(private fb: FirebaseService) { }
 
   /**
    * Obtiene o inicializa la suscripción de una empresa en Firestore.
@@ -146,7 +157,7 @@ export class SuscripcionService {
     const subRef = doc(this.fb.firestore, 'suscripciones', empresaId);
     const current = this.suscripcionSignal();
 
-    const baseDate = (current && !this.estaVencida()) 
+    const baseDate = (current && !this.estaVencida())
       ? new Date(current.fechaVencimiento)
       : new Date();
 
@@ -163,10 +174,54 @@ export class SuscripcionService {
   }
 
   /**
-   * Valida un código de activación manual/promocional
+   * Valida y canjea un código de activación / promocional en Firestore
    */
   async activarConCodigo(empresaId: string, codigo: string): Promise<boolean> {
     const cod = (codigo || '').trim().toUpperCase();
+    if (!cod) throw new Error('Ingresa un código.');
+
+    const { collection, getDocs, query, where, updateDoc } = await import('firebase/firestore');
+
+    // 1. Buscar en la colección de códigos promocionales dinámicos
+    const codRef = doc(this.fb.firestore, 'codigos_promocionales', cod);
+    const snap = await getDoc(codRef);
+
+    if (snap.exists()) {
+      const data = snap.data() as import('../models/models').CodigoPromocional;
+
+      if (!data.activo) {
+        throw new Error('Este código promocional ha sido desactivado.');
+      }
+
+      if (data.expiraEn && new Date(data.expiraEn).getTime() < Date.now()) {
+        throw new Error('Este código promocional ya expiró.');
+      }
+
+      if (data.usosMaximos > 0 && (data.usosActuales || 0) >= data.usosMaximos) {
+        throw new Error('Este código ya alcanzó el límite máximo de usos.');
+      }
+
+      const empresasUsadas = data.empresasQueCanjearon || [];
+      if (empresasUsadas.includes(empresaId)) {
+        throw new Error('Tu empresa ya ha utilizado este código promocional anteriormente.');
+      }
+
+      // Aplicar días a la empresa
+      const dias = data.diasOtorgados || 30;
+      await this.modificarVigenciaManual(empresaId, dias, data.planAsignado || 'PRO', 'ACTIVA');
+
+      // Incrementar uso del código
+      empresasUsadas.push(empresaId);
+      await updateDoc(codRef, {
+        usosActuales: (data.usosActuales || 0) + 1,
+        empresasQueCanjearon: empresasUsadas,
+        actualizadoEn: new Date().toISOString()
+      });
+
+      return true;
+    }
+
+    // 2. Códigos estáticos universales de respaldo
     let meses = 0;
     let plan: PlanSuscripcion = 'BASICO';
 
@@ -185,5 +240,88 @@ export class SuscripcionService {
 
     await this.renovarSuscripcion(empresaId, meses, plan);
     return true;
+  }
+
+  // ── Métodos para el Super Administrador (Master SaaS) ─────────────
+
+  /**
+   * Obtiene la lista completa de códigos promocionales creados
+   */
+  async listarCodigosPromocionales(): Promise<import('../models/models').CodigoPromocional[]> {
+    const { collection, getDocs } = await import('firebase/firestore');
+    const colRef = collection(this.fb.firestore, 'codigos_promocionales');
+    const snap = await getDocs(colRef);
+    const list: import('../models/models').CodigoPromocional[] = [];
+    snap.forEach((d) => {
+      list.push({ ...d.data(), id: d.id } as import('../models/models').CodigoPromocional);
+    });
+    return list;
+  }
+
+  /**
+   * Crea o actualiza un código promocional en Firestore
+   */
+  async guardarCodigoPromocional(codigoData: import('../models/models').CodigoPromocional): Promise<void> {
+    const codigoUpper = codigoData.codigo.trim().toUpperCase();
+    const codRef = doc(this.fb.firestore, 'codigos_promocionales', codigoUpper);
+    await setDoc(codRef, {
+      ...codigoData,
+      codigo: codigoUpper,
+      actualizadoEn: new Date().toISOString()
+    }, { merge: true });
+  }
+
+  /**
+   * Elimina un código promocional
+   */
+  async eliminarCodigoPromocional(codigo: string): Promise<void> {
+    const { deleteDoc } = await import('firebase/firestore');
+    const codRef = doc(this.fb.firestore, 'codigos_promocionales', codigo.trim().toUpperCase());
+    await deleteDoc(codRef);
+  }
+
+  /**
+   * Obtiene la lista completa de empresas clientes registradas en la plataforma
+   */
+  async listarTodasEmpresas(): Promise<SuscripcionEmpresa[]> {
+    const { collection, getDocs } = await import('firebase/firestore');
+    const colRef = collection(this.fb.firestore, 'suscripciones');
+    const snap = await getDocs(colRef);
+    const list: SuscripcionEmpresa[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as SuscripcionEmpresa);
+    });
+    return list;
+  }
+
+  /**
+   * Extiende o reduce días manualmente a cualquier empresa cliente
+   */
+  async modificarVigenciaManual(empresaId: string, diasSumar: number, nuevoPlan?: PlanSuscripcion, nuevoEstado?: EstadoSuscripcion): Promise<void> {
+    const subRef = doc(this.fb.firestore, 'suscripciones', empresaId);
+    const snap = await getDoc(subRef);
+    if (!snap.exists()) throw new Error('La empresa no existe');
+
+    const data = snap.data() as SuscripcionEmpresa;
+    let base = new Date();
+    const actualFin = new Date(data.fechaVencimiento || 0);
+
+    if (actualFin.getTime() > base.getTime()) {
+      base = actualFin;
+    }
+
+    base.setDate(base.getDate() + diasSumar);
+
+    const updatePayload: Partial<SuscripcionEmpresa> = {
+      fechaVencimiento: base.toISOString(),
+      estado: nuevoEstado || (base.getTime() > Date.now() ? 'ACTIVA' : 'VENCIDA'),
+      actualizadoEn: new Date().toISOString()
+    };
+
+    if (nuevoPlan) {
+      updatePayload.plan = nuevoPlan;
+    }
+
+    await setDoc(subRef, updatePayload, { merge: true });
   }
 }

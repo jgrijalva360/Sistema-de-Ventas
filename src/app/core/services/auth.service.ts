@@ -29,6 +29,7 @@ export class AuthService {
 
   // Computados de Roles
   public rol = computed<RolUsuario>(() => this.perfilUsuarioSignal()?.rol || 'CAJERO');
+  public esSuperAdmin = computed(() => this.rol() === 'SUPERADMIN');
   public esAdmin = computed(() => {
     const r = this.rol();
     return r === 'ADMIN' || r === 'SUPERADMIN';
@@ -207,6 +208,12 @@ export class AuthService {
       sucursalId: sucursalId || '',
       sucursalNombre: sucursalNombre || ''
     });
+  }
+
+  async eliminarUsuarioEmpresa(uid: string): Promise<void> {
+    const { deleteDoc } = await import('firebase/firestore');
+    const userDocRef = doc(this.fb.firestore, 'usuarios', uid);
+    await deleteDoc(userDocRef);
   }
 }
 

@@ -65,11 +65,18 @@ import { AuthService } from '../../core/services/auth.service';
           </a>
           <a routerLink="/administracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
             <span class="nav-icon">👥</span>
-            <span>Administración</span>
+            <span>Colaboradores & Licencia</span>
           </a>
           <a routerLink="/configuracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
             <span class="nav-icon">⚙️</span>
             <span>Configuración</span>
+          </a>
+        }
+
+        @if (authService.esSuperAdmin()) {
+          <a routerLink="/super-admin" routerLinkActive="active" (click)="closeNav()" class="nav-item" style="color: #52d341ff;">
+            <span class="nav-icon">🛡️</span>
+            <span>Master SaaS</span>
           </a>
         }
       </nav>
