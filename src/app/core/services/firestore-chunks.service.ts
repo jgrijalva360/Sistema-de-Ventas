@@ -131,6 +131,7 @@ export class FirestoreChunksService {
       'chunks_movimientos',
       'chunks_gastos',
       'chunks_cortes',
+      'chunks_pedidos',
       'config',
       'productos',
       'ventas',

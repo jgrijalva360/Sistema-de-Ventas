@@ -301,12 +301,12 @@ export class ConfiguracionComponent implements AfterViewInit {
       msg = '⚠️ ATENCIÓN: Se descargará un respaldo de seguridad previo y se ELIMINARÁN PERMANENTEMENTE todos los datos de Firestore asociados a este usuario (Productos, Ventas, Gastos, Movimientos, Cortes y Pedidos).\n\n¿Estás seguro de realizar el Reset Total de Fábrica?';
     } else if (tipo === 'reset_operativo') {
       msg = '⚠️ RESET OPERATIVO:\n\n' +
-            'Se descargará un respaldo automático y se realizarán los siguientes ajustes:\n\n' +
-            '• Se eliminarán las ventas concluidas, gastos y cortes cerrados.\n' +
-            '• Se CONSERVARÁN los Pedidos y Ventas que se encuentren PENDIENTES o en proceso.\n' +
-            '• Se limpiará el historial de movimientos de inventario sin afectar el stock actual.\n' +
-            '• Tu catálogo de productos, existencias y precios se mantendrán intactos.\n\n' +
-            '¿Estás seguro de continuar con el Reset Operativo?';
+        'Se descargará un respaldo automático y se realizarán los siguientes ajustes:\n\n' +
+        '• Se ELIMINARÁN todas las ventas (historial y en espera), gastos y cortes de caja.\n' +
+        '• Se CONSERVARÁN únicamente los Pedidos que se encuentren PENDIENTES o en proceso.\n' +
+        '• Se limpiará el historial de movimientos de inventario sin afectar el stock actual.\n' +
+        '• Tu catálogo de productos, existencias y precios se mantendrán intactos.\n\n' +
+        '¿Estás seguro de continuar con el Reset Operativo?';
     }
 
     if (confirm(msg)) {

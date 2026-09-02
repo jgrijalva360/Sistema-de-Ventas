@@ -174,6 +174,7 @@ export class ConfiguracionService {
     const rawVentas = normalizar(data.ventas, data.sales, data.historialVentas, data.ventasHistorial);
     const rawGastos = normalizar(data.gastos, data.expenses, data.gastosHistorial);
     const rawCortes = normalizar(data.cortes, data.cortesHistorial, data.cortesCaja);
+    const hasCorteActivo = Boolean(data.corteActivo && (data.corteActivo.id || data.corteActivo.estado === 'ABIERTO'));
     const rawPedidos = normalizar(data.pedidosPersonalizados, data.pedidos, data.customOrders);
     const rawSucursales = normalizar(data.sucursales, data.branches);
     const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
@@ -188,7 +189,7 @@ export class ConfiguracionService {
       ventasCount: rawVentas.length,
       movimientosCount: rawMovimientos.length,
       gastosCount: rawGastos.length,
-      cortesCount: rawCortes.length,
+      cortesCount: rawCortes.length + (hasCorteActivo ? 1 : 0),
       pedidosCount: rawPedidos.length,
       sucursalesCount: rawSucursales.length,
       bitacoraCount: rawBitacora.length,
@@ -423,44 +424,46 @@ export class ConfiguracionService {
       gastosRestaurados = gastos.length;
     }
 
-    // 5. Mapear Cortes
-    if (opciones.restaurarCortes && rawCortes.length > 0) {
-      const cortes: Corte[] = rawCortes.map((c: any, idx: number) => ({
-        id: c.id || `CC-${String(idx + 1).padStart(4, '0')}`,
-        periodicidad: c.periodicidad || 'DIARIO',
-        fechaApertura: c.fechaApertura || new Date().toISOString(),
-        fechaCierre: c.fechaCierre || new Date().toISOString(),
-        cajaInicial: Number(c.cajaInicial) || 0,
-        ventasCount: Number(c.ventasCount) || 0,
-        gastosCount: Number(c.gastosCount) || 0,
-        pagosEfectivo: Number(c.pagosEfectivo) || 0,
-        pagosTarjeta: Number(c.pagosTarjeta) || 0,
-        pagosTransferencia: Number(c.pagosTransferencia) || 0,
-        totalVentasNetas: Number(c.totalVentasNetas) || 0,
-        totalGastos: Number(c.totalGastos) || 0,
-        gastosEfectivo: Number(c.gastosEfectivo) || 0,
-        gastosTarjeta: Number(c.gastosTarjeta) || 0,
-        gastosTransferencia: Number(c.gastosTransferencia) || 0,
-        gastosBancarios: Number(c.gastosBancarios) || 0,
-        retiros: Number(c.retiros) || 0,
-        ingresosCaja: Number(c.ingresosCaja) || 0,
-        cajaEsperada: Number(c.cajaEsperada) || 0,
-        cajaContada: Number(c.cajaContada) || 0,
-        diferencia: Number(c.diferencia) || 0,
-        observacionesApertura: c.observacionesApertura || '',
-        observacionesCierre: c.observacionesCierre || '',
-        usuario: c.usuario || 'Local',
-        sucursalId: c.sucursalId || 'SUC-MAIN',
-        sucursalNombre: c.sucursalNombre || 'JBGraphic',
-        estado: 'CERRADO'
-      }));
+    // 5. Mapear Cortes y Corte Activo
+    if (opciones.restaurarCortes) {
+      if (rawCortes.length > 0) {
+        const cortes: Corte[] = rawCortes.map((c: any, idx: number) => ({
+          id: c.id || `CC-${String(idx + 1).padStart(4, '0')}`,
+          periodicidad: c.periodicidad || 'DIARIO',
+          fechaApertura: c.fechaApertura || new Date().toISOString(),
+          fechaCierre: c.fechaCierre || new Date().toISOString(),
+          cajaInicial: Number(c.cajaInicial) || 0,
+          ventasCount: Number(c.ventasCount) || 0,
+          gastosCount: Number(c.gastosCount) || 0,
+          pagosEfectivo: Number(c.pagosEfectivo) || 0,
+          pagosTarjeta: Number(c.pagosTarjeta) || 0,
+          pagosTransferencia: Number(c.pagosTransferencia) || 0,
+          totalVentasNetas: Number(c.totalVentasNetas) || 0,
+          totalGastos: Number(c.totalGastos) || 0,
+          gastosEfectivo: Number(c.gastosEfectivo) || 0,
+          gastosTarjeta: Number(c.gastosTarjeta) || 0,
+          gastosTransferencia: Number(c.gastosTransferencia) || 0,
+          gastosBancarios: Number(c.gastosBancarios) || 0,
+          retiros: Number(c.retiros) || 0,
+          ingresosCaja: Number(c.ingresosCaja) || 0,
+          cajaEsperada: Number(c.cajaEsperada) || 0,
+          cajaContada: Number(c.cajaContada) || 0,
+          diferencia: Number(c.diferencia) || 0,
+          observacionesApertura: c.observacionesApertura || '',
+          observacionesCierre: c.observacionesCierre || '',
+          usuario: c.usuario || 'Local',
+          sucursalId: c.sucursalId || 'SUC-MAIN',
+          sucursalNombre: c.sucursalNombre || 'JBGraphic',
+          estado: 'CERRADO'
+        }));
 
-      this.cortesService.setCortes(cortes);
-      await this.firestoreService.guardarColeccionChunked('cortes', cortes);
-      cortesRestaurados = cortes.length;
+        this.cortesService.setCortes(cortes);
+        await this.firestoreService.guardarColeccionChunked('cortes', cortes);
+        cortesRestaurados = cortes.length;
+      }
 
       // Corte Activo
-      if (data.corteActivo && data.corteActivo.estado === 'ABIERTO') {
+      if (data.corteActivo && (data.corteActivo.id || data.corteActivo.estado === 'ABIERTO')) {
         const corteActivo = {
           id: data.corteActivo.id || `CA-${Date.now()}`,
           fechaApertura: data.corteActivo.fechaApertura || new Date().toISOString(),
@@ -472,7 +475,10 @@ export class ConfiguracionService {
           sucursalNombre: data.corteActivo.sucursalNombre || 'JBGraphic'
         };
         const corteRef = this.firestoreService.getRefDocConfig('corteActivo');
-        await setDoc(corteRef, this.firestoreService.sanitizarParaFirestore(corteActivo));
+        const sanitizado = this.firestoreService.sanitizarParaFirestore(corteActivo);
+        await setDoc(corteRef, sanitizado);
+        this.cortesService.setCorteActivo(sanitizado as any);
+        cortesRestaurados += 1;
       }
     }
 
@@ -567,11 +573,7 @@ export class ConfiguracionService {
       });
 
       this.pedidosService.setPedidos(pedidos);
-      const pedidosRef = this.firestoreService.getRefDocConfig('pedidosPersonalizados');
-      await setDoc(pedidosRef, this.firestoreService.sanitizarParaFirestore({
-        items: pedidos,
-        actualizadoEn: new Date().toISOString()
-      }), { merge: true });
+      await this.firestoreService.guardarColeccionChunked('pedidos', pedidos, 30);
       pedidosRestaurados = pedidos.length;
     }
 
@@ -699,35 +701,29 @@ export class ConfiguracionService {
       const pedidosPendientes = this.pedidosService.pedidos().filter(
         (p) => p.estado === 'PENDIENTE' || p.estado === 'EN_PROCESO' || ((p.saldoRestante || 0) > 0 && p.estado !== 'CANCELADO')
       );
-      const pedidosPendientesIds = new Set(pedidosPendientes.map((p) => p.id));
 
-      // 2. Conservar las ventas que correspondan a abonos/anticipos de los pedidos pendientes
-      const ventasConservadas = this.ventasService.ventas().filter((v) =>
-        (v.items || []).some((it) => pedidosPendientesIds.has(it.codigo))
-      );
-
-      // 3. Guardar pedidos pendientes en Firestore
-      const pedidosRef = this.firestoreService.getRefDocConfig('pedidosPersonalizados');
-      await setDoc(pedidosRef, {
-        items: this.firestoreService.sanitizarParaFirestore(pedidosPendientes),
-        actualizadoEn: new Date().toISOString()
-      });
+      // 2. Guardar pedidos pendientes en Firestore (chunks de 30)
+      await this.firestoreService.guardarColeccionChunked('pedidos', pedidosPendientes, 30);
       this.pedidosService.setPedidos(pedidosPendientes);
 
-      // 4. Limpiar ventas (dejando únicamente las de pedidos pendientes)
-      await this.firestoreService.guardarColeccionChunked('ventas', ventasConservadas);
-      this.ventasService.setVentas(ventasConservadas);
+      // 3. Eliminar todas las ventas y carritos pendientes
+      await this.firestoreService.guardarColeccionChunked('ventas', []);
+      this.ventasService.setVentas([]);
+      await setDoc(this.firestoreService.getRefDocConfig('carritosPendientes'), {
+        items: [],
+        actualizadoEn: new Date().toISOString()
+      });
 
-      // 5. Eliminar gastos
+      // 4. Eliminar gastos
       await this.firestoreService.guardarColeccionChunked('gastos', []);
       this.gastosService.setGastos([]);
 
-      // 6. Eliminar cortes cerrados y limpiar corte activo
+      // 5. Eliminar cortes cerrados y limpiar corte activo
       await this.firestoreService.guardarColeccionChunked('cortes', []);
       this.cortesService.setCortes([]);
       await setDoc(this.firestoreService.getRefDocConfig('corteActivo'), {});
 
-      // 7. Vaciar historial de movimientos de inventario (el stock actual reside directamente en los productos)
+      // 6. Vaciar historial de movimientos de inventario (el stock actual reside directamente en los productos)
       await this.firestoreService.guardarColeccionChunked('movimientos', []);
       this.movimientosService.setMovimientos([]);
     } else if (tipo === 'reset_total') {

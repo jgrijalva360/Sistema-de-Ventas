@@ -25,6 +25,10 @@ import { SyncService } from '../../core/services/sync.service';
           <span class="nav-icon">💵</span>
           <span>Ventas (POS)</span>
         </a>
+        <a routerLink="/pedidos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+          <span class="nav-icon">🎨</span>
+          <span>Pedidos</span>
+        </a>
         <a routerLink="/inventario" routerLinkActive="active" (click)="closeNav()" class="nav-item">
           <span class="nav-icon">📦</span>
           <span>Inventario</span>
@@ -36,10 +40,6 @@ import { SyncService } from '../../core/services/sync.service';
         <a routerLink="/gastos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
           <span class="nav-icon">🧾</span>
           <span>Gastos</span>
-        </a>
-        <a routerLink="/pedidos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-          <span class="nav-icon">🎨</span>
-          <span>Pedidos</span>
         </a>
         <a routerLink="/cortes" routerLinkActive="active" (click)="closeNav()" class="nav-item">
           <span class="nav-icon">🔒</span>

@@ -6,7 +6,7 @@ import { GastosService } from './gastos.service';
 import { SucursalesService } from './sucursales.service';
 import { SyncService } from './sync.service';
 import { PedidosService } from './pedidos.service';
-import { doc, setDoc, deleteDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { Subscription } from 'rxjs';
 import { docStream$, collectionStream$ } from '../utils/realtime.util';
 import { generarSiguienteConsecutivo } from '../utils/consecutivo.util';
@@ -46,13 +46,32 @@ export class CortesService {
     });
   }
 
-  setCortes(list: Corte[]): void {
+  setCortes(list: Corte[], corteActivo?: CorteActivo | null): void {
     if (Array.isArray(list)) {
       this.cortesHistorialSignal.set(this.ordenarCortes(list));
     }
+    if (corteActivo !== undefined) {
+      this.corteActivoSignal.set(corteActivo);
+    }
+  }
+
+  setCorteActivo(corteActivo: CorteActivo | null): void {
+    this.corteActivoSignal.set(corteActivo);
   }
 
   async cargarCortes(): Promise<Corte[]> {
+    try {
+      const corteRef = this.firestoreService.getRefDocConfig('corteActivo');
+      const snap = await getDoc(corteRef);
+      if (snap.exists() && snap.data()['id']) {
+        this.corteActivoSignal.set(snap.data() as CorteActivo);
+      } else {
+        this.corteActivoSignal.set(null);
+      }
+    } catch (e) {
+      console.warn('Error al cargar corte activo:', e);
+    }
+
     const list = await this.firestoreService.cargarColeccionChunked<Corte>('cortes');
     const ordenados = this.ordenarCortes(list);
     this.cortesHistorialSignal.set(ordenados);

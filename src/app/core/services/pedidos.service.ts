@@ -5,9 +5,8 @@ import { ProductosService } from './productos.service';
 import { SucursalesService } from './sucursales.service';
 import { VentasService } from './ventas.service';
 import { SyncService } from './sync.service';
-import { getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { Subscription } from 'rxjs';
-import { docStream$ } from '../utils/realtime.util';
+import { collectionStream$ } from '../utils/realtime.util';
 import { generarSiguienteConsecutivo, generarSiguienteAbonoId } from '../utils/consecutivo.util';
 
 import { BitacoraService } from './bitacora.service';
@@ -155,21 +154,30 @@ export class PedidosService {
   }
 
   async cargarPedidos(): Promise<PedidoPersonalizado[]> {
+    // 1. Intentar cargar desde chunks_pedidos
+    const rawList = await this.firestoreService.cargarColeccionChunked<PedidoPersonalizado>('pedidos');
+    if (rawList.length > 0) {
+      const list = this.validarYLimpiarDuplicados(rawList);
+      this.pedidosSignal.set(list);
+      return list;
+    }
+
+    // 2. Fallback de migración: Si aún existía en config/pedidosPersonalizados, migrarlo a chunks
     try {
       const ref = this.firestoreService.getRefDocConfig('pedidosPersonalizados');
+      const { getDoc } = await import('firebase/firestore');
       const snap = await getDoc(ref);
-      if (snap.exists() && Array.isArray(snap.data()['items'])) {
+      if (snap.exists() && Array.isArray(snap.data()['items']) && snap.data()['items'].length > 0) {
         const list = snap.data()['items'] as PedidoPersonalizado[];
         const limpios = this.validarYLimpiarDuplicados(list);
         this.pedidosSignal.set(limpios);
+        await this.guardarEnFirestore(limpios);
         return limpios;
       }
     } catch (_) {}
 
-    const rawList = await this.firestoreService.cargarColeccionChunked<PedidoPersonalizado>('pedidosPersonalizados');
-    const list = this.validarYLimpiarDuplicados(rawList);
-    this.pedidosSignal.set(list);
-    return list;
+    this.pedidosSignal.set([]);
+    return [];
   }
 
   async crearPedido(
@@ -423,12 +431,7 @@ export class PedidosService {
   private async guardarEnFirestore(pedidosList: PedidoPersonalizado[]): Promise<void> {
     try {
       this.syncService.setStatus('saving', 'Guardando pedidos...');
-      const ref = this.firestoreService.getRefDocConfig('pedidosPersonalizados');
-      const cleanList = JSON.parse(JSON.stringify(pedidosList));
-      await setDoc(ref, {
-        items: cleanList,
-        actualizadoEn: new Date().toISOString()
-      }, { merge: true });
+      await this.firestoreService.guardarColeccionChunked('pedidos', pedidosList, 30);
       await this.syncService.incrementarRevision();
       this.syncService.setStatus('online', 'En Línea');
     } catch (e) {
@@ -601,11 +604,30 @@ export class PedidosService {
   iniciarEscuchadorLive(): void {
     if (this.subLive) this.subLive.unsubscribe();
 
-    const ref = this.firestoreService.getRefDocConfig('pedidosPersonalizados');
-    this.subLive = docStream$(ref).subscribe({
-      next: (docSnap) => {
-        if (docSnap.exists() && Array.isArray(docSnap.data()['items'])) {
-          this.pedidosSignal.set(this.validarYLimpiarDuplicados(docSnap.data()['items']));
+    const chunksCollRef = this.firestoreService.getRefColeccion('chunks_pedidos');
+    this.subLive = collectionStream$(chunksCollRef).subscribe({
+      next: (snapshot) => {
+        if (!snapshot.empty) {
+          const chunkDocs = snapshot.docs
+            .filter((d) => d.id.startsWith('chunk_'))
+            .sort((a, b) => {
+              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+              return idxA - idxB;
+            });
+
+          const actualizados: PedidoPersonalizado[] = [];
+          chunkDocs.forEach((d) => {
+            const data = d.data();
+            if (Array.isArray(data['items'])) {
+              actualizados.push(...data['items']);
+            }
+          });
+
+          if (actualizados.length > 0) {
+            const limpios = this.validarYLimpiarDuplicados(actualizados);
+            this.pedidosSignal.set(limpios);
+          }
         }
       },
       error: (err) => console.error('Error en stream de pedidos:', err)
