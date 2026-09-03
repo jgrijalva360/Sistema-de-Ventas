@@ -7,6 +7,7 @@ import { VentasService } from '../../core/services/ventas.service';
 import { ProductosService } from '../../core/services/productos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
+import { AuthService } from '../../core/services/auth.service';
 import { Venta, Producto } from '../../core/models/models';
 
 @Component({
@@ -40,10 +41,18 @@ export class VentasComponent implements AfterViewInit {
   public modalTicketAbierto = signal<boolean>(false);
   public autoImprimirTicket = signal<boolean>(localStorage.getItem('pos_auto_imprimir_ticket') !== 'false');
 
+  // Modal Cancelar Venta / Devolución
+  public modalCancelarAbierto = signal<boolean>(false);
+  public ventaACancelar = signal<Venta | null>(null);
+  public motivoCancelacion = '';
+  public reponerStockCancelacion = true;
+  public cancelandoVenta = signal<boolean>(false);
+
   public ventasService = inject(VentasService);
   public productosService = inject(ProductosService);
   public sucursalesService = inject(SucursalesService);
   public configuracionService = inject(ConfiguracionService);
+  public authService = inject(AuthService);
 
   obtenerStockSucursal(prod: Producto): number {
     const sid = this.sucursalesService.activaId() || 'SUC-MAIN';
@@ -250,6 +259,10 @@ export class VentasComponent implements AfterViewInit {
   }
 
   async realizarCobro(): Promise<void> {
+    if (this.ventasService.procesandoCobro()) {
+      return;
+    }
+
     try {
       const venta = await this.ventasService.procesarVenta();
       this.ticketVenta.set(venta);
@@ -280,5 +293,51 @@ export class VentasComponent implements AfterViewInit {
 
   cerrarModalTicket(): void {
     this.modalTicketAbierto.set(false);
+  }
+
+  abrirModalCancelar(venta: Venta): void {
+    this.ventaACancelar.set(venta);
+    this.motivoCancelacion = '';
+    this.reponerStockCancelacion = true;
+    this.modalCancelarAbierto.set(true);
+  }
+
+  cerrarModalCancelar(): void {
+    this.modalCancelarAbierto.set(false);
+    this.ventaACancelar.set(null);
+    this.motivoCancelacion = '';
+  }
+
+  async confirmarCancelacionVenta(): Promise<void> {
+    const venta = this.ventaACancelar();
+    if (!venta) return;
+
+    if (!this.motivoCancelacion.trim()) {
+      alert('Por favor especifica el motivo de la cancelación o devolución.');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de cancelar la venta #${venta.id} por un monto de $${venta.total.toFixed(2)}? Esta acción ajustará el corte de caja y el inventario.`)) {
+      return;
+    }
+
+    this.cancelandoVenta.set(true);
+    try {
+      await this.ventasService.cancelarVenta({
+        ventaId: venta.id,
+        motivo: this.motivoCancelacion.trim(),
+        reponerInventario: this.reponerStockCancelacion,
+        usuario: this.authService.nombreUsuario()
+      });
+
+      this.cerrarModalCancelar();
+      this.mensajeAlerta.set(`✅ Venta #${venta.id} cancelada exitosamente.`);
+      this.tipoAlerta.set('success');
+      setTimeout(() => this.mensajeAlerta.set(''), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Error al cancelar la venta');
+    } finally {
+      this.cancelandoVenta.set(false);
+    }
   }
 }

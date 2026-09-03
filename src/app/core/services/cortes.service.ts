@@ -101,8 +101,9 @@ export class CortesService {
 
     const fechaInicio = new Date(corte.fechaApertura).getTime();
 
-    // Filtrar ventas del turno
+    // Filtrar ventas del turno (excluyendo ventas canceladas)
     const ventasTurno = this.ventasService.ventas().filter((v) => {
+      if (v.estado === 'CANCELADA') return false;
       const t = new Date(v.fecha).getTime();
       return t >= fechaInicio && (!v.sucursalId || v.sucursalId === sucursalId || sucursalId === 'TODAS');
     });

@@ -19,6 +19,7 @@ export class VentasService {
   // Carrito Activo
   public carrito = signal<ItemCarrito[]>([]);
   public pagos = signal<PagosDetalle>({ efectivo: 0, tarjeta: 0, transferencia: 0 });
+  public procesandoCobro = signal<boolean>(false);
 
   // Historial de Ventas y Carritos Pendientes
   private ventasSignal = signal<Venta[]>([]);
@@ -68,7 +69,9 @@ export class VentasService {
   });
 
   public totalVentasHoy = computed(() => {
-    return this.ventasDeHoy().reduce((acc, v) => acc + (v.total || 0), 0);
+    return this.ventasDeHoy()
+      .filter((v) => v.estado !== 'CANCELADA')
+      .reduce((acc, v) => acc + (v.total || 0), 0);
   });
 
   public ventasRecientes = computed(() => {
@@ -144,6 +147,10 @@ export class VentasService {
 
   // ── Procesamiento de Venta ────────────────────────────────
   async procesarVenta(): Promise<Venta> {
+    if (this.procesandoCobro()) {
+      throw new Error('Ya se está procesando un cobro, por favor espera un momento.');
+    }
+
     const items = [...this.carrito()];
     if (items.length === 0) throw new Error('El carrito está vacío.');
 
@@ -151,55 +158,135 @@ export class VentasService {
     const pagado = this.totalPagado();
     if (pagado < total) throw new Error(`El pago es insuficiente. Falta $${(total - pagado).toFixed(2)}`);
 
-    const sucursal = this.sucursalesService.sucursalActiva();
-    const nuevoId = generarSiguienteConsecutivo(this.ventasSignal().map((v) => v.id), 'V', 4);
-    
-    const nuevaVenta: Venta = {
-      id: nuevoId,
-      fecha: new Date().toISOString(),
-      items,
-      total,
-      totalPagado: pagado,
-      cambio: this.cambio(),
-      pagos: { ...this.pagos() },
-      sucursalId: sucursal.id,
-      sucursalNombre: sucursal.nombre
+    this.procesandoCobro.set(true);
+
+    try {
+      const sucursal = this.sucursalesService.sucursalActiva();
+      const nuevoId = generarSiguienteConsecutivo(this.ventasSignal().map((v) => v.id), 'V', 4);
+      
+      const nuevaVenta: Venta = {
+        id: nuevoId,
+        fecha: new Date().toISOString(),
+        items,
+        total,
+        totalPagado: pagado,
+        cambio: this.cambio(),
+        pagos: { ...this.pagos() },
+        sucursalId: sucursal.id,
+        sucursalNombre: sucursal.nombre,
+        estado: 'COMPLETADA'
+      };
+
+      // 1. Guardar local y actualizar lista
+      const currentVentas = [nuevaVenta, ...this.ventasSignal()];
+      this.ventasSignal.set(currentVentas);
+
+      // 2. Descontar stock de la sucursal activa
+      await this.productosService.descontarStockVenta(items, sucursal.id);
+
+      // 3. Guardar en Firestore: chunks_ventas
+      try {
+        this.syncService.setStatus('saving', 'Registrando venta...');
+        await this.firestoreService.guardarColeccionChunked('ventas', currentVentas);
+        await this.syncService.incrementarRevision();
+        this.syncService.setStatus('online', 'En Línea');
+
+        // Registrar en Bitácora
+        await this.bitacoraService.registrarEvento({
+          modulo: 'VENTAS',
+          accion: 'CREAR',
+          descripcion: `Venta #${nuevaVenta.id} registrada por $${nuevaVenta.total.toFixed(2)} (${items.length} artículos)`,
+          detalles: {
+            folio: nuevaVenta.id,
+            total: nuevaVenta.total,
+            itemsCount: items.length,
+            pagos: nuevaVenta.pagos
+          },
+          sucursalId: sucursal.id,
+          sucursalNombre: sucursal.nombre
+        });
+      } catch (e) {
+        console.warn('Error al persistir venta en Firestore:', e);
+      }
+
+      this.limpiarCarrito();
+      return nuevaVenta;
+    } finally {
+      this.procesandoCobro.set(false);
+    }
+  }
+
+  // ── Cancelación y Devolución de Venta ───────────────────────
+  async cancelarVenta(params: {
+    ventaId: string;
+    motivo: string;
+    reponerInventario?: boolean;
+    usuario?: string;
+  }): Promise<Venta> {
+    const { ventaId, motivo, reponerInventario = true, usuario = 'Administrador' } = params;
+    const currentVentas = [...this.ventasSignal()];
+    const idx = currentVentas.findIndex((v) => v.id === ventaId);
+
+    if (idx === -1) {
+      throw new Error(`La venta #${ventaId} no fue encontrada.`);
+    }
+
+    const venta = currentVentas[idx];
+    if (venta.estado === 'CANCELADA') {
+      throw new Error(`La venta #${ventaId} ya se encuentra cancelada.`);
+    }
+
+    // 1. Marcar como cancelada
+    const ventaActualizada: Venta = {
+      ...venta,
+      estado: 'CANCELADA',
+      fechaCancelacion: new Date().toISOString(),
+      motivoCancelacion: motivo.trim() || 'Cancelación solicitada por el usuario',
+      usuarioCancelacion: usuario
     };
 
-    // 1. Guardar local y actualizar lista
-    const currentVentas = [nuevaVenta, ...this.ventasSignal()];
+    currentVentas[idx] = ventaActualizada;
     this.ventasSignal.set(currentVentas);
 
-    // 2. Descontar stock de la sucursal activa
-    await this.productosService.descontarStockVenta(items, sucursal.id);
+    // 2. Reingresar stock al inventario si aplica y tiene productos
+    if (reponerInventario && Array.isArray(venta.items) && venta.items.length > 0) {
+      const itemsAReponer = venta.items
+        .filter((it) => it.codigo && it.cantidad > 0)
+        .map((it) => ({ codigo: it.codigo, cantidad: it.cantidad }));
 
-    // 3. Guardar en Firestore: chunks_ventas
+      if (itemsAReponer.length > 0) {
+        await this.productosService.reponerStockDevolucion(itemsAReponer, venta.sucursalId || 'SUC-MAIN');
+      }
+    }
+
+    // 3. Persistir en Firestore
     try {
-      this.syncService.setStatus('saving', 'Registrando venta...');
+      this.syncService.setStatus('saving', 'Cancelando venta...');
       await this.firestoreService.guardarColeccionChunked('ventas', currentVentas);
       await this.syncService.incrementarRevision();
       this.syncService.setStatus('online', 'En Línea');
 
-      // Registrar en Bitácora
+      // 4. Registrar en Bitácora
       await this.bitacoraService.registrarEvento({
         modulo: 'VENTAS',
-        accion: 'CREAR',
-        descripcion: `Venta #${nuevaVenta.id} registrada por $${nuevaVenta.total.toFixed(2)} (${items.length} artículos)`,
+        accion: 'ELIMINAR',
+        descripcion: `Venta #${venta.id} CANCELADA / DEVUELTA. Monto: $${venta.total.toFixed(2)}. Motivo: ${motivo || 'No especificado'}. Repuso stock: ${reponerInventario ? 'SÍ' : 'NO'}`,
         detalles: {
-          folio: nuevaVenta.id,
-          total: nuevaVenta.total,
-          itemsCount: items.length,
-          pagos: nuevaVenta.pagos
+          folio: venta.id,
+          total: venta.total,
+          motivo,
+          reponerInventario,
+          itemsCount: venta.items?.length || 0
         },
-        sucursalId: sucursal.id,
-        sucursalNombre: sucursal.nombre
+        sucursalId: venta.sucursalId,
+        sucursalNombre: venta.sucursalNombre
       });
     } catch (e) {
-      console.warn('Error al persistir venta en Firestore:', e);
+      console.error('Error al persistir cancelación de venta en Firestore:', e);
+      throw e;
     }
 
-    this.limpiarCarrito();
-    return nuevaVenta;
+    return ventaActualizada;
   }
 
   // ── Registrar Pago / Abono de Pedido en Ventas ──────────────

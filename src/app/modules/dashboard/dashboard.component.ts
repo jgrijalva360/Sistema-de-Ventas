@@ -79,6 +79,7 @@ export class DashboardComponent {
     const hasta = new Date(`${hStr}T23:59:59.999`).getTime();
 
     const ventas = this.ventasService.ventas().filter((v) => {
+      if (v.estado === 'CANCELADA') return false;
       if (sucursalId !== 'TODAS' && v.sucursalId && v.sucursalId !== sucursalId) return false;
       const t = new Date(v.fecha).getTime();
       return !isNaN(t) && t >= desde && t <= hasta;

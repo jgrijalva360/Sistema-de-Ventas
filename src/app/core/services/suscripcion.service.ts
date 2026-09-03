@@ -1,6 +1,7 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { SuscripcionEmpresa, PlanSuscripcion, EstadoSuscripcion } from '../models/models';
 import { FirebaseService } from './firebase.service';
+import { MercadoPagoService } from './mercado-pago.service';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Subscription } from 'rxjs';
 import { docStream$ } from '../utils/realtime.util';
@@ -9,22 +10,38 @@ import { docStream$ } from '../utils/realtime.util';
   providedIn: 'root'
 })
 export class SuscripcionService {
+  private fb = inject(FirebaseService);
+  private mpService = inject(MercadoPagoService);
+
   private suscripcionSignal = signal<SuscripcionEmpresa | null>(null);
   public suscripcion = this.suscripcionSignal.asReadonly();
 
-  // Límites computados según el plan
+  // Límites computados dinámicamente según el plan y catálogo actualizado
   public limites = computed(() => {
     const sub = this.suscripcionSignal();
-    const plan = sub?.plan || 'TRIAL';
+    const planId = sub?.plan || 'TRIAL';
 
-    switch (plan) {
+    if (planId === 'TRIAL') {
+      return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 300, nombre: 'Período de Prueba' };
+    }
+
+    const planCatalogo = this.mpService.planesDisponibles().find(p => p.id === planId);
+    if (planCatalogo) {
+      return {
+        maxUsuarios: planCatalogo.maxUsuarios || 2,
+        maxSucursales: planCatalogo.maxSucursales || 1,
+        maxProductos: planCatalogo.maxProductos || (planId === 'BASICO' ? 500 : (planId === 'PRO' ? 5000 : 50000)),
+        nombre: planCatalogo.titulo
+      };
+    }
+
+    switch (planId) {
       case 'BASICO':
         return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 500, nombre: 'Plan Básico' };
       case 'PRO':
         return { maxUsuarios: 6, maxSucursales: 3, maxProductos: 5000, nombre: 'Plan Pro' };
       case 'ENTERPRISE':
         return { maxUsuarios: 99, maxSucursales: 10, maxProductos: 50000, nombre: 'Plan Anual VIP' };
-      case 'TRIAL':
       default:
         return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 300, nombre: 'Período de Prueba' };
     }
@@ -91,7 +108,7 @@ export class SuscripcionService {
 
   private subLive?: Subscription;
 
-  constructor(private fb: FirebaseService) { }
+  constructor() { }
 
   /**
    * Obtiene o inicializa la suscripción de una empresa en Firestore.

@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
 import { SuscripcionService } from '../../core/services/suscripcion.service';
@@ -6,6 +6,7 @@ import { SucursalesService } from '../../core/services/sucursales.service';
 import { UsuarioSistema, RolUsuario } from '../../core/models/models';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-usuarios-admin',
@@ -14,13 +15,14 @@ import { RouterLink } from '@angular/router';
   templateUrl: './usuarios-admin.component.html',
   styleUrl: './usuarios-admin.component.scss'
 })
-export class UsuariosAdminComponent implements OnInit {
+export class UsuariosAdminComponent implements OnInit, OnDestroy {
   public authService = inject(AuthService);
   public suscripcionService = inject(SuscripcionService);
   public sucursalesService = inject(SucursalesService);
 
   public usuarios = signal<UsuarioSistema[]>([]);
   public cargando = signal<boolean>(false);
+  private subUsuarios?: Subscription;
 
   // Modal Nuevo Colaborador
   public modalAbierto = signal<boolean>(false);
@@ -38,20 +40,28 @@ export class UsuariosAdminComponent implements OnInit {
   public renovando = signal<boolean>(false);
   public msgRenovacion = signal<string>('');
 
-  async ngOnInit(): Promise<void> {
-    await this.cargarUsuarios();
+  ngOnInit(): void {
+    this.iniciarEscuchaUsuarios();
   }
 
-  async cargarUsuarios(): Promise<void> {
-    this.cargando.set(true);
-    try {
-      const list = await this.authService.listarUsuariosEmpresa();
-      this.usuarios.set(list);
-    } catch (e) {
-      console.error('Error al listar usuarios:', e);
-    } finally {
-      this.cargando.set(false);
+  ngOnDestroy(): void {
+    if (this.subUsuarios) {
+      this.subUsuarios.unsubscribe();
     }
+  }
+
+  iniciarEscuchaUsuarios(): void {
+    this.cargando.set(true);
+    this.subUsuarios = this.authService.streamUsuariosEmpresa$().subscribe({
+      next: (list) => {
+        this.usuarios.set(list);
+        this.cargando.set(false);
+      },
+      error: (e) => {
+        console.error('Error al escuchar colaboradores en tiempo real:', e);
+        this.cargando.set(false);
+      }
+    });
   }
 
   abrirModalNuevo(): void {
@@ -128,7 +138,6 @@ export class UsuariosAdminComponent implements OnInit {
 
       alert(`✅ Colaborador "${this.nombreNuevo}" creado exitosamente.`);
       this.modalAbierto.set(false);
-      await this.cargarUsuarios();
     } catch (e: any) {
       this.errorModal.set(e.message || 'Error al crear usuario.');
     } finally {
@@ -146,7 +155,6 @@ export class UsuariosAdminComponent implements OnInit {
     const confirmMsg = nuevoEstado ? `¿Activar a ${u.nombre}?` : `¿Desactivar acceso a ${u.nombre}?`;
     if (confirm(confirmMsg)) {
       await this.authService.actualizarEstadoUsuario(u.uid, nuevoEstado);
-      await this.cargarUsuarios();
     }
   }
 
@@ -155,11 +163,9 @@ export class UsuariosAdminComponent implements OnInit {
     const nuevoRol = target.value as RolUsuario;
     if (u.uid === this.authService.currentUser()?.uid && nuevoRol !== 'ADMIN') {
       alert('No puedes quitarte el rol de Administrador principal.');
-      await this.cargarUsuarios();
       return;
     }
     await this.authService.actualizarRolUsuario(u.uid, nuevoRol, u.sucursalId, u.sucursalNombre);
-    await this.cargarUsuarios();
   }
 
   async eliminarColaborador(u: UsuarioSistema): Promise<void> {
@@ -171,7 +177,6 @@ export class UsuariosAdminComponent implements OnInit {
     if (confirm(`⚠️ ¿Estás seguro de eliminar a "${u.nombre}" (${u.email})? Esta acción revocará su acceso de forma permanente.`)) {
       try {
         await this.authService.eliminarUsuarioEmpresa(u.uid);
-        await this.cargarUsuarios();
       } catch (err: any) {
         alert('❌ Error al eliminar colaborador: ' + (err.message || err));
       }

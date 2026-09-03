@@ -45,6 +45,10 @@ export interface Venta {
   sucursalId: string;
   sucursalNombre: string;
   usuario?: string;
+  estado?: 'COMPLETADA' | 'CANCELADA';
+  fechaCancelacion?: string;
+  motivoCancelacion?: string;
+  usuarioCancelacion?: string;
 }
 
 export interface CarritoPendiente {
@@ -146,6 +150,9 @@ export interface PedidoPersonalizado {
   insumosDescontados?: boolean;
   sucursalId: string;
   sucursalNombre: string;
+  fechaCancelacion?: string;
+  motivoCancelacion?: string;
+  usuarioCancelacion?: string;
 }
 
 export interface MovimientoInventario {

@@ -507,8 +507,11 @@
     .btn-delete {
       background: #ef4444;
       color: white;
-      padding: 4px 7px;
+      padding: 4px 9px;
       font-size: 0.78rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
 
       &:hover {
         background: #dc2626;

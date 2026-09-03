@@ -323,6 +323,46 @@ export class ProductosService {
     }
   }
 
+  async reponerStockDevolucion(itemsDevueltos: { codigo: string; cantidad: number }[], sucursalId: string = 'SUC-MAIN'): Promise<void> {
+    const current = [...this.productosSignal()];
+    let huboCambios = false;
+
+    itemsDevueltos.forEach((item) => {
+      const idx = current.findIndex(
+        (p) => (p.codigo || '').toLowerCase() === (item.codigo || '').toLowerCase().trim()
+      );
+      if (idx >= 0) {
+        const prod = current[idx];
+        const stocks = { ...(prod.stockPorSucursal || {}) };
+        const sucData = stocks[sucursalId] || { stockActual: 0, stockMinimo: 1 };
+
+        const nuevoSuc = (sucData.stockActual || 0) + (Number(item.cantidad) || 0);
+        stocks[sucursalId] = {
+          ...sucData,
+          stockActual: nuevoSuc
+        };
+
+        const totalAct = Object.values(stocks).reduce((acc, s) => acc + (s.stockActual || 0), 0);
+
+        current[idx] = {
+          ...prod,
+          stockActual: totalAct,
+          stockPorSucursal: stocks
+        };
+        huboCambios = true;
+      }
+    });
+
+    if (huboCambios) {
+      this.productosSignal.set(current);
+      try {
+        await this.persistirCatalogo(current);
+      } catch (e) {
+        console.warn('Error al reponer stock de devolución:', e);
+      }
+    }
+  }
+
   async recalcularStockDesdeMovimientos(movimientos: any[], sucursalId?: string): Promise<{
     productosActualizados: number;
     totalProductos: number;

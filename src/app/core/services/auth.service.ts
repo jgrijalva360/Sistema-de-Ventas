@@ -15,6 +15,9 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } fro
 import { FirebaseService } from './firebase.service';
 import { UsuarioSistema, RolUsuario } from '../models/models';
 import { SuscripcionService } from './suscripcion.service';
+import { docStream$, collectionStream$ } from '../utils/realtime.util';
+import { Subscription, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -49,6 +52,7 @@ export class AuthService {
   });
 
   private authReadyPromise: Promise<User | null>;
+  private subPerfilLive?: import('rxjs').Subscription;
 
   constructor(
     public fb: FirebaseService,
@@ -60,7 +64,9 @@ export class AuthService {
         this.currentUserSignal.set(user);
         if (user && user.uid) {
           await this.cargarPerfilUsuario(user);
+          this.iniciarEscuchadorPerfilLive(user.uid);
         } else {
+          this.detenerEscuchadorPerfilLive();
           this.perfilUsuarioSignal.set(null);
         }
         resolve(user);
@@ -70,6 +76,44 @@ export class AuthService {
 
   async waitForAuthReady(): Promise<User | null> {
     return this.authReadyPromise;
+  }
+
+  /**
+   * Inicia escucha reactiva en tiempo real sobre el documento del usuario en Firestore
+   */
+  private iniciarEscuchadorPerfilLive(uid: string): void {
+    this.detenerEscuchadorPerfilLive();
+
+    const userDocRef = doc(this.fb.firestore, 'usuarios', uid);
+
+    this.subPerfilLive = docStream$(userDocRef).subscribe({
+      next: (snap) => {
+        if (snap.exists()) {
+          const nuevoPerfil = snap.data() as UsuarioSistema;
+          this.perfilUsuarioSignal.set(nuevoPerfil);
+          localStorage.setItem('pos_tenant_id', nuevoPerfil.empresaId);
+          localStorage.setItem('pos_user_role', nuevoPerfil.rol);
+
+          // Si el usuario fue desactivado por el Administrador, expulsarlo y cerrar sesión de inmediato
+          if (nuevoPerfil.activo === false) {
+            alert('⚠️ Tu cuenta ha sido desactivada por el administrador. La sesión se cerrará de inmediato.');
+            this.logout();
+          }
+        } else {
+          // Si el documento del usuario fue eliminado de la empresa
+          alert('⚠️ Tu usuario ya no tiene acceso a esta empresa.');
+          this.logout();
+        }
+      },
+      error: (e) => console.warn('Error escuchando perfil de usuario en vivo:', e)
+    });
+  }
+
+  private detenerEscuchadorPerfilLive(): void {
+    if (this.subPerfilLive) {
+      this.subPerfilLive.unsubscribe();
+      this.subPerfilLive = undefined;
+    }
   }
 
   /**
@@ -184,6 +228,21 @@ export class AuthService {
   }
 
   // ── Gestión de Colaboradores (Centro de Administración) ───────
+  streamUsuariosEmpresa$(): Observable<UsuarioSistema[]> {
+    const empresaId = this.getTenantId();
+    const q = query(
+      collection(this.fb.firestore, 'usuarios'),
+      where('empresaId', '==', empresaId)
+    );
+    return collectionStream$(q).pipe(
+      map((snap) => {
+        const list: UsuarioSistema[] = [];
+        snap.forEach((d) => list.push(d.data() as UsuarioSistema));
+        return list;
+      })
+    );
+  }
+
   async listarUsuariosEmpresa(): Promise<UsuarioSistema[]> {
     const empresaId = this.getTenantId();
     const q = query(

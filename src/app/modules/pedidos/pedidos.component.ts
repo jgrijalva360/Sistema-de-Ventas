@@ -44,9 +44,14 @@ export class PedidosComponent implements AfterViewInit {
   public modalLiquidarAbierto = signal<boolean>(false);
   public modalDetalleAbierto = signal<boolean>(false);
   public modalEditarAbierto = signal<boolean>(false);
+  public modalCancelarAbierto = signal<boolean>(false);
 
   public pedidoSeleccionado = signal<PedidoPersonalizado | null>(null);
   public pedidoDetalle = signal<PedidoPersonalizado | null>(null);
+  public pedidoACancelar = signal<PedidoPersonalizado | null>(null);
+  public motivoCancelacionPedido = '';
+  public reponerStockPedido = true;
+  public cancelandoPedido = signal<boolean>(false);
   public autoImprimirTicket = signal<boolean>(localStorage.getItem('pos_auto_imprimir_ticket') !== 'false');
 
   // Formulario nuevo
@@ -345,8 +350,62 @@ export class PedidosComponent implements AfterViewInit {
       return;
     }
 
+    if (nuevoEstado === 'CANCELADO') {
+      this.abrirModalCancelar(ped);
+      return;
+    }
+
     const act = await this.pedidosService.actualizarEstado(ped.id, nuevoEstado);
     if (act) this.pedidoDetalle.set(act);
+  }
+
+  abrirModalCancelar(ped: PedidoPersonalizado): void {
+    this.pedidoACancelar.set(ped);
+    this.motivoCancelacionPedido = '';
+    this.reponerStockPedido = true;
+    this.modalCancelarAbierto.set(true);
+    // Cerrar modal Detalle
+    this.cerrarModalDetalle();
+  }
+
+  cerrarModalCancelar(): void {
+    this.modalCancelarAbierto.set(false);
+    this.pedidoACancelar.set(null);
+    this.motivoCancelacionPedido = '';
+  }
+
+  async confirmarCancelacionPedido(): Promise<void> {
+    const ped = this.pedidoACancelar();
+    if (!ped) return;
+
+    if (!this.motivoCancelacionPedido.trim()) {
+      alert('Por favor describe el motivo de la cancelación del pedido.');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de cancelar el pedido #${ped.id} de "${ped.clienteNombre}"?`)) {
+      return;
+    }
+
+    this.cancelandoPedido.set(true);
+    try {
+      const act = await this.pedidosService.actualizarEstado(
+        ped.id,
+        'CANCELADO',
+        this.motivoCancelacionPedido.trim(),
+        this.reponerStockPedido
+      );
+
+      if (act && this.pedidoDetalle()?.id === ped.id) {
+        this.pedidoDetalle.set(act);
+      }
+
+      this.cerrarModalCancelar();
+    } catch (err: any) {
+      alert(err.message || 'Error al cancelar el pedido');
+    } finally {
+      this.cancelandoPedido.set(false);
+    }
   }
 
   async registrarAbonoModal(): Promise<void> {

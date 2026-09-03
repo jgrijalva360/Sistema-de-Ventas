@@ -166,13 +166,19 @@
               <th>Artículos</th>
               <th style="text-align: right;">Total</th>
               <th style="text-align: center;">Pago</th>
-              <th style="text-align: center;">Ticket</th>
+              <th style="text-align: center;">Estado</th>
+              <th style="text-align: center;">Acciones</th>
             </tr>
           </thead>
           <tbody>
             @for (v of ventasService.ventasDeHoy(); track v.id) {
-            <tr>
-              <td><strong>{{ v.id }}</strong></td>
+            <tr [style.opacity]="v.estado === 'CANCELADA' ? '0.6' : '1'" [style.background]="v.estado === 'CANCELADA' ? '#fef2f2' : 'transparent'">
+              <td>
+                <strong>{{ v.id }}</strong>
+                @if (v.estado === 'CANCELADA') {
+                  <span style="display: block; font-size: 0.68rem; color: #dc2626; font-weight: 700;">CANCELADA</span>
+                }
+              </td>
               <td>{{ v.fecha | fechaLocal }}</td>
               <td>
                 <span style="font-size: 0.82rem; color: #475569;">
@@ -183,7 +189,11 @@
                   }
                 </span>
               </td>
-              <td style="text-align: right;"><strong style="color: #0284c7;">{{ v.total | currencyMxn }}</strong></td>
+              <td style="text-align: right;">
+                <strong [style.color]="v.estado === 'CANCELADA' ? '#94a3b8' : '#0284c7'" [style.text-decoration]="v.estado === 'CANCELADA' ? 'line-through' : 'none'">
+                  {{ v.total | currencyMxn }}
+                </strong>
+              </td>
               <td style="text-align: center;">
                 @if (v.pagos.efectivo) { <span class="badge badge-success"
                   style="font-size: 0.72rem; padding: 2px 6px;">EFECTIVO</span> }
@@ -193,15 +203,34 @@
                   style="font-size: 0.72rem; padding: 2px 6px;">TRANSFERENCIA</span> }
               </td>
               <td style="text-align: center;">
-                <button type="button" class="btn btn-sm btn-secondary" (click)="verTicket(v)"
-                  title="Ver / Reimprimir Ticket" style="padding: 3px 8px; font-size: 0.8rem;">
-                  🧾
-                </button>
+                @if (v.estado === 'CANCELADA') {
+                  <span class="badge badge-danger" style="font-size: 0.72rem; padding: 3px 6px;" [title]="'Motivo: ' + (v.motivoCancelacion || 'No especificado')">
+                    🚫 Cancelada
+                  </span>
+                } @else {
+                  <span class="badge badge-success" style="font-size: 0.72rem; padding: 3px 6px;">
+                    ✓ Activa
+                  </span>
+                }
+              </td>
+              <td style="text-align: center;">
+                <div style="display: inline-flex; gap: 4px; align-items: center;">
+                  <button type="button" class="btn btn-sm btn-secondary" (click)="verTicket(v)"
+                    title="Ver / Reimprimir Ticket" style="padding: 3px 8px; font-size: 0.8rem;">
+                    🧾
+                  </button>
+                  @if (v.estado !== 'CANCELADA') {
+                    <button type="button" class="btn btn-sm btn-danger" (click)="abrirModalCancelar(v)"
+                      title="Cancelar Venta / Devolución" style="padding: 3px 8px; font-size: 0.8rem; background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c;">
+                      ↩️ Devolución
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
             } @empty {
             <tr>
-              <td colspan="6" style="text-align: center; color: #94a3b8; padding: 25px;">
+              <td colspan="7" style="text-align: center; color: #94a3b8; padding: 25px;">
                 No hay ventas registradas el día de hoy todavía.
               </td>
             </tr>
@@ -283,8 +312,8 @@
 
         <!-- Botón de Cobrar -->
         <button type="button" class="btn btn-success btn-block btn-pay" (click)="realizarCobro()"
-          [disabled]="ventasService.carrito().length === 0 || ventasService.totalPagado() < ventasService.totalCarrito()">
-          ✅ COBRAR TICKET
+          [disabled]="ventasService.procesandoCobro() || ventasService.carrito().length === 0 || ventasService.totalPagado() < ventasService.totalCarrito()">
+          {{ ventasService.procesandoCobro() ? '⏳ PROCESANDO VENTA...' : '✅ COBRAR TICKET' }}
         </button>
       </div>
     </div>
@@ -308,6 +337,94 @@
     <div class="modal-actions">
       <button type="button" class="btn btn-secondary" (click)="modalPausarAbierto.set(false)">Cancelar</button>
       <button type="button" class="btn btn-primary" (click)="confirmarPausa()">Guardar en Espera</button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- Modal Cancelar Venta / Devolución -->
+@if (modalCancelarAbierto() && ventaACancelar()) {
+<div class="modal-overlay">
+  <div class="modal-card" style="max-width: 520px;">
+    <div class="modal-header" style="background: #fef2f2; border-bottom: 1px solid #fee2e2;">
+      <h3 style="color: #991b1b; display: flex; align-items: center; gap: 8px;">
+        <span>↩️</span> Cancelar Venta / Devolución
+      </h3>
+      <button type="button" class="modal-close" (click)="cerrarModalCancelar()">&times;</button>
+    </div>
+    <div class="modal-body" style="padding: 20px;">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>Folio de Venta:</span>
+          <strong>#{{ ventaACancelar()?.id }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>Fecha y Hora:</span>
+          <span>{{ ventaACancelar()?.fecha | fechaLocal }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>Monto Total a Devolver:</span>
+          <strong style="color: #dc2626; font-size: 1.15rem;">{{ ventaACancelar()?.total | currencyMxn }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>Sucursal:</span>
+          <span>{{ ventaACancelar()?.sucursalNombre || 'Principal' }}</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-weight: 700; font-size: 0.88rem; margin-bottom: 6px; display: block;">
+          Artículos en esta venta ({{ ventaACancelar()?.items?.length || 0 }}):
+        </label>
+        <div style="max-height: 120px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; background: white;">
+          @for (it of ventaACancelar()?.items; track $index) {
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; padding: 3px 0; border-bottom: 1px dashed #f1f5f9;">
+              <span>{{ it.cantidad }}x {{ it.nombre }}</span>
+              <strong style="color: #475569;">{{ it.subtotal | currencyMxn }}</strong>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="motivoCancelacion" style="font-weight: 700; font-size: 0.88rem; display: block; margin-bottom: 6px;">
+          Motivo de la Cancelación / Devolución *
+        </label>
+        <textarea
+          id="motivoCancelacion"
+          rows="3"
+          [(ngModel)]="motivoCancelacion"
+          placeholder="Ej: Producto defectuoso, error en cobro, cliente devolvió el producto..."
+          style="width: 100%; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;"
+          required
+        ></textarea>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; background: #eff6ff; padding: 10px 14px; border-radius: 8px; border: 1px solid #bfdbfe;">
+        <input
+          type="checkbox"
+          id="chkReponerStock"
+          [(ngModel)]="reponerStockCancelacion"
+          style="width: 18px; height: 18px; cursor: pointer;"
+        />
+        <label for="chkReponerStock" style="font-size: 0.88rem; color: #1e3a8a; cursor: pointer; margin: 0;">
+          <strong>Reintegrar artículos al inventario</strong> (aumentar el stock de nuevo).
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions" style="border-top: 1px solid #e2e8f0; padding: 14px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" class="btn btn-secondary" (click)="cerrarModalCancelar()" [disabled]="cancelandoVenta()">
+        ✕ Salir
+      </button>
+      <button
+        type="button"
+        class="btn btn-danger"
+        (click)="confirmarCancelacionVenta()"
+        [disabled]="cancelandoVenta() || !motivoCancelacion.trim()"
+        style="background: #dc2626; border-color: #b91c1c; color: white;"
+      >
+        {{ cancelandoVenta() ? '⏳ Procesando...' : '↩️ Confirmar Devolución / Cancelar' }}
+      </button>
     </div>
   </div>
 </div>
@@ -358,6 +475,18 @@
     </div>
 
     <div class="ticket-separator">================================</div>
+
+    @if (ticketVenta()?.estado === 'CANCELADA') {
+      <div style="background: #000; color: #fff; text-align: center; padding: 4px; font-weight: 900; margin: 4px 0; font-size: 13px; letter-spacing: 1px;">
+        *** TICKET CANCELADO / DEVOLUCIÓN ***
+      </div>
+      @if (ticketVenta()?.motivoCancelacion) {
+        <div style="text-align: center; font-size: 10px; font-style: italic; margin-bottom: 4px;">
+          Motivo: {{ ticketVenta()?.motivoCancelacion }}
+        </div>
+      }
+      <div class="ticket-separator">================================</div>
+    }
 
     <!-- Metadatos de la Venta -->
     <div class="ticket-meta-block">

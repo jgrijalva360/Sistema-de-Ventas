@@ -91,9 +91,9 @@
         <select [ngModel]="filtroPlan()" (ngModelChange)="filtroPlan.set($event)">
           <option value="TODOS">Todos los Planes</option>
           <option value="TRIAL">Prueba (Trial)</option>
-          <option value="BASICO">Plan Básico ($299)</option>
-          <option value="PRO">Plan Pro ($499)</option>
-          <option value="ENTERPRISE">Plan Anual VIP ($4,990)</option>
+          @for (plan of mpService.planesDisponibles(); track plan.id) {
+            <option [value]="plan.id">{{ plan.titulo }} (${{ plan.precio | number }})</option>
+          }
         </select>
       </div>
 
@@ -448,10 +448,12 @@
         <div class="form-group">
           <label>Plan de Suscripción Asignado:</label>
           <select [(ngModel)]="planSeleccionado">
-            <option value="TRIAL">Prueba (Trial 15 Días)</option>
-            <option value="BASICO">Plan Básico ($299 MXN)</option>
-            <option value="PRO">Plan Pro ($499 MXN)</option>
-            <option value="ENTERPRISE">Plan Anual VIP ($4,990 MXN)</option>
+            <option value="TRIAL">🟡 Prueba (Trial 15 Días)</option>
+            @for (plan of mpService.planesDisponibles(); track plan.id) {
+              <option [value]="plan.id">
+                {{ plan.destacado ? '⭐ ' : '' }}{{ plan.titulo }} (${{ plan.precio | number }} {{ plan.moneda }} / {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }})
+              </option>
+            }
           </select>
         </div>
 
@@ -526,9 +528,9 @@
         <div class="form-group">
           <label>Plan que otorgará al canjearse:</label>
           <select [(ngModel)]="planCodigo">
-            <option value="BASICO">Plan Básico ($299)</option>
-            <option value="PRO">Plan Pro ($499)</option>
-            <option value="ENTERPRISE">Plan Anual VIP ($4,990)</option>
+            @for (plan of mpService.planesDisponibles(); track plan.id) {
+              <option [value]="plan.id">{{ plan.titulo }} (${{ plan.precio | number }})</option>
+            }
           </select>
         </div>
 

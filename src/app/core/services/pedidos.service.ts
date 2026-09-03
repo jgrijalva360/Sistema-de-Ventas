@@ -237,7 +237,12 @@ export class PedidosService {
     return nuevoPedido;
   }
 
-  async actualizarEstado(id: string, nuevoEstado: PedidoPersonalizado['estado']): Promise<PedidoPersonalizado | null> {
+  async actualizarEstado(
+    id: string,
+    nuevoEstado: PedidoPersonalizado['estado'],
+    motivoCancelacion?: string,
+    reponerInventario = true
+  ): Promise<PedidoPersonalizado | null> {
     const current = [...this.pedidosSignal()];
     const pedido = current.find((p) => p.id === id);
     if (!pedido) return null;
@@ -250,16 +255,33 @@ export class PedidosService {
     const estadoAnterior = pedido.estado;
     pedido.estado = nuevoEstado;
 
-    // Descontar inventario si avanza a EN_PROCESO, TERMINADO o ENTREGADO y aún no se había descontado
-    const estadosAvanzados = ['EN_PROCESO', 'TERMINADO', 'LISTO', 'ENTREGADO'];
-    if (estadosAvanzados.includes(nuevoEstado) && !pedido.insumosDescontados) {
-      const insumosInventario = (pedido.materiasPrimas || [])
-        .filter((mp) => mp.tipo === 'INVENTARIO' && mp.codigo)
-        .map((mp) => ({ codigo: mp.codigo!, cantidad: mp.cantidad }));
+    if (nuevoEstado === 'CANCELADO') {
+      pedido.fechaCancelacion = new Date().toISOString();
+      pedido.motivoCancelacion = motivoCancelacion?.trim() || 'Cancelación de pedido';
+      
+      // Si ya se habían descontado insumos y se solicita reponer, devolverlos al inventario
+      if (reponerInventario && pedido.insumosDescontados) {
+        const insumosInventario = (pedido.materiasPrimas || [])
+          .filter((mp) => mp.tipo === 'INVENTARIO' && mp.codigo)
+          .map((mp) => ({ codigo: mp.codigo!, cantidad: mp.cantidad }));
 
-      if (insumosInventario.length > 0) {
-        await this.productosService.descontarStockVenta(insumosInventario, pedido.sucursalId || 'SUC-MAIN');
-        pedido.insumosDescontados = true;
+        if (insumosInventario.length > 0) {
+          await this.productosService.reponerStockDevolucion(insumosInventario, pedido.sucursalId || 'SUC-MAIN');
+          pedido.insumosDescontados = false;
+        }
+      }
+    } else {
+      // Descontar inventario si avanza a EN_PROCESO, TERMINADO o ENTREGADO y aún no se había descontado
+      const estadosAvanzados = ['EN_PROCESO', 'TERMINADO', 'LISTO', 'ENTREGADO'];
+      if (estadosAvanzados.includes(nuevoEstado) && !pedido.insumosDescontados) {
+        const insumosInventario = (pedido.materiasPrimas || [])
+          .filter((mp) => mp.tipo === 'INVENTARIO' && mp.codigo)
+          .map((mp) => ({ codigo: mp.codigo!, cantidad: mp.cantidad }));
+
+        if (insumosInventario.length > 0) {
+          await this.productosService.descontarStockVenta(insumosInventario, pedido.sucursalId || 'SUC-MAIN');
+          pedido.insumosDescontados = true;
+        }
       }
     }
 
@@ -269,9 +291,11 @@ export class PedidosService {
     // Registrar en Bitácora
     await this.bitacoraService.registrarEvento({
       modulo: 'PEDIDOS',
-      accion: 'EDITAR',
-      descripcion: `Pedido #${pedido.id} cambió de estado: ${estadoAnterior} ➔ ${nuevoEstado}`,
-      detalles: { id: pedido.id, estadoAnterior, nuevoEstado },
+      accion: nuevoEstado === 'CANCELADO' ? 'ELIMINAR' : 'EDITAR',
+      descripcion: nuevoEstado === 'CANCELADO'
+        ? `Pedido #${pedido.id} CANCELADO. Motivo: ${pedido.motivoCancelacion || 'No especificado'}. Insumos devueltos: ${reponerInventario ? 'SÍ' : 'NO'}`
+        : `Pedido #${pedido.id} cambió de estado: ${estadoAnterior} ➔ ${nuevoEstado}`,
+      detalles: { id: pedido.id, estadoAnterior, nuevoEstado, motivoCancelacion, reponerInventario },
       sucursalId: pedido.sucursalId,
       sucursalNombre: pedido.sucursalNombre
     });

@@ -28,11 +28,12 @@ export class ReportesService {
     private pedidosService: PedidosService
   ) {}
 
-  filtrarVentas(desdeStr: string, hastaStr: string, sucursalId = 'TODAS'): Venta[] {
+  filtrarVentas(desdeStr: string, hastaStr: string, sucursalId = 'TODAS', incluirCanceladas = false): Venta[] {
     const desde = new Date(`${desdeStr}T00:00:00`).getTime();
     const hasta = new Date(`${hastaStr}T23:59:59`).getTime();
 
     return this.ventasService.ventas().filter((v) => {
+      if (!incluirCanceladas && v.estado === 'CANCELADA') return false;
       const t = new Date(v.fecha).getTime();
       if (isNaN(t) || t < desde || t > hasta) return false;
       if (sucursalId !== 'TODAS' && v.sucursalId !== sucursalId) return false;
