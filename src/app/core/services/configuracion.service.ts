@@ -12,7 +12,9 @@ import {
   PedidoPersonalizado,
   MateriaPrimaItem,
   AbonoPedido,
-  UsuarioSistema
+  UsuarioSistema,
+  SocioConfig,
+  LiquidacionSocios
 } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { ProductosService } from './productos.service';
@@ -26,6 +28,7 @@ import { SyncService } from './sync.service';
 import { AuthService } from './auth.service';
 import { SuscripcionService } from './suscripcion.service';
 import { FirebaseService } from './firebase.service';
+import { SociosService } from './socios.service';
 import { doc, getDoc, setDoc, deleteDoc, getDocs, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 import { Subscription } from 'rxjs';
@@ -69,7 +72,8 @@ export class ConfiguracionService {
     private bitacoraService: BitacoraService,
     private authService: AuthService,
     private suscripcionService: SuscripcionService,
-    private fb: FirebaseService
+    private fb: FirebaseService,
+    private sociosService: SociosService
   ) {}
 
   async cargarConfiguracion(): Promise<void> {
@@ -123,6 +127,14 @@ export class ConfiguracionService {
       console.warn('Error al obtener lista de colaboradores para el backup:', e);
     }
 
+    if (this.sociosService.socios().length === 0 && this.sociosService.liquidaciones().length === 0) {
+      try {
+        await this.sociosService.cargarDatos();
+      } catch (e) {
+        console.warn('Error al cargar datos de socios para el backup:', e);
+      }
+    }
+
     const tenantId = this.authService.getTenantId();
     const suscripcion = this.suscripcionService.suscripcion();
 
@@ -147,6 +159,8 @@ export class ConfiguracionService {
       corteActivo: this.cortesService.corteActivo(),
       carritosPendientes: this.ventasService.carritosPendientes(),
       pedidosPersonalizados: this.pedidosService.pedidos(),
+      socios: this.sociosService.socios(),
+      liquidacionesSocios: this.sociosService.liquidaciones(),
       bitacora: this.bitacoraService.eventos()
     };
 
@@ -174,6 +188,8 @@ export class ConfiguracionService {
     sucursalesCount: number;
     bitacoraCount: number;
     usuariosCount: number;
+    sociosCount: number;
+    liquidacionesCount: number;
     hasConfig: boolean;
   }> {
     const text = await file.text();
@@ -204,6 +220,8 @@ export class ConfiguracionService {
     const rawSucursales = normalizar(data.sucursales, data.branches);
     const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
     const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
+    const rawSocios = normalizar(data.socios, data.sociosConfig, data.partners);
+    const rawLiquidaciones = normalizar(data.liquidacionesSocios, data.liquidaciones, data.repartosSocios, data.repartos);
     const hasConfig = Boolean(data.config || data.general || data.listas || data.nombreNegocio || data.businessName);
 
     return {
@@ -220,6 +238,8 @@ export class ConfiguracionService {
       sucursalesCount: rawSucursales.length,
       bitacoraCount: rawBitacora.length,
       usuariosCount: rawUsuarios.length,
+      sociosCount: rawSocios.length,
+      liquidacionesCount: rawLiquidaciones.length,
       hasConfig
     };
   }
@@ -237,6 +257,7 @@ export class ConfiguracionService {
       restaurarConfiguracion: boolean;
       restaurarBitacora?: boolean;
       restaurarUsuarios?: boolean;
+      restaurarSocios?: boolean;
     }
   ): Promise<{
     productosCount: number;
@@ -248,6 +269,8 @@ export class ConfiguracionService {
     sucursalesCount: number;
     bitacoraCount: number;
     usuariosCount: number;
+    sociosCount: number;
+    liquidacionesCount: number;
     configRestaurada: boolean;
   }> {
     this.syncService.setStatus('saving', 'Restaurando copia de seguridad...');
@@ -278,6 +301,8 @@ export class ConfiguracionService {
     const rawSucursales = normalizar(data.sucursales, data.branches);
     const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
     const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
+    const rawSocios = normalizar(data.socios, data.sociosConfig, data.partners);
+    const rawLiquidaciones = normalizar(data.liquidacionesSocios, data.liquidaciones, data.repartosSocios, data.repartos);
 
     let sucursalesRestauradas = 0;
     let productosRestaurados = 0;
@@ -288,6 +313,8 @@ export class ConfiguracionService {
     let pedidosRestaurados = 0;
     let bitacoraRestaurada = 0;
     let usuariosRestaurados = 0;
+    let sociosRestaurados = 0;
+    let liquidacionesRestauradas = 0;
     let configRestaurada = false;
 
     // 0. Sucursales
@@ -314,6 +341,7 @@ export class ConfiguracionService {
         const stockAct = typeof p.stockActual === 'number' ? p.stockActual : (p.existencias ?? stockMin);
 
         return {
+          ...p,
           codigo: cod,
           nombre: p.nombre || 'Producto',
           precioVenta: Number(p.precioVenta) || 0,
@@ -322,7 +350,12 @@ export class ConfiguracionService {
           precioVariable: Boolean(p.precioVariable),
           grupo: p.grupo || 'General',
           unidad: p.unidad || 'Unidades',
-          categoria: p.categoria || p.grupo || 'General'
+          categoria: p.categoria || p.grupo || 'General',
+          ultimoCosto: typeof p.ultimoCosto === 'number' ? p.ultimoCosto : (p.costoUnitario || p.costo || undefined),
+          fechaUltimoCosto: p.fechaUltimoCosto || undefined,
+          costoPromedio: typeof p.costoPromedio === 'number' ? p.costoPromedio : undefined,
+          lotesFifo: Array.isArray(p.lotesFifo) ? p.lotesFifo : [],
+          stockPorSucursal: p.stockPorSucursal || {}
         };
       });
 
@@ -345,6 +378,7 @@ export class ConfiguracionService {
         const cant = Number(m.cantidad) || 1;
 
         return {
+          ...m,
           id: m.id || `MOV-${String(idx + 1).padStart(4, '0')}`,
           fecha: m.fecha || m.timestamp || new Date().toISOString(),
           tipo,
@@ -353,6 +387,8 @@ export class ConfiguracionService {
           cantidad: cant,
           stockAnterior: typeof m.stockAnterior === 'number' ? m.stockAnterior : cant,
           stockNuevo: typeof m.stockNuevo === 'number' ? m.stockNuevo : cant,
+          costoUnitario: typeof m.costoUnitario === 'number' ? m.costoUnitario : undefined,
+          costoTotal: typeof m.costoTotal === 'number' ? m.costoTotal : undefined,
           motivo: m.observaciones || m.motivo || '',
           usuario: m.usuario || 'Local',
           sucursalId: m.sucursalId || 'SUC-MAIN'
@@ -377,15 +413,19 @@ export class ConfiguracionService {
 
         const rawItems = Array.isArray(v.items) ? v.items : [];
         const items: ItemCarrito[] = rawItems.map((it: any) => ({
+          ...it,
           codigo: it.codigo || '',
           nombre: it.nombre || 'Artículo',
           cantidad: Number(it.cantidad) || 1,
           precioUnitario: typeof it.precioUnitario === 'number' ? it.precioUnitario : tot,
           subtotal: typeof it.subtotal === 'number' ? it.subtotal : (Number(it.cantidad) || 1) * (typeof it.precioUnitario === 'number' ? it.precioUnitario : tot),
+          costoUnitarioFifo: typeof it.costoUnitarioFifo === 'number' ? it.costoUnitarioFifo : undefined,
+          costoTotalFifo: typeof it.costoTotalFifo === 'number' ? it.costoTotalFifo : undefined,
           precioVariable: Boolean(it.precioVariable)
         }));
 
         return {
+          ...v,
           id: v.id || `V-${String(idx + 1).padStart(4, '0')}`,
           fecha: v.fecha || new Date().toISOString(),
           items: items.length > 0 ? items : [{
@@ -405,7 +445,15 @@ export class ConfiguracionService {
           },
           sucursalId: v.sucursalId || 'SUC-MAIN',
           sucursalNombre: v.sucursalNombre || 'JBGraphic',
-          usuario: v.usuario || 'Local'
+          usuario: v.usuario || 'Local',
+          estado: v.estado || 'COMPLETADA',
+          fechaCancelacion: v.fechaCancelacion || undefined,
+          motivoCancelacion: v.motivoCancelacion || undefined,
+          usuarioCancelacion: v.usuarioCancelacion || undefined,
+          socioTransferenciaId: v.socioTransferenciaId || undefined,
+          socioTransferenciaNombre: v.socioTransferenciaNombre || undefined,
+          socioTarjetaId: v.socioTarjetaId || undefined,
+          socioTarjetaNombre: v.socioTarjetaNombre || undefined
         };
       });
 
@@ -434,6 +482,7 @@ export class ConfiguracionService {
     // 4. Mapear Gastos
     if (opciones.restaurarGastos && rawGastos.length > 0) {
       const gastos: Gasto[] = rawGastos.map((g: any, idx: number) => ({
+        ...g,
         id: g.id || `G-${String(idx + 1).padStart(4, '0')}`,
         fecha: g.fecha || g.timestamp || new Date().toISOString(),
         concepto: g.concepto || 'Gasto',
@@ -443,7 +492,8 @@ export class ConfiguracionService {
         metodoPago: g.metodoPago || 'EFECTIVO',
         observaciones: g.observaciones || '',
         sucursalId: g.sucursalId || 'SUC-MAIN',
-        sucursalNombre: g.sucursalNombre || 'JBGraphic'
+        sucursalNombre: g.sucursalNombre || 'JBGraphic',
+        socioId: g.socioId || undefined
       }));
 
       this.gastosService.setGastos(gastos);
@@ -455,6 +505,7 @@ export class ConfiguracionService {
     if (opciones.restaurarCortes) {
       if (rawCortes.length > 0) {
         const cortes: Corte[] = rawCortes.map((c: any, idx: number) => ({
+          ...c,
           id: c.id || `CC-${String(idx + 1).padStart(4, '0')}`,
           periodicidad: c.periodicidad || 'DIARIO',
           fechaApertura: c.fechaApertura || new Date().toISOString(),
@@ -473,6 +524,9 @@ export class ConfiguracionService {
           gastosBancarios: Number(c.gastosBancarios) || 0,
           retiros: Number(c.retiros) || 0,
           ingresosCaja: Number(c.ingresosCaja) || 0,
+          socioRetiroId: c.socioRetiroId || undefined,
+          socioRetiroNombre: c.socioRetiroNombre || undefined,
+          resguardosDetalle: Array.isArray(c.resguardosDetalle) ? c.resguardosDetalle : [],
           cajaEsperada: Number(c.cajaEsperada) || 0,
           cajaContada: Number(c.cajaContada) || 0,
           diferencia: Number(c.diferencia) || 0,
@@ -492,6 +546,7 @@ export class ConfiguracionService {
       // Corte Activo
       if (data.corteActivo && (data.corteActivo.id || data.corteActivo.estado === 'ABIERTO')) {
         const corteActivo = {
+          ...data.corteActivo,
           id: data.corteActivo.id || `CA-${Date.now()}`,
           fechaApertura: data.corteActivo.fechaApertura || new Date().toISOString(),
           cajaInicial: Number(data.corteActivo.cajaInicial) || 0,
@@ -499,7 +554,8 @@ export class ConfiguracionService {
           estado: 'ABIERTO' as const,
           usuario: data.corteActivo.usuario || 'Cajero',
           sucursalId: data.corteActivo.sucursalId || 'SUC-MAIN',
-          sucursalNombre: data.corteActivo.sucursalNombre || 'JBGraphic'
+          sucursalNombre: data.corteActivo.sucursalNombre || 'JBGraphic',
+          resguardos: Array.isArray(data.corteActivo.resguardos) ? data.corteActivo.resguardos : []
         };
         const corteRef = this.firestoreService.getRefDocConfig('corteActivo');
         const sanitizado = this.firestoreService.sanitizarParaFirestore(corteActivo);
@@ -544,11 +600,16 @@ export class ConfiguracionService {
           const metodo = (a.metodoPago || a.metodo || a.formaPago || p.metodoPagoAnticipo || 'EFECTIVO').toUpperCase();
 
           return {
+            ...a,
             id: a.id || a.pagoId || `ABO-${aIdx + 1}`,
             fecha,
             concepto,
             monto,
-            metodoPago: metodo
+            metodoPago: metodo,
+            socioTransferenciaId: a.socioTransferenciaId || undefined,
+            socioTransferenciaNombre: a.socioTransferenciaNombre || undefined,
+            socioTarjetaId: a.socioTarjetaId || undefined,
+            socioTarjetaNombre: a.socioTarjetaNombre || undefined
           };
         });
 
@@ -578,6 +639,7 @@ export class ConfiguracionService {
         const saldoRestante = Math.max(0, Math.round((total - ant) * 100) / 100);
 
         return {
+          ...p,
           id: p.id || p.folio || `PED-${String(idx + 1).padStart(4, '0')}`,
           clienteNombre: cliNombre,
           clienteTelefono: cliTel || '',
@@ -594,8 +656,15 @@ export class ConfiguracionService {
           metodoPagoLiquidacion: p.metodoPagoLiquidacion || '',
           fechaLiquidacion: p.fechaLiquidacion || '',
           insumosDescontados: Boolean(p.insumosDescontados),
+          socioTransferenciaId: p.socioTransferenciaId || undefined,
+          socioTransferenciaNombre: p.socioTransferenciaNombre || undefined,
+          socioTarjetaId: p.socioTarjetaId || undefined,
+          socioTarjetaNombre: p.socioTarjetaNombre || undefined,
           sucursalId: p.sucursalId || 'SUC-MAIN',
-          sucursalNombre: p.sucursalNombre || 'Principal'
+          sucursalNombre: p.sucursalNombre || 'Principal',
+          fechaCancelacion: p.fechaCancelacion || undefined,
+          motivoCancelacion: p.motivoCancelacion || undefined,
+          usuarioCancelacion: p.usuarioCancelacion || undefined
         };
       });
 
@@ -693,6 +762,49 @@ export class ConfiguracionService {
       }
     }
 
+    // 10. Socios y Liquidaciones
+    if (opciones.restaurarSocios) {
+      if (rawSocios.length > 0) {
+        const socios: SocioConfig[] = rawSocios.map((s: any, idx: number) => ({
+          ...s,
+          id: s.id || `socio-${idx + 1}`,
+          nombre: s.nombre || `Socio ${idx + 1}`,
+          porcentaje: typeof s.porcentaje === 'number' ? s.porcentaje : (parseFloat(s.porcentaje) || 0),
+          activo: s.activo !== false,
+          recibeTransferenciasDefault: Boolean(s.recibeTransferenciasDefault),
+          recibeTarjetasDefault: Boolean(s.recibeTarjetasDefault),
+          recibeResguardosDefault: Boolean(s.recibeResguardosDefault)
+        }));
+        await this.sociosService.guardarSociosConfig(socios);
+        sociosRestaurados = socios.length;
+      }
+
+      if (rawLiquidaciones.length > 0) {
+        const liquidaciones: LiquidacionSocios[] = rawLiquidaciones.map((l: any, idx: number) => ({
+          ...l,
+          id: l.id || `LIQ-${Date.now()}-${idx}`,
+          folio: l.folio || `REP-${String(idx + 1).padStart(4, '0')}`,
+          fechaCreacion: l.fechaCreacion || new Date().toISOString(),
+          fechaDesde: l.fechaDesde || '',
+          fechaHasta: l.fechaHasta || '',
+          baseCalculo: l.baseCalculo || 'FLUJO_EFECTIVO',
+          totalIngresos: Number(l.totalIngresos) || 0,
+          totalCostoFifo: Number(l.totalCostoFifo) || 0,
+          totalGastosNegocio: Number(l.totalGastosNegocio) || 0,
+          totalGastosSocios: Number(l.totalGastosSocios) || 0,
+          totalTransferencias: Number(l.totalTransferencias) || 0,
+          totalTarjetas: Number(l.totalTarjetas) || 0,
+          totalResguardos: Number(l.totalResguardos) || 0,
+          utilidadBaseReparto: Number(l.utilidadBaseReparto) || 0,
+          socios: Array.isArray(l.socios) ? l.socios : [],
+          gastosBolsilloDetalle: Array.isArray(l.gastosBolsilloDetalle) ? l.gastosBolsilloDetalle : []
+        }));
+        await this.firestoreService.guardarColeccionChunked('liquidaciones_socios', liquidaciones);
+        await this.sociosService.cargarLiquidaciones();
+        liquidacionesRestauradas = liquidaciones.length;
+      }
+    }
+
     await this.syncService.incrementarRevision();
     this.syncService.setStatus('online', 'En Línea');
 
@@ -706,6 +818,8 @@ export class ConfiguracionService {
       sucursalesCount: sucursalesRestauradas,
       bitacoraCount: bitacoraRestaurada,
       usuariosCount: usuariosRestaurados,
+      sociosCount: sociosRestaurados,
+      liquidacionesCount: liquidacionesRestauradas,
       configRestaurada
     };
   }
@@ -720,6 +834,8 @@ export class ConfiguracionService {
     sucursalesCount?: number;
     bitacoraCount?: number;
     usuariosCount?: number;
+    sociosCount?: number;
+    liquidacionesCount?: number;
     configRestaurada?: boolean;
   }> {
     const text = await file.text();
@@ -734,7 +850,8 @@ export class ConfiguracionService {
       restaurarSucursales: true,
       restaurarConfiguracion: true,
       restaurarBitacora: true,
-      restaurarUsuarios: true
+      restaurarUsuarios: true,
+      restaurarSocios: true
     });
     return resultado;
   }

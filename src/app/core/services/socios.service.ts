@@ -7,9 +7,7 @@ import { getDoc, setDoc } from 'firebase/firestore';
 import { generarSiguienteConsecutivo } from '../utils/consecutivo.util';
 
 const SOCIOS_DEFAULT: SocioConfig[] = [
-  { id: 'socio-1', nombre: 'Socio 1', porcentaje: 40, activo: true },
-  { id: 'socio-2', nombre: 'Socio 2', porcentaje: 40, activo: true },
-  { id: 'socio-3', nombre: 'Socio 3', porcentaje: 20, activo: true }
+  { id: 'socio-1', nombre: 'Socio 1', porcentaje: 100, activo: true }
 ];
 
 @Injectable({
@@ -37,6 +35,24 @@ export class SociosService {
 
   public porcentajesValidos = computed(() => {
     return Math.abs(this.sumaPorcentajes() - 100) < 0.01;
+  });
+
+  public socioTransferenciasDefault = computed(() => {
+    const list = this.sociosActivos();
+    const def = list.find((s) => s.recibeTransferenciasDefault === true);
+    return def || (list.length > 0 ? list[0] : null);
+  });
+
+  public socioTarjetasDefault = computed(() => {
+    const list = this.sociosActivos();
+    const def = list.find((s) => s.recibeTarjetasDefault === true);
+    return def || this.socioTransferenciasDefault();
+  });
+
+  public socioResguardosDefault = computed(() => {
+    const list = this.sociosActivos();
+    const def = list.find((s) => s.recibeResguardosDefault === true);
+    return def || (list.length > 0 ? list[0] : null);
   });
 
   async cargarDatos(): Promise<void> {

@@ -33,6 +33,7 @@
             <option value="NOMINA">Nómina / Sueldos</option>
             <option value="MANTENIMIENTO">Mantenimiento</option>
             <option value="PROVEEDORES">Proveedores / Mercancía</option>
+            <option value="REPARTO_SOCIOS">🤝 Reparto de Utilidades / Socios</option>
             <option value="OTROS">Otros Gastos</option>
           </select>
         </div>
@@ -96,10 +97,10 @@
             <th>Fecha</th>
             <th>Concepto</th>
             <th>Categoría</th>
-            <th>Método</th>
             <th>Pagado Por</th>
+            <th>Método</th>
             <th style="text-align: right;">Monto</th>
-            <th style="text-align: center;">Acción</th>
+            <th style="text-align: center;">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -107,12 +108,12 @@
           <tr>
             <td>{{ g.fecha | fechaLocal }}</td>
             <td><strong>{{ g.concepto }}</strong></td>
-            <td><span class="badge badge-info">{{ g.categoria }}</span></td>
             <td>
-              @if (g.metodoPago === 'EFECTIVO') { <span class="badge badge-success">💵 Efectivo</span> }
-              @else if (g.metodoPago === 'BOLSILLO_SOCIO') { <span class="badge"
-                style="background: #fef3c7; color: #92400e;">👛 Bolsillo Socio</span> }
-              @else { <span class="badge badge-warning">{{ g.metodoPago }}</span> }
+              @if (g.categoria === 'REPARTO_SOCIOS') {
+                <span class="badge" style="background: #ede9fe; color: #6d28d9; font-weight: 700;">🤝 Reparto Socios</span>
+              } @else {
+                <span class="badge badge-info">{{ g.categoria }}</span>
+              }
             </td>
             <td>
               @if (g.socioId || (g.persona && !g.persona.toLowerCase().includes('caja') &&
@@ -124,9 +125,18 @@
                 Negocio</span>
               }
             </td>
+            <td>
+              @if (g.metodoPago === 'EFECTIVO') { <span class="badge badge-success">💵 Efectivo</span> }
+              @else if (g.metodoPago === 'BOLSILLO_SOCIO') { <span class="badge"
+                style="background: #fef3c7; color: #92400e;">👛 Bolsillo Socio</span> }
+              @else { <span class="badge badge-warning">{{ g.metodoPago }}</span> }
+            </td>
             <td style="text-align: right;"><strong style="color: #dc2626;">{{ g.monto | currencyMxn }}</strong></td>
             <td style="text-align: center;">
-              <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarGasto(g.id)">🗑️</button>
+              <div style="display: inline-flex; gap: 6px;">
+                <button type="button" class="btn btn-sm btn-secondary" (click)="abrirModalEditar(g)" title="Modificar gasto">✏️</button>
+                <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarGasto(g.id)" title="Eliminar gasto">🗑️</button>
+              </div>
             </td>
           </tr>
           } @empty {
@@ -140,4 +150,90 @@
       </table>
     </div>
   </div>
+
+  <!-- Modal para Modificar Gasto -->
+  @if (gastoEditando(); as g) {
+  <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+    (click)="cerrarModalEditar()">
+    <div style="background: white; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); overflow: hidden;"
+      (click)="$event.stopPropagation()">
+      <div style="padding: 16px 20px; background: #0f172a; color: white; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">✏️ Modificar Gasto #{{ g.id }}</h3>
+        <button type="button" (click)="cerrarModalEditar()"
+          style="background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;">✕</button>
+      </div>
+
+      <div style="padding: 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+          <div style="font-size: 0.85rem; color: #64748b;">Concepto: <strong style="color: #0f172a; font-size: 0.95rem;">{{ g.concepto }}</strong></div>
+          <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">Monto: <strong style="color: #dc2626; font-size: 1.1rem;">{{ g.monto | currencyMxn }}</strong></div>
+          <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">Fecha: {{ g.fecha | fechaLocal }}</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- 1. Categoría -->
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              Categoría *
+            </label>
+            <select [ngModel]="editCategoria()" (ngModelChange)="editCategoria.set($event)"
+              style="width: 100%; padding: 10px; font-size: 0.92rem; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+              <option value="SERVICIOS">Servicios (Luz, Agua, Internet)</option>
+              <option value="SUMINISTROS">Suministros / Empaque</option>
+              <option value="NOMINA">Nómina / Sueldos</option>
+              <option value="MANTENIMIENTO">Mantenimiento</option>
+              <option value="PROVEEDORES">Proveedores / Mercancía</option>
+              <option value="REPARTO_SOCIOS">🤝 Reparto de Utilidades / Socios</option>
+              <option value="OTROS">Otros Gastos</option>
+            </select>
+          </div>
+
+          <!-- 2. Pagado Por (Primero) -->
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              Pagado Por *
+            </label>
+            <select [ngModel]="editOrigenGasto()" (ngModelChange)="onEditOrigenGastoChange($event)"
+              style="width: 100%; padding: 10px; font-size: 0.92rem; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+              <option value="CAJA">🏢 Caja / Negocio (Empresa)</option>
+              <optgroup label="Socios (Bolsillo de Socio)">
+                @for (s of sociosService.sociosActivos(); track s.id) {
+                <option [value]="s.id">👤 Socio: {{ s.nombre }}</option>
+                }
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- 3. Método de Pago (Después) -->
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              Método de Pago *
+            </label>
+            <select [ngModel]="editMetodoPago()" (ngModelChange)="editMetodoPago.set($event)"
+              style="width: 100%; padding: 10px; font-size: 0.92rem; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+              @if (editOrigenGasto() === 'CAJA') {
+              <option value="EFECTIVO">💵 Efectivo (Afecta Caja de Turno)</option>
+              <option value="TARJETA">💳 Tarjeta (Gasto Bancario Empresa)</option>
+              <option value="TRANSFERENCIA">📱 Transferencia (Gasto Bancario Empresa)</option>
+              } @else {
+              <option value="BOLSILLO_SOCIO">👛 Bolsillo Personal del Socio (No afecta caja)</option>
+              <option value="EFECTIVO">💵 Efectivo (Tomado de Caja de Turno)</option>
+              <option value="TRANSFERENCIA">📱 Transferencia Personal</option>
+              <option value="TARJETA">💳 Tarjeta Personal</option>
+              }
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 14px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModalEditar()">Cancelar</button>
+        <button type="button" class="btn btn-primary" (click)="onGuardarEdicionGasto()"
+          [disabled]="guardandoEdicion()">
+          💾 {{ guardandoEdicion() ? 'Guardando...' : 'Guardar Cambios' }}
+        </button>
+      </div>
+    </div>
+  </div>
+  }
 </div>

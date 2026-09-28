@@ -65,6 +65,10 @@ export interface Venta {
   fechaCancelacion?: string;
   motivoCancelacion?: string;
   usuarioCancelacion?: string;
+  socioTransferenciaId?: string;
+  socioTransferenciaNombre?: string;
+  socioTarjetaId?: string;
+  socioTarjetaNombre?: string;
 }
 
 export interface CarritoPendiente {
@@ -90,6 +94,16 @@ export interface Gasto {
   socioId?: string;
 }
 
+export interface ResguardoCajaItem {
+  id: string;
+  fecha: string;
+  monto: number;
+  socioId: string;
+  socioNombre: string;
+  concepto?: string;
+  usuario?: string;
+}
+
 export interface CorteActivo {
   id: string;
   fechaApertura: string;
@@ -99,6 +113,7 @@ export interface CorteActivo {
   usuario: string;
   sucursalId: string;
   sucursalNombre: string;
+  resguardos?: ResguardoCajaItem[];
 }
 
 export interface Corte {
@@ -120,6 +135,9 @@ export interface Corte {
   gastosBancarios: number;
   retiros: number;
   ingresosCaja: number;
+  socioRetiroId?: string;
+  socioRetiroNombre?: string;
+  resguardosDetalle?: ResguardoCajaItem[];
   cajaEsperada: number;
   cajaContada: number;
   diferencia: number;
@@ -146,6 +164,10 @@ export interface AbonoPedido {
   concepto: string;
   monto: number;
   metodoPago: string;
+  socioTransferenciaId?: string;
+  socioTransferenciaNombre?: string;
+  socioTarjetaId?: string;
+  socioTarjetaNombre?: string;
 }
 
 export interface PedidoPersonalizado {
@@ -165,6 +187,10 @@ export interface PedidoPersonalizado {
   fechaLiquidacion?: string;
   abonos?: AbonoPedido[];
   insumosDescontados?: boolean;
+  socioTransferenciaId?: string;
+  socioTransferenciaNombre?: string;
+  socioTarjetaId?: string;
+  socioTarjetaNombre?: string;
   sucursalId: string;
   sucursalNombre: string;
   fechaCancelacion?: string;
@@ -375,6 +401,9 @@ export interface SocioConfig {
   nombre: string;
   porcentaje: number; // Ej: 40, 40, 20
   activo: boolean;
+  recibeTransferenciasDefault?: boolean;
+  recibeTarjetasDefault?: boolean;
+  recibeResguardosDefault?: boolean;
 }
 
 export interface DetalleLiquidacionSocio {
@@ -384,6 +413,9 @@ export interface DetalleLiquidacionSocio {
   gananciaAsignada: number;
   gastosBolsilloAportados: number;
   cuotaGastosBolsillo: number;
+  transferenciasRecibidas?: number;
+  tarjetasRecibidas?: number;
+  resguardosRecibidos?: number;
   montoNetoACobrar: number;
 }
 
@@ -409,6 +441,9 @@ export interface LiquidacionSocios {
   totalCostoFifo: number;
   totalGastosNegocio: number;
   totalGastosSocios: number;
+  totalTransferencias?: number;
+  totalTarjetas?: number;
+  totalResguardos?: number;
   utilidadBaseReparto: number;
   socios: DetalleLiquidacionSocio[];
   gastosBolsilloDetalle: GastoBolsilloItem[];

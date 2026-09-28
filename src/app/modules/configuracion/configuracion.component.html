@@ -502,6 +502,16 @@
               <small>{{ resumenBackup()?.usuariosCount || 0 }} colaboradores y dispositivos</small>
             </div>
           </label>
+
+          <!-- 11. Socios y Repartos -->
+          <label class="module-card" [class.selected]="optSocios()">
+            <input type="checkbox" [ngModel]="optSocios()" (ngModelChange)="optSocios.set($event)" />
+            <div class="module-icon">🤝</div>
+            <div class="module-info">
+              <strong>Socios y Repartos</strong>
+              <small>{{ resumenBackup()?.sociosCount || 0 }} socios, {{ resumenBackup()?.liquidacionesCount || 0 }} liquidaciones</small>
+            </div>
+          </label>
         </div>
       </div>
 

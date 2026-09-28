@@ -114,6 +114,31 @@ export class GastosService {
     }
   }
 
+  async actualizarGasto(gastoActualizado: Gasto): Promise<void> {
+    const list = this.gastosSignal().map((g) => (g.id === gastoActualizado.id ? { ...gastoActualizado } : g));
+    this.gastosSignal.set(list);
+
+    try {
+      this.syncService.setStatus('saving', 'Actualizando gasto...');
+      await this.firestoreService.guardarColeccionChunked('gastos', list);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+
+      await this.bitacoraService.registrarEvento({
+        modulo: 'GASTOS',
+        accion: 'EDITAR',
+        descripcion: `Gasto #${gastoActualizado.id} modificado: "${gastoActualizado.concepto}" ($${gastoActualizado.monto.toFixed(2)}) - Pagado por: ${gastoActualizado.persona}, Método: ${gastoActualizado.metodoPago}, Categoría: ${gastoActualizado.categoria}`,
+        detalles: gastoActualizado,
+        sucursalId: gastoActualizado.sucursalId,
+        sucursalNombre: gastoActualizado.sucursalNombre
+      });
+    } catch (e) {
+      console.warn('Error al actualizar gasto en Firestore:', e);
+      this.syncService.setStatus('offline', 'Error al guardar');
+      throw e;
+    }
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLive) this.subLive.unsubscribe();
 

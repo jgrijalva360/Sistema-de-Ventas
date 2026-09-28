@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { Corte, CorteActivo } from '../models/models';
+import { Corte, CorteActivo, ResguardoCajaItem } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { VentasService } from './ventas.service';
 import { GastosService } from './gastos.service';
@@ -212,7 +212,12 @@ export class CortesService {
     retiros = 0,
     ingresosCaja = 0,
     observaciones = '',
-    periodicidad = 'DIARIO'
+    periodicidad = 'DIARIO',
+    paramsRetiro?: {
+      socioRetiroId?: string;
+      socioRetiroNombre?: string;
+      resguardosDetalle?: ResguardoCajaItem[];
+    }
   ): Promise<Corte> {
     const activo = this.corteActivoSignal();
     if (!activo) throw new Error('No hay corte abierto para cerrar.');
@@ -240,6 +245,9 @@ export class CortesService {
       gastosBancarios: resumen.gastosBancarios,
       retiros,
       ingresosCaja,
+      socioRetiroId: paramsRetiro?.socioRetiroId,
+      socioRetiroNombre: paramsRetiro?.socioRetiroNombre,
+      resguardosDetalle: paramsRetiro?.resguardosDetalle || activo.resguardos || [],
       cajaEsperada: resumen.cajaEsperada,
       cajaContada,
       diferencia: resumen.diferencia,
@@ -266,7 +274,7 @@ export class CortesService {
       await this.bitacoraService.registrarEvento({
         modulo: 'CORTES',
         accion: 'CIERRE',
-        descripcion: `Cierre de caja #${nuevoCorte.id} (${nuevoCorte.ventasCount} ventas, $${nuevoCorte.totalVentasNetas.toFixed(2)}). Diferencia de arqueo: $${nuevoCorte.diferencia.toFixed(2)}`,
+        descripcion: `Cierre de caja #${nuevoCorte.id} (${nuevoCorte.ventasCount} ventas, $${nuevoCorte.totalVentasNetas.toFixed(2)}). Diferencia de arqueo: $${nuevoCorte.diferencia.toFixed(2)}${nuevoCorte.socioRetiroNombre ? ` (Resguardo en custodia de ${nuevoCorte.socioRetiroNombre}: $${nuevoCorte.retiros.toFixed(2)})` : ''}`,
         detalles: nuevoCorte,
         sucursalId: activo.sucursalId,
         sucursalNombre: activo.sucursalNombre,
@@ -277,6 +285,79 @@ export class CortesService {
     }
 
     return nuevoCorte;
+  }
+
+  // ── Resguardo de Efectivo en Turno Activo ────────────────────
+  async registrarResguardoTurnoActivo(
+    monto: number,
+    socioId: string,
+    socioNombre: string,
+    concepto = 'Resguardo de efectivo de caja'
+  ): Promise<ResguardoCajaItem> {
+    const activo = this.corteActivoSignal();
+    if (!activo) throw new Error('No hay turno abierto.');
+
+    const nuevoItem: ResguardoCajaItem = {
+      id: `RESG-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      fecha: new Date().toISOString(),
+      monto,
+      socioId,
+      socioNombre,
+      concepto,
+      usuario: activo.usuario
+    };
+
+    const actualizados = [...(activo.resguardos || []), nuevoItem];
+    const corteActualizado: CorteActivo = {
+      ...activo,
+      resguardos: actualizados
+    };
+
+    this.corteActivoSignal.set(corteActualizado);
+
+    try {
+      this.syncService.setStatus('saving', 'Registrando resguardo...');
+      const ref = this.firestoreService.getRefDocConfig('corteActivo');
+      await setDoc(ref, corteActualizado);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+
+      await this.bitacoraService.registrarEvento({
+        modulo: 'CORTES',
+        accion: 'EDITAR',
+        descripcion: `Resguardo de efectivo por $${monto.toFixed(2)} entregado a socio ${socioNombre} en turno #${activo.id}`,
+        detalles: nuevoItem,
+        sucursalId: activo.sucursalId,
+        sucursalNombre: activo.sucursalNombre
+      });
+    } catch (e) {
+      console.warn('Error al registrar resguardo en Firestore:', e);
+    }
+
+    return nuevoItem;
+  }
+
+  async eliminarResguardoTurnoActivo(id: string): Promise<void> {
+    const activo = this.corteActivoSignal();
+    if (!activo || !activo.resguardos) return;
+
+    const actualizados = activo.resguardos.filter((r) => r.id !== id);
+    const corteActualizado: CorteActivo = {
+      ...activo,
+      resguardos: actualizados
+    };
+
+    this.corteActivoSignal.set(corteActualizado);
+
+    try {
+      this.syncService.setStatus('saving', 'Eliminando resguardo...');
+      const ref = this.firestoreService.getRefDocConfig('corteActivo');
+      await setDoc(ref, corteActualizado);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+    } catch (e) {
+      console.warn('Error al eliminar resguardo en Firestore:', e);
+    }
   }
 
   async eliminarCorte(id: string): Promise<void> {

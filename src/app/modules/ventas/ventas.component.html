@@ -197,10 +197,18 @@
               <td style="text-align: center;">
                 @if (v.pagos.efectivo) { <span class="badge badge-success"
                   style="font-size: 0.72rem; padding: 2px 6px;">EFECTIVO</span> }
-                @if (v.pagos.tarjeta) { <span class="badge badge-info"
-                  style="font-size: 0.72rem; padding: 2px 6px;">TARJETA</span> }
-                @if (v.pagos.transferencia) { <span class="badge badge-warning"
-                  style="font-size: 0.72rem; padding: 2px 6px;">TRANSFERENCIA</span> }
+                @if (v.pagos.tarjeta) {
+                  <span class="badge badge-info" style="font-size: 0.72rem; padding: 2px 6px;"
+                    [title]="v.socioTarjetaNombre ? 'Terminal / Cuenta de: ' + v.socioTarjetaNombre : 'Tarjeta'">
+                    TARJETA{{ v.socioTarjetaNombre ? ' (' + v.socioTarjetaNombre + ')' : '' }}
+                  </span>
+                }
+                @if (v.pagos.transferencia) {
+                  <span class="badge badge-warning" style="font-size: 0.72rem; padding: 2px 6px;"
+                    [title]="v.socioTransferenciaNombre ? 'Recibido por socio: ' + v.socioTransferenciaNombre : 'Transferencia'">
+                    TRANSFERENCIA{{ v.socioTransferenciaNombre ? ' (' + v.socioTransferenciaNombre + ')' : '' }}
+                  </span>
+                }
               </td>
               <td style="text-align: center;">
                 @if (v.estado === 'CANCELADA') {
@@ -283,11 +291,59 @@
               (ngModelChange)="onPagoChange('tarjeta', $event)" />
           </div>
 
+          @if (ventasService.pagos().tarjeta > 0) {
+          <div class="transfer-partner-box" style="margin-top: 6px; padding: 10px; background: #fdf4ff; border-radius: 8px; border: 1px solid #f5d0fe;">
+            <label for="socioTarjeta" style="font-size: 0.78rem; font-weight: 700; color: #86198f; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+              <span>💳 ¿Quién recibe el pago con tarjeta?</span>
+              @if (sociosService.socioTarjetasDefault(); as def) {
+                <span style="font-weight: 500; font-size: 0.72rem; color: #a21caf;">(Predet: {{ def.nombre }})</span>
+              }
+            </label>
+            <select id="socioTarjeta"
+              [ngModel]="socioTarjetaId() || sociosService.socioTarjetasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+              (ngModelChange)="socioTarjetaId.set($event)"
+              style="width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #e879f9; background: #ffffff; font-size: 0.85rem; font-weight: 600; color: #701a75;">
+              @for (socio of sociosService.sociosActivos(); track socio.id) {
+                <option [value]="socio.id">
+                  {{ socio.nombre }} {{ socio.recibeTarjetasDefault ? '★ (Predeterminado)' : '' }}
+                </option>
+              }
+            </select>
+            <div style="font-size: 0.7rem; color: #a21caf; margin-top: 4px;">
+              ℹ️ Se le descontará de su reparto en la liquidación.
+            </div>
+          </div>
+          }
+
           <div class="form-group">
             <label for="pagoTransf">📱 Transferencia ($)</label>
             <input id="pagoTransf" type="number" min="0" step="0.01" [ngModel]="ventasService.pagos().transferencia"
               (ngModelChange)="onPagoChange('transferencia', $event)" />
           </div>
+
+          @if (ventasService.pagos().transferencia > 0) {
+          <div class="transfer-partner-box" style="margin-top: 6px; padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+            <label for="socioTransferencia" style="font-size: 0.78rem; font-weight: 700; color: #1e40af; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+              <span>👤 ¿Quién recibe la transferencia?</span>
+              @if (sociosService.socioTransferenciasDefault(); as def) {
+                <span style="font-weight: 500; font-size: 0.72rem; color: #2563eb;">(Predet: {{ def.nombre }})</span>
+              }
+            </label>
+            <select id="socioTransferencia"
+              [ngModel]="socioTransferenciaId() || sociosService.socioTransferenciasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+              (ngModelChange)="socioTransferenciaId.set($event)"
+              style="width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #93c5fd; background: #ffffff; font-size: 0.85rem; font-weight: 600; color: #1e3a8a;">
+              @for (socio of sociosService.sociosActivos(); track socio.id) {
+                <option [value]="socio.id">
+                  {{ socio.nombre }} {{ socio.recibeTransferenciasDefault ? '★ (Predeterminado)' : '' }}
+                </option>
+              }
+            </select>
+            <div style="font-size: 0.7rem; color: #2563eb; margin-top: 4px;">
+              ℹ️ Se le descontará de su reparto en la liquidación.
+            </div>
+          </div>
+          }
         </div>
 
         <!-- Resumen de Cobro -->

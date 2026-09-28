@@ -47,13 +47,43 @@
       <span class="badge badge-success">EN CURSO</span>
     </div>
     <div class="card-body">
-      <div class="shift-meta-row">
-        <div><span>Responsable:</span> <strong>{{ cortesService.corteActivo()?.usuario }}</strong></div>
-        <div><span>Sucursal:</span> <strong>{{ cortesService.corteActivo()?.sucursalNombre }}</strong></div>
-        <div><span>Apertura:</span> <strong>{{ cortesService.corteActivo()?.fechaApertura | fechaLocal }}</strong></div>
-        <div><span>Caja Inicial:</span> <strong>{{ cortesService.corteActivo()?.cajaInicial | currencyMxn }}</strong>
+      <div class="shift-meta-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+          <div><span>Responsable:</span> <strong>{{ cortesService.corteActivo()?.usuario }}</strong></div>
+          <div><span>Sucursal:</span> <strong>{{ cortesService.corteActivo()?.sucursalNombre }}</strong></div>
+          <div><span>Apertura:</span> <strong>{{ cortesService.corteActivo()?.fechaApertura | fechaLocal }}</strong></div>
+          <div><span>Caja Inicial:</span> <strong>{{ cortesService.corteActivo()?.cajaInicial | currencyMxn }}</strong></div>
+        </div>
+        <button type="button" class="btn btn-warning btn-sm" (click)="abrirModalResguardo()"
+          style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+          🛡️ Resguardar Efectivo en Turno
+        </button>
+      </div>
+
+      <!-- Chips de Resguardos Registrados en Turno -->
+      @if ((cortesService.corteActivo()?.resguardos || []).length > 0) {
+      <div style="margin: 14px 0 6px 0; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="color: #92400e; font-size: 0.88rem;">
+            🛡️ Dinero en Custodia / Resguardo de Socios en este turno (Total: {{ totalResguardosTurnoActivo() | currencyMxn }}):
+          </strong>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          @for (r of cortesService.corteActivo()?.resguardos; track r.id) {
+          <span style="background: white; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <span style="color: #b45309; font-weight: 800;">{{ r.monto | currencyMxn }}</span>
+            <span>en custodia de <strong>{{ r.socioNombre }}</strong></span>
+            @if (r.concepto) {
+            <span style="color: #64748b; font-size: 0.78rem;">({{ r.concepto }})</span>
+            }
+            <button type="button" (click)="onEliminarResguardoTurno(r.id)"
+              style="border: none; background: transparent; cursor: pointer; color: #dc2626; font-size: 0.9rem; padding: 0 2px;"
+              title="Eliminar este resguardo">✕</button>
+          </span>
+          }
         </div>
       </div>
+      }
 
       <!-- KPIs en Tiempo Real del Turno Activo -->
       <div class="corte-kpis">
@@ -106,10 +136,28 @@
         </div>
 
         <div class="form-group">
-          <label for="cRetiros">Retiros de Caja ($)</label>
+          <label for="cRetiros">Retiros / Dinero Resguardado ($)</label>
           <input id="cRetiros" type="number" min="0" step="0.01" [ngModel]="retiros()"
             (ngModelChange)="retiros.set($event !== null && $event !== '' ? +$event : 0)" name="retiros" />
         </div>
+
+        <!-- Selector del socio que resguarda el dinero retirado -->
+        @if (retiros() > 0) {
+        <div class="form-group">
+          <label for="cSocioRetiro" style="color: #b45309; font-weight: 700;">
+            🛡️ ¿Qué socio resguarda este dinero? *
+          </label>
+          <select id="cSocioRetiro" [ngModel]="socioRetiroId()" (ngModelChange)="socioRetiroId.set($event)" name="socioRetiro"
+            style="border-color: #f59e0b; background: #fffbeb; font-weight: 600;">
+            @for (s of sociosService.sociosActivos(); track s.id) {
+            <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+            }
+          </select>
+          <small style="color: #92400e; font-size: 0.76rem;">
+            Se descontará de su liquidación de socios.
+          </small>
+        </div>
+        }
 
         <div class="form-group">
           <label for="cIngresos">Ingresos Extra a Caja ($)</label>
@@ -173,6 +221,7 @@
             <th style="text-align: right;">Ventas Netas</th>
             <th style="text-align: right;">Efectivo</th>
             <th style="text-align: right;">Gastos Efec.</th>
+            <th style="text-align: right;">Retiros / Resguardo</th>
             <th style="text-align: right;">Caja Esperada</th>
             <th style="text-align: right;">Caja Contada</th>
             <th style="text-align: right;">Diferencia</th>
@@ -191,6 +240,18 @@
             <td style="text-align: right;"><strong>{{ corte.totalVentasNetas | currencyMxn }}</strong></td>
             <td style="text-align: right;">{{ corte.pagosEfectivo | currencyMxn }}</td>
             <td style="text-align: right; color: #dc2626;">{{ corte.gastosEfectivo | currencyMxn }}</td>
+            <td style="text-align: right;">
+              @if ((corte.retiros || 0) > 0) {
+              <strong style="color: #b45309;">{{ corte.retiros | currencyMxn }}</strong>
+              @if (corte.socioRetiroNombre) {
+              <small style="display: block; font-size: 0.75rem; color: #78350f;">
+                👤 {{ corte.socioRetiroNombre }}
+              </small>
+              }
+              } @else {
+              <span style="color: #94a3b8;">$0.00</span>
+              }
+            </td>
             <td style="text-align: right;">{{ corte.cajaEsperada | currencyMxn }}</td>
             <td style="text-align: right;"><strong>{{ corte.cajaContada | currencyMxn }}</strong></td>
             <td style="text-align: right;"
@@ -203,7 +264,7 @@
           </tr>
           } @empty {
           <tr>
-            <td colspan="13" style="text-align: center; color: #94a3b8; padding: 25px;">
+            <td colspan="14" style="text-align: center; color: #94a3b8; padding: 25px;">
               No hay cortes de caja cerrados registrados.
             </td>
           </tr>
@@ -212,4 +273,58 @@
       </table>
     </div>
   </div>
+
+  <!-- Modal para Resguardo de Efectivo en Turno Activo -->
+  @if (mostrarModalResguardo()) {
+  <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
+    (click)="cerrarModalResguardo()">
+    <div style="background: white; border-radius: 12px; max-width: 480px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); overflow: hidden;"
+      (click)="$event.stopPropagation()">
+      <div style="padding: 16px 20px; background: #0f172a; color: white; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">🛡️ Resguardar Efectivo de Caja</h3>
+        <button type="button" (click)="cerrarModalResguardo()"
+          style="background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;">✕</button>
+      </div>
+      <div style="padding: 20px;">
+        <p style="margin: 0 0 16px 0; font-size: 0.88rem; color: #64748b;">
+          Registra el retiro de efectivo de la gaveta hacia la custodia de un socio. Este dinero se descontará automáticamente de la caja física y se deducirá al socio en su próxima liquidación.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              Monto a Resguardar ($) *
+            </label>
+            <input type="number" min="0.01" step="0.50" [ngModel]="montoResguardo()" (ngModelChange)="montoResguardo.set($event)"
+              placeholder="0.00" style="width: 100%; padding: 10px; font-size: 1.1rem; font-weight: 800; border-radius: 6px; border: 1px solid #cbd5e1;" />
+          </div>
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              ¿Qué socio toma en custodia el dinero? *
+            </label>
+            <select [ngModel]="socioResguardoId()" (ngModelChange)="socioResguardoId.set($event)"
+              style="width: 100%; padding: 10px; font-size: 0.92rem; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+              @for (s of sociosService.sociosActivos(); track s.id) {
+              <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
+              Concepto / Motivo
+            </label>
+            <input type="text" [ngModel]="conceptoResguardo()" (ngModelChange)="conceptoResguardo.set($event)"
+              placeholder="Ej: Retiro parcial para resguardo" style="width: 100%; padding: 10px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1;" />
+          </div>
+        </div>
+      </div>
+      <div style="padding: 14px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModalResguardo()">Cancelar</button>
+        <button type="button" class="btn btn-warning" (click)="onGuardarResguardoTurno()"
+          [disabled]="!montoResguardo() || (montoResguardo() || 0) <= 0" style="font-weight: 700;">
+          🛡️ Confirmar Resguardo
+        </button>
+      </div>
+    </div>
+  </div>
+  }
 </div>

@@ -230,7 +230,11 @@ export class PedidosService {
         monto: pedido.anticipo,
         metodoPago: pedido.metodoPagoAnticipo || 'EFECTIVO',
         sucursalId: nuevoPedido.sucursalId,
-        sucursalNombre: nuevoPedido.sucursalNombre
+        sucursalNombre: nuevoPedido.sucursalNombre,
+        socioTransferenciaId: nuevoPedido.socioTransferenciaId,
+        socioTransferenciaNombre: nuevoPedido.socioTransferenciaNombre,
+        socioTarjetaId: nuevoPedido.socioTarjetaId,
+        socioTarjetaNombre: nuevoPedido.socioTarjetaNombre
       });
     }
 
@@ -307,7 +311,13 @@ export class PedidosService {
     id: string,
     monto: number,
     metodoPago: string,
-    concepto: string = 'Abono a cuenta'
+    concepto: string = 'Abono a cuenta',
+    paramsDigitales?: {
+      socioTransferenciaId?: string;
+      socioTransferenciaNombre?: string;
+      socioTarjetaId?: string;
+      socioTarjetaNombre?: string;
+    }
   ): Promise<PedidoPersonalizado | null> {
     const current = [...this.pedidosSignal()];
     const pedido = current.find((p) => p.id === id);
@@ -321,7 +331,11 @@ export class PedidosService {
       fecha: new Date().toISOString(),
       concepto: concepto.trim() || 'Abono a cuenta',
       monto: Math.round(monto * 100) / 100,
-      metodoPago: (metodoPago || 'EFECTIVO').toUpperCase()
+      metodoPago: (metodoPago || 'EFECTIVO').toUpperCase(),
+      socioTransferenciaId: paramsDigitales?.socioTransferenciaId,
+      socioTransferenciaNombre: paramsDigitales?.socioTransferenciaNombre,
+      socioTarjetaId: paramsDigitales?.socioTarjetaId,
+      socioTarjetaNombre: paramsDigitales?.socioTarjetaNombre
     };
 
     pedido.abonos.push(nuevoAbono);
@@ -347,7 +361,11 @@ export class PedidosService {
       monto: nuevoAbono.monto,
       metodoPago: nuevoAbono.metodoPago,
       sucursalId: pedido.sucursalId,
-      sucursalNombre: pedido.sucursalNombre
+      sucursalNombre: pedido.sucursalNombre,
+      socioTransferenciaId: nuevoAbono.socioTransferenciaId,
+      socioTransferenciaNombre: nuevoAbono.socioTransferenciaNombre,
+      socioTarjetaId: nuevoAbono.socioTarjetaId,
+      socioTarjetaNombre: nuevoAbono.socioTarjetaNombre
     });
 
     return pedido;
@@ -376,7 +394,16 @@ export class PedidosService {
     return actualizado;
   }
 
-  async liquidarPedido(id: string, metodoPago: string): Promise<PedidoPersonalizado | null> {
+  async liquidarPedido(
+    id: string,
+    metodoPago: string,
+    paramsDigitales?: {
+      socioTransferenciaId?: string;
+      socioTransferenciaNombre?: string;
+      socioTarjetaId?: string;
+      socioTarjetaNombre?: string;
+    }
+  ): Promise<PedidoPersonalizado | null> {
     const current = [...this.pedidosSignal()];
     const pedido = current.find((p) => p.id === id);
     if (!pedido) return null;
@@ -393,7 +420,11 @@ export class PedidosService {
         fecha: new Date().toISOString(),
         concepto: 'Liquidación Final',
         monto: saldoPendiente,
-        metodoPago: metodo
+        metodoPago: metodo,
+        socioTransferenciaId: paramsDigitales?.socioTransferenciaId,
+        socioTransferenciaNombre: paramsDigitales?.socioTransferenciaNombre,
+        socioTarjetaId: paramsDigitales?.socioTarjetaId,
+        socioTarjetaNombre: paramsDigitales?.socioTarjetaNombre
       };
 
       pedido.abonos.push(nuevoAbono);
@@ -407,13 +438,25 @@ export class PedidosService {
         monto: saldoPendiente,
         metodoPago: metodo,
         sucursalId: pedido.sucursalId,
-        sucursalNombre: pedido.sucursalNombre
+        sucursalNombre: pedido.sucursalNombre,
+        socioTransferenciaId: paramsDigitales?.socioTransferenciaId,
+        socioTransferenciaNombre: paramsDigitales?.socioTransferenciaNombre,
+        socioTarjetaId: paramsDigitales?.socioTarjetaId,
+        socioTarjetaNombre: paramsDigitales?.socioTarjetaNombre
       });
     }
 
     pedido.anticipo = pedido.totalAcordado;
     pedido.saldoRestante = 0;
     pedido.metodoPagoLiquidacion = metodo;
+    if (paramsDigitales?.socioTransferenciaId) {
+      pedido.socioTransferenciaId = paramsDigitales.socioTransferenciaId;
+      pedido.socioTransferenciaNombre = paramsDigitales.socioTransferenciaNombre;
+    }
+    if (paramsDigitales?.socioTarjetaId) {
+      pedido.socioTarjetaId = paramsDigitales.socioTarjetaId;
+      pedido.socioTarjetaNombre = paramsDigitales.socioTarjetaNombre;
+    }
     pedido.fechaLiquidacion = new Date().toISOString();
     pedido.estado = 'ENTREGADO';
 

@@ -148,7 +148,12 @@ export class VentasService {
   }
 
   // ── Procesamiento de Venta ────────────────────────────────
-  async procesarVenta(): Promise<Venta> {
+  async procesarVenta(paramsDigitales?: {
+    socioTransferenciaId?: string;
+    socioTransferenciaNombre?: string;
+    socioTarjetaId?: string;
+    socioTarjetaNombre?: string;
+  }): Promise<Venta> {
     if (this.procesandoCobro()) {
       throw new Error('Ya se está procesando un cobro, por favor espera un momento.');
     }
@@ -187,6 +192,10 @@ export class VentasService {
         totalPagado: pagado,
         cambio: this.cambio(),
         pagos: { ...this.pagos() },
+        socioTransferenciaId: paramsDigitales?.socioTransferenciaId,
+        socioTransferenciaNombre: paramsDigitales?.socioTransferenciaNombre,
+        socioTarjetaId: paramsDigitales?.socioTarjetaId,
+        socioTarjetaNombre: paramsDigitales?.socioTarjetaNombre,
         sucursalId: sucursal.id,
         sucursalNombre: sucursal.nombre,
         usuario: this.authService.nombreOperadorActual(),
@@ -317,6 +326,10 @@ export class VentasService {
     metodoPago: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | string;
     sucursalId?: string;
     sucursalNombre?: string;
+    socioTransferenciaId?: string;
+    socioTransferenciaNombre?: string;
+    socioTarjetaId?: string;
+    socioTarjetaNombre?: string;
   }): Promise<Venta> {
     const monto = Number(params.monto) || 0;
     if (monto <= 0) {
@@ -352,6 +365,10 @@ export class VentasService {
       totalPagado: monto,
       cambio: 0,
       pagos,
+      socioTransferenciaId: params.socioTransferenciaId,
+      socioTransferenciaNombre: params.socioTransferenciaNombre,
+      socioTarjetaId: params.socioTarjetaId,
+      socioTarjetaNombre: params.socioTarjetaNombre,
       sucursalId,
       sucursalNombre,
       usuario: 'Cajero'

@@ -402,6 +402,40 @@
               <option value="TRANSFERENCIA">Transferencia</option>
             </select>
           </div>
+          @if (metodoPagoAnticipo === 'TRANSFERENCIA' && nuevoAnticipo > 0) {
+          <div class="form-group" style="padding: 8px 10px; background: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe;">
+            <label style="font-size: 0.78rem; font-weight: 700; color: #1e40af; margin-bottom: 3px; display: flex; justify-content: space-between;">
+              <span>👤 Socio que recibe anticipo (Transf):</span>
+              @if (sociosService.socioTransferenciasDefault(); as def) {
+                <span style="font-weight: 500; font-size: 0.72rem; color: #2563eb;">(Predet: {{ def.nombre }})</span>
+              }
+            </label>
+            <select [ngModel]="socioTransferenciaAnticipoId() || sociosService.socioTransferenciasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+              (ngModelChange)="socioTransferenciaAnticipoId.set($event)"
+              style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid #93c5fd; background: #fff; font-size: 0.84rem; font-weight: 600; color: #1e3a8a;">
+              @for (socio of sociosService.sociosActivos(); track socio.id) {
+                <option [value]="socio.id">{{ socio.nombre }} {{ socio.recibeTransferenciasDefault ? '★' : '' }}</option>
+              }
+            </select>
+          </div>
+          }
+          @if (metodoPagoAnticipo === 'TARJETA' && nuevoAnticipo > 0) {
+          <div class="form-group" style="padding: 8px 10px; background: #fdf4ff; border-radius: 6px; border: 1px solid #f5d0fe;">
+            <label style="font-size: 0.78rem; font-weight: 700; color: #86198f; margin-bottom: 3px; display: flex; justify-content: space-between;">
+              <span>💳 Socio que recibe anticipo (Tarjeta):</span>
+              @if (sociosService.socioTarjetasDefault(); as def) {
+                <span style="font-weight: 500; font-size: 0.72rem; color: #a21caf;">(Predet: {{ def.nombre }})</span>
+              }
+            </label>
+            <select [ngModel]="socioTarjetaAnticipoId() || sociosService.socioTarjetasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+              (ngModelChange)="socioTarjetaAnticipoId.set($event)"
+              style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid #e879f9; background: #fff; font-size: 0.84rem; font-weight: 600; color: #701a75;">
+              @for (socio of sociosService.sociosActivos(); track socio.id) {
+                <option [value]="socio.id">{{ socio.nombre }} {{ socio.recibeTarjetasDefault ? '★' : '' }}</option>
+              }
+            </select>
+          </div>
+          }
         </div>
 
         <!-- Saldo Pendiente Estimado -->
@@ -596,6 +630,40 @@
             <option value="TRANSFERENCIA">📱 Transferencia</option>
           </select>
         </div>
+        @if (metodoPagoLiquidacion === 'TRANSFERENCIA') {
+        <div class="form-group" style="padding: 8px 10px; background: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe;">
+          <label style="font-size: 0.78rem; font-weight: 700; color: #1e40af; margin-bottom: 3px; display: flex; justify-content: space-between;">
+            <span>👤 Socio que recibe liquidación (Transf):</span>
+            @if (sociosService.socioTransferenciasDefault(); as def) {
+              <span style="font-weight: 500; font-size: 0.72rem; color: #2563eb;">(Predet: {{ def.nombre }})</span>
+            }
+          </label>
+          <select [ngModel]="socioTransferenciaLiquidacionId() || sociosService.socioTransferenciasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+            (ngModelChange)="socioTransferenciaLiquidacionId.set($event)"
+            style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid #93c5fd; background: #fff; font-size: 0.84rem; font-weight: 600; color: #1e3a8a;">
+            @for (socio of sociosService.sociosActivos(); track socio.id) {
+              <option [value]="socio.id">{{ socio.nombre }} {{ socio.recibeTransferenciasDefault ? '★' : '' }}</option>
+            }
+          </select>
+        </div>
+        }
+        @if (metodoPagoLiquidacion === 'TARJETA') {
+        <div class="form-group" style="padding: 8px 10px; background: #fdf4ff; border-radius: 6px; border: 1px solid #f5d0fe;">
+          <label style="font-size: 0.78rem; font-weight: 700; color: #86198f; margin-bottom: 3px; display: flex; justify-content: space-between;">
+            <span>💳 Socio que recibe liquidación (Tarjeta):</span>
+            @if (sociosService.socioTarjetasDefault(); as def) {
+              <span style="font-weight: 500; font-size: 0.72rem; color: #a21caf;">(Predet: {{ def.nombre }})</span>
+            }
+          </label>
+          <select [ngModel]="socioTarjetaLiquidacionId() || sociosService.socioTarjetasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+            (ngModelChange)="socioTarjetaLiquidacionId.set($event)"
+            style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid #e879f9; background: #fff; font-size: 0.84rem; font-weight: 600; color: #701a75;">
+            @for (socio of sociosService.sociosActivos(); track socio.id) {
+              <option [value]="socio.id">{{ socio.nombre }} {{ socio.recibeTarjetasDefault ? '★' : '' }}</option>
+            }
+          </select>
+        </div>
+        }
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" (click)="modalLiquidarAbierto.set(false)">Cancelar</button>
@@ -963,6 +1031,24 @@
                   <option value="TARJETA">Tarjeta</option>
                   <option value="TRANSFERENCIA">Transferencia</option>
                 </select>
+                @if (metodoPagoNuevoAbono === 'TRANSFERENCIA') {
+                  <select [ngModel]="socioTransferenciaAbonoId() || sociosService.socioTransferenciasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+                    (ngModelChange)="socioTransferenciaAbonoId.set($event)"
+                    style="padding: 6px 8px; border-radius: 6px; border: 1.5px solid #93c5fd; background: #eff6ff; font-size: 0.84rem; font-weight: 600; color: #1e3a8a;">
+                    @for (socio of sociosService.sociosActivos(); track socio.id) {
+                      <option [value]="socio.id">👤 {{ socio.nombre }}</option>
+                    }
+                  </select>
+                }
+                @if (metodoPagoNuevoAbono === 'TARJETA') {
+                  <select [ngModel]="socioTarjetaAbonoId() || sociosService.socioTarjetasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+                    (ngModelChange)="socioTarjetaAbonoId.set($event)"
+                    style="padding: 6px 8px; border-radius: 6px; border: 1.5px solid #e879f9; background: #fdf4ff; font-size: 0.84rem; font-weight: 600; color: #701a75;">
+                    @for (socio of sociosService.sociosActivos(); track socio.id) {
+                      <option [value]="socio.id">👤 {{ socio.nombre }}</option>
+                    }
+                  </select>
+                }
                 <button type="button" class="btn-agregar-abono" (click)="registrarAbonoModal()">
                   💰 Agregar Abono
                 </button>
@@ -1156,6 +1242,24 @@
                   <option value="TARJETA">💳 Tarjeta</option>
                   <option value="TRANSFERENCIA">📱 Transferencia</option>
                 </select>
+                @if (metodoPagoAbonoEditar === 'TRANSFERENCIA') {
+                  <select [ngModel]="socioTransferenciaAbonoEditarId() || sociosService.socioTransferenciasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+                    (ngModelChange)="socioTransferenciaAbonoEditarId.set($event)"
+                    style="padding: 6px 8px; border-radius: 6px; border: 1.5px solid #93c5fd; background: #eff6ff; font-size: 0.84rem; font-weight: 600; color: #1e3a8a;">
+                    @for (socio of sociosService.sociosActivos(); track socio.id) {
+                      <option [value]="socio.id">👤 {{ socio.nombre }}</option>
+                    }
+                  </select>
+                }
+                @if (metodoPagoAbonoEditar === 'TARJETA') {
+                  <select [ngModel]="socioTarjetaAbonoEditarId() || sociosService.socioTarjetasDefault()?.id || (sociosService.sociosActivos()[0]?.id || '')"
+                    (ngModelChange)="socioTarjetaAbonoEditarId.set($event)"
+                    style="padding: 6px 8px; border-radius: 6px; border: 1.5px solid #e879f9; background: #fdf4ff; font-size: 0.84rem; font-weight: 600; color: #701a75;">
+                    @for (socio of sociosService.sociosActivos(); track socio.id) {
+                      <option [value]="socio.id">👤 {{ socio.nombre }}</option>
+                    }
+                  </select>
+                }
                 <input
                   type="text"
                   [(ngModel)]="conceptoAbonoEditar"

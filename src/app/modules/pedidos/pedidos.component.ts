@@ -5,6 +5,7 @@ import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { PedidosService, AnalisisConsolidacion } from '../../core/services/pedidos.service';
 import { ProductosService } from '../../core/services/productos.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
+import { SociosService } from '../../core/services/socios.service';
 import { PedidoPersonalizado, MateriaPrimaItem, Producto } from '../../core/models/models';
 
 export interface ItemPedidoForm {
@@ -62,6 +63,8 @@ export class PedidosComponent implements AfterViewInit {
   public nuevoTotal = 0;
   public nuevoAnticipo = 0;
   public metodoPagoAnticipo = 'EFECTIVO';
+  public socioTransferenciaAnticipoId = signal<string>('');
+  public socioTarjetaAnticipoId = signal<string>('');
   public itemsPedido = signal<ItemPedidoForm[]>([]);
 
   // Formulario Editar
@@ -75,19 +78,26 @@ export class PedidosComponent implements AfterViewInit {
   public pedidoEditando = signal<PedidoPersonalizado | null>(null);
   public montoAbonoEditar = 0;
   public metodoPagoAbonoEditar = 'EFECTIVO';
+  public socioTransferenciaAbonoEditarId = signal<string>('');
+  public socioTarjetaAbonoEditarId = signal<string>('');
   public conceptoAbonoEditar = 'Abono a cuenta';
 
   // Registro de Abono en Detalle
   public montoNuevoAbono = 0;
   public metodoPagoNuevoAbono = 'EFECTIVO';
+  public socioTransferenciaAbonoId = signal<string>('');
+  public socioTarjetaAbonoId = signal<string>('');
   public conceptoNuevoAbono = 'Abono a cuenta';
 
   // Liquidación
   public metodoPagoLiquidacion = 'EFECTIVO';
+  public socioTransferenciaLiquidacionId = signal<string>('');
+  public socioTarjetaLiquidacionId = signal<string>('');
 
   public pedidosService = inject(PedidosService);
   public productosService = inject(ProductosService);
   public configService = inject(ConfiguracionService);
+  public sociosService = inject(SociosService);
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
@@ -420,16 +430,40 @@ export class PedidosComponent implements AfterViewInit {
       return;
     }
 
+    let paramsDigitales: {
+      socioTransferenciaId?: string;
+      socioTransferenciaNombre?: string;
+      socioTarjetaId?: string;
+      socioTarjetaNombre?: string;
+    } | undefined;
+
+    if (this.metodoPagoNuevoAbono === 'TRANSFERENCIA') {
+      const idS = this.socioTransferenciaAbonoId() || this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTransferenciaId: s.id, socioTransferenciaNombre: s.nombre };
+      }
+    } else if (this.metodoPagoNuevoAbono === 'TARJETA') {
+      const idS = this.socioTarjetaAbonoId() || this.sociosService.socioTarjetasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTarjetaId: s.id, socioTarjetaNombre: s.nombre };
+      }
+    }
+
     const act = await this.pedidosService.agregarAbono(
       ped.id,
       this.montoNuevoAbono,
       this.metodoPagoNuevoAbono,
-      this.conceptoNuevoAbono.trim() || 'Abono a cuenta'
+      this.conceptoNuevoAbono.trim() || 'Abono a cuenta',
+      paramsDigitales
     );
 
     if (act) {
       this.pedidoDetalle.set(act);
       this.montoNuevoAbono = 0;
+      this.socioTransferenciaAbonoId.set('');
+      this.socioTarjetaAbonoId.set('');
     }
   }
 
@@ -494,11 +528,33 @@ export class PedidosComponent implements AfterViewInit {
       return;
     }
 
+    let paramsDigitales: {
+      socioTransferenciaId?: string;
+      socioTransferenciaNombre?: string;
+      socioTarjetaId?: string;
+      socioTarjetaNombre?: string;
+    } | undefined;
+
+    if (this.metodoPagoAbonoEditar === 'TRANSFERENCIA') {
+      const idS = this.socioTransferenciaAbonoEditarId() || this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTransferenciaId: s.id, socioTransferenciaNombre: s.nombre };
+      }
+    } else if (this.metodoPagoAbonoEditar === 'TARJETA') {
+      const idS = this.socioTarjetaAbonoEditarId() || this.sociosService.socioTarjetasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTarjetaId: s.id, socioTarjetaNombre: s.nombre };
+      }
+    }
+
     const act = await this.pedidosService.agregarAbono(
       ped.id,
       monto,
       this.metodoPagoAbonoEditar,
-      this.conceptoAbonoEditar.trim() || 'Abono a cuenta'
+      this.conceptoAbonoEditar.trim() || 'Abono a cuenta',
+      paramsDigitales
     );
 
     if (act) {
@@ -507,6 +563,8 @@ export class PedidosComponent implements AfterViewInit {
         this.pedidoDetalle.set(act);
       }
       this.montoAbonoEditar = 0;
+      this.socioTransferenciaAbonoEditarId.set('');
+      this.socioTarjetaAbonoEditarId.set('');
       this.conceptoAbonoEditar = 'Abono a cuenta';
       alert(`✅ Abono de $${monto.toFixed(2)} registrado con éxito y reflejado en ventas.`);
     }
@@ -727,6 +785,27 @@ export class PedidosComponent implements AfterViewInit {
         subtotal: Number(it.subtotal) || 0
       }));
 
+    let socioTransfId: string | undefined;
+    let socioTransfNombre: string | undefined;
+    let socioTarjId: string | undefined;
+    let socioTarjNombre: string | undefined;
+
+    if (this.nuevoAnticipo > 0 && this.metodoPagoAnticipo === 'TRANSFERENCIA') {
+      const idS = this.socioTransferenciaAnticipoId() || this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        socioTransfId = s.id;
+        socioTransfNombre = s.nombre;
+      }
+    } else if (this.nuevoAnticipo > 0 && this.metodoPagoAnticipo === 'TARJETA') {
+      const idS = this.socioTarjetaAnticipoId() || this.sociosService.socioTarjetasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        socioTarjId = s.id;
+        socioTarjNombre = s.nombre;
+      }
+    }
+
     const nuevo = await this.pedidosService.crearPedido({
       clienteNombre: this.nuevoCliente.trim(),
       clienteTelefono: this.nuevoTelefono ? this.nuevoTelefono.trim() : '',
@@ -737,8 +816,15 @@ export class PedidosComponent implements AfterViewInit {
       totalAcordado: Number(this.nuevoTotal) || 0,
       anticipo: Number(this.nuevoAnticipo) || 0,
       saldoRestante: this.saldoPendienteNuevo,
-      metodoPagoAnticipo: this.nuevoAnticipo > 0 ? this.metodoPagoAnticipo : 'EFECTIVO'
+      metodoPagoAnticipo: this.nuevoAnticipo > 0 ? this.metodoPagoAnticipo : 'EFECTIVO',
+      socioTransferenciaId: socioTransfId,
+      socioTransferenciaNombre: socioTransfNombre,
+      socioTarjetaId: socioTarjId,
+      socioTarjetaNombre: socioTarjNombre
     });
+
+    this.socioTransferenciaAnticipoId.set('');
+    this.socioTarjetaAnticipoId.set('');
 
     this.modalNuevoAbierto.set(false);
     this.pedidoSeleccionado.set(nuevo);
@@ -798,7 +884,30 @@ export class PedidosComponent implements AfterViewInit {
   async confirmarLiquidacion(): Promise<void> {
     const ped = this.pedidoSeleccionado();
     if (!ped) return;
-    const act = await this.pedidosService.liquidarPedido(ped.id, this.metodoPagoLiquidacion);
+    let paramsDigitales: {
+      socioTransferenciaId?: string;
+      socioTransferenciaNombre?: string;
+      socioTarjetaId?: string;
+      socioTarjetaNombre?: string;
+    } | undefined;
+
+    if (this.metodoPagoLiquidacion === 'TRANSFERENCIA') {
+      const idS = this.socioTransferenciaLiquidacionId() || this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTransferenciaId: s.id, socioTransferenciaNombre: s.nombre };
+      }
+    } else if (this.metodoPagoLiquidacion === 'TARJETA') {
+      const idS = this.socioTarjetaLiquidacionId() || this.sociosService.socioTarjetasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+      const s = this.sociosService.socios().find((x) => x.id === idS);
+      if (s) {
+        paramsDigitales = { socioTarjetaId: s.id, socioTarjetaNombre: s.nombre };
+      }
+    }
+
+    const act = await this.pedidosService.liquidarPedido(ped.id, this.metodoPagoLiquidacion, paramsDigitales);
+    this.socioTransferenciaLiquidacionId.set('');
+    this.socioTarjetaLiquidacionId.set('');
     this.modalLiquidarAbierto.set(false);
 
     if (act && this.pedidoDetalle()?.id === act.id) {

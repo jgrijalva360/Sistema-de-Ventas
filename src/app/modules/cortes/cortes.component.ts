@@ -1,9 +1,10 @@
-import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
 import { CortesService } from '../../core/services/cortes.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SociosService } from '../../core/services/socios.service';
 
 @Component({
   selector: 'app-cortes',
@@ -12,22 +13,13 @@ import { AuthService } from '../../core/services/auth.service';
   templateUrl: './cortes.component.html',
   styleUrl: './cortes.component.scss'
 })
-export class CortesComponent implements AfterViewInit {
+export class CortesComponent implements OnInit, AfterViewInit {
   @ViewChild('cajaInicialRef') cajaInicialRef?: ElementRef<HTMLInputElement>;
   @ViewChild('cajaContadaRef') cajaContadaRef?: ElementRef<HTMLInputElement>;
 
   public cortesService = inject(CortesService);
+  public sociosService = inject(SociosService);
   private authService = inject(AuthService);
-
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      if (this.cajaContadaRef) {
-        this.cajaContadaRef.nativeElement.focus();
-      } else if (this.cajaInicialRef) {
-        this.cajaInicialRef.nativeElement.focus();
-      }
-    }, 100);
-  }
 
   // Formulario Apertura
   public usuarioApertura = this.authService.nombreOperadorActual();
@@ -37,9 +29,21 @@ export class CortesComponent implements AfterViewInit {
   // Formulario Cierre (Reactivo con Signals)
   public periodicidad = 'DIARIO';
   public retiros = signal<number>(0);
+  public socioRetiroId = signal<string>('');
   public ingresosCaja = signal<number>(0);
   public cajaContada = signal<number | null>(null);
   public observacionesCierre = '';
+
+  // Resguardo en Turno Activo (Modal)
+  public mostrarModalResguardo = signal<boolean>(false);
+  public montoResguardo = signal<number | null>(null);
+  public socioResguardoId = signal<string>('');
+  public conceptoResguardo = signal<string>('Resguardo de efectivo');
+
+  public totalResguardosTurnoActivo = computed(() => {
+    const activo = this.cortesService.corteActivo();
+    return (activo?.resguardos || []).reduce((sum, r) => sum + (r.monto || 0), 0);
+  });
 
   public resumenEnVivo = computed(() => {
     return this.cortesService.calcularResumenTurnoActivo(
@@ -57,6 +61,81 @@ export class CortesComponent implements AfterViewInit {
     return Math.abs(diff) < 0.005 ? 0 : diff;
   });
 
+  ngOnInit(): void {
+    const defSocio = this.sociosService.socioResguardosDefault();
+    if (defSocio) {
+      this.socioRetiroId.set(defSocio.id);
+      this.socioResguardoId.set(defSocio.id);
+    }
+    // Si el turno activo ya tenía resguardos registrados, precargar en retiros
+    const resgAcumulados = this.totalResguardosTurnoActivo();
+    if (resgAcumulados > 0 && this.retiros() === 0) {
+      this.retiros.set(resgAcumulados);
+    }
+  }
+
+  ngAfterViewInit(): void {
+    setTimeout(() => {
+      if (this.cajaContadaRef) {
+        this.cajaContadaRef.nativeElement.focus();
+      } else if (this.cajaInicialRef) {
+        this.cajaInicialRef.nativeElement.focus();
+      }
+    }, 100);
+  }
+
+  abrirModalResguardo(): void {
+    const defSocio = this.sociosService.socioResguardosDefault();
+    if (defSocio && !this.socioResguardoId()) {
+      this.socioResguardoId.set(defSocio.id);
+    }
+    this.montoResguardo.set(null);
+    this.conceptoResguardo.set('Resguardo parcial de efectivo');
+    this.mostrarModalResguardo.set(true);
+  }
+
+  cerrarModalResguardo(): void {
+    this.mostrarModalResguardo.set(false);
+  }
+
+  async onGuardarResguardoTurno(): Promise<void> {
+    const monto = Number(this.montoResguardo());
+    const socioId = this.socioResguardoId();
+    const socio = this.sociosService.sociosActivos().find((s) => s.id === socioId);
+
+    if (!monto || monto <= 0 || !socio) {
+      alert('Ingresa un monto válido y selecciona el socio que resguarda el dinero.');
+      return;
+    }
+
+    await this.cortesService.registrarResguardoTurnoActivo(
+      monto,
+      socio.id,
+      socio.nombre,
+      this.conceptoResguardo().trim() || 'Resguardo de efectivo'
+    );
+
+    // Sumar al campo retiros del formulario de cierre
+    this.retiros.update((v) => Math.round(((v || 0) + monto) * 100) / 100);
+    if (!this.socioRetiroId()) {
+      this.socioRetiroId.set(socio.id);
+    }
+
+    this.mostrarModalResguardo.set(false);
+  }
+
+  async onEliminarResguardoTurno(id: string): Promise<void> {
+    const activo = this.cortesService.corteActivo();
+    const item = (activo?.resguardos || []).find((r) => r.id === id);
+
+    if (confirm(`¿Eliminar el registro de resguardo por $${item?.monto || 0}?`)) {
+      await this.cortesService.eliminarResguardoTurnoActivo(id);
+      if (item) {
+        this.retiros.update((v) => Math.max(0, Math.round(((v || 0) - item.monto) * 100) / 100));
+      }
+    }
+  }
+
   async onAbrirCorte(): Promise<void> {
     if (!this.usuarioApertura || this.cajaInicialApertura < 0) return;
 
@@ -73,12 +152,24 @@ export class CortesComponent implements AfterViewInit {
     const contada = this.cajaContada();
     if (contada === null || contada < 0) return;
 
+    const montoRetiros = this.retiros() || 0;
+    let socioRetiro = this.sociosService.sociosActivos().find((s) => s.id === this.socioRetiroId());
+
+    if (montoRetiros > 0 && !socioRetiro) {
+      socioRetiro = this.sociosService.socioResguardosDefault() || this.sociosService.sociosActivos()[0];
+    }
+
     await this.cortesService.cerrarCorte(
       contada,
-      this.retiros() || 0,
+      montoRetiros,
       this.ingresosCaja() || 0,
       this.observacionesCierre,
-      this.periodicidad
+      this.periodicidad,
+      {
+        socioRetiroId: socioRetiro?.id,
+        socioRetiroNombre: socioRetiro?.nombre,
+        resguardosDetalle: this.cortesService.corteActivo()?.resguardos
+      }
     );
 
     this.cajaContada.set(null);

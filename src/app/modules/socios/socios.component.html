@@ -182,7 +182,8 @@
       <div class="panel-header">
         <div>
           <h4>👛 Gastos de Bolsillo Pagados por Socios</h4>
-          <p>Los gastos asignados a un socio se reembolsan íntegramente a quien los pagó, distribuyendo el costo de forma proporcional entre todos.</p>
+          <p>Los gastos asignados a un socio se reembolsan íntegramente a quien los pagó, distribuyendo el costo de
+            forma proporcional entre todos.</p>
         </div>
         <div class="gastos-summary-badge">
           Total Bolsillo: <strong>{{ totalGastosSocios() | currencyMxn }}</strong>
@@ -212,8 +213,7 @@
               <td>{{ g.persona || 'No especificado' }}</td>
               <td>
                 <select [ngModel]="asignacionesGastos()[g.id] || 'EMPRESA'"
-                  (ngModelChange)="onCambiarAsignacionGasto(g.id, $event)"
-                  class="select-socio"
+                  (ngModelChange)="onCambiarAsignacionGasto(g.id, $event)" class="select-socio"
                   [class.socio-selected]="asignacionesGastos()[g.id] && asignacionesGastos()[g.id] !== 'EMPRESA'">
                   <option value="EMPRESA">🏢 Empresa / Caja General</option>
                   @for (s of sociosService.sociosActivos(); track s.id) {
@@ -245,7 +245,8 @@
               <td>
                 <div class="manual-action-cell">
                   <span class="socio-tag">👤 {{ gm.socioNombre }}</span>
-                  <button type="button" class="btn-del-sm" (click)="eliminarGastoManual(gm.id)" title="Quitar gasto">✕</button>
+                  <button type="button" class="btn-del-sm" (click)="eliminarGastoManual(gm.id)"
+                    title="Quitar gasto">✕</button>
                 </div>
               </td>
             </tr>
@@ -260,8 +261,8 @@
         <div class="manual-expense-form">
           <input type="text" placeholder="Concepto (Ej: Gasolina, Refacción, Almuerzo trabajo)"
             [ngModel]="nuevoGastoConcepto()" (ngModelChange)="nuevoGastoConcepto.set($event)" />
-          <input type="number" placeholder="Monto ($)" min="1" step="0.50"
-            [ngModel]="nuevoGastoMonto()" (ngModelChange)="nuevoGastoMonto.set($event)" />
+          <input type="number" placeholder="Monto ($)" min="1" step="0.50" [ngModel]="nuevoGastoMonto()"
+            (ngModelChange)="nuevoGastoMonto.set($event)" />
           <select [ngModel]="nuevoGastoSocioId()" (ngModelChange)="nuevoGastoSocioId.set($event)">
             @for (s of sociosService.sociosActivos(); track s.id) {
             <option [value]="s.id">Pagado por: {{ s.nombre }}</option>
@@ -275,13 +276,201 @@
       </div>
     </div>
 
+    <!-- Sección de Transferencias Bancarias del Periodo -->
+    <div class="panel-section" style="margin-top: 24px;">
+      <div class="panel-header">
+        <div>
+          <h4>📱 Transferencias Bancarias del Periodo (Ingresos en Cuenta Personal)</h4>
+          <p>Las transferencias que entran directamente a la cuenta personal de un socio se deducen automáticamente de
+            su reparto en efectivo, ya que ese dinero ya está en su posesión.</p>
+        </div>
+        <div class="gastos-summary-badge" style="background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;">
+          Total Transferencias: <strong>{{ totalTransferenciasPeriodo() | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      <!-- Tabla de Ventas con Transferencia y su Asignación -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Fecha</th>
+              <th>Detalle / Concepto</th>
+              <th class="text-right">Monto Transferido</th>
+              <th>¿Quién recibió la transferencia en su cuenta?</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (v of ventasConTransferencia(); track v.id) {
+            <tr>
+              <td><strong>#{{ v.id }}</strong></td>
+              <td>{{ v.fecha | fechaLocal }}</td>
+              <td>
+                <span>
+                  {{ esVentaDePedido(v) ? '🎨 Pedido Personalizado' : '🛒 Venta Mostrador' }}
+                  @if (v.items && v.items[0]) {
+                  <small class="text-muted" style="display: block;">({{ v.items[0].nombre }}{{ v.items.length > 1 ?
+                    '...' : '' }})</small>
+                  }
+                </span>
+              </td>
+              <td class="text-right font-bold text-blue">{{ (v.pagos.transferencia || 0) | currencyMxn }}</td>
+              <td>
+                <select
+                  [ngModel]="asignacionesTransferencias()[v.id] || v.socioTransferenciaId || (sociosService.socioTransferenciasDefault()?.id || '')"
+                  (ngModelChange)="onCambiarAsignacionTransferencia(v.id, $event)" class="select-socio socio-selected"
+                  style="border-color: #93c5fd; background-color: #f0f9ff; color: #0369a1;">
+                  @for (s of sociosService.sociosActivos(); track s.id) {
+                  <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+                  }
+                </select>
+              </td>
+            </tr>
+            }
+            @empty {
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">
+                No hay transferencias registradas en este periodo.
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sección de Pagos con Tarjeta del Periodo -->
+    <div class="panel-section" style="margin-top: 24px;">
+      <div class="panel-header">
+        <div>
+          <h4>💳 Pagos con Tarjeta del Periodo (Ingresos en Terminal / Cuenta)</h4>
+          <p>Los pagos cobrados por terminal de tarjeta vinculada a la cuenta de un socio se deducen automáticamente de
+            su reparto en efectivo.</p>
+        </div>
+        <div class="gastos-summary-badge" style="background: #fdf4ff; color: #86198f; border: 1px solid #f5d0fe;">
+          Total Tarjetas: <strong>{{ totalTarjetasPeriodo() | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      <!-- Tabla de Ventas con Tarjeta y su Asignación -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Fecha</th>
+              <th>Detalle / Concepto</th>
+              <th class="text-right">Monto Tarjeta</th>
+              <th>¿Quién recibió el pago con tarjeta?</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (v of ventasConTarjeta(); track v.id) {
+            <tr>
+              <td><strong>#{{ v.id }}</strong></td>
+              <td>{{ v.fecha | fechaLocal }}</td>
+              <td>
+                <span>
+                  {{ esVentaDePedido(v) ? '🎨 Pedido Personalizado' : '🛒 Venta Mostrador' }}
+                  @if (v.items && v.items[0]) {
+                  <small class="text-muted" style="display: block;">({{ v.items[0].nombre }}{{ v.items.length > 1 ?
+                    '...' : '' }})</small>
+                  }
+                </span>
+              </td>
+              <td class="text-right font-bold" style="color: #9333ea;">{{ (v.pagos.tarjeta || 0) | currencyMxn }}</td>
+              <td>
+                <select
+                  [ngModel]="asignacionesTarjetas()[v.id] || v.socioTarjetaId || (sociosService.socioTarjetasDefault()?.id || '')"
+                  (ngModelChange)="onCambiarAsignacionTarjeta(v.id, $event)" class="select-socio socio-selected"
+                  style="border-color: #e879f9; background-color: #fdf4ff; color: #701a75;">
+                  @for (s of sociosService.sociosActivos(); track s.id) {
+                  <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+                  }
+                </select>
+              </td>
+            </tr>
+            }
+            @empty {
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">
+                No hay pagos con tarjeta registrados en este periodo.
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sección de Dinero Resguardado de Caja del Periodo -->
+    <div class="panel-section" style="margin-top: 24px;">
+      <div class="panel-header">
+        <div>
+          <h4>🛡️ Dinero Resguardado de Caja del Periodo (Retiros en Custodia)</h4>
+          <p>El dinero en efectivo retirado de caja para su resguardo por un socio se deduce automáticamente de su
+            liquidación, ya que dicho dinero ya está en su poder.</p>
+        </div>
+        <div class="gastos-summary-badge" style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a;">
+          Total Resguardado: <strong>{{ totalResguardosPeriodo() | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      <!-- Tabla de Cortes con Retiro y su Asignación -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Folio Corte</th>
+              <th>Fecha Turno</th>
+              <th>Sucursal / Cajero</th>
+              <th class="text-right">Monto Resguardado</th>
+              <th>¿Quién tiene en custodia este efectivo?</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of cortesConRetiros(); track c.id) {
+            <tr>
+              <td><strong>#{{ c.id }}</strong></td>
+              <td>{{ (c.fechaCierre || c.fechaApertura) | fechaLocal }}</td>
+              <td>
+                <span>🏢 {{ c.sucursalNombre }}</span>
+                <small class="text-muted" style="display: block;">Cajero: {{ c.usuario }}</small>
+              </td>
+              <td class="text-right font-bold" style="color: #b45309;">{{ (c.retiros || 0) | currencyMxn }}</td>
+              <td>
+                <select
+                  [ngModel]="asignacionesResguardos()[c.id] || c.socioRetiroId || (sociosService.socioResguardosDefault()?.id || '')"
+                  (ngModelChange)="onCambiarAsignacionResguardo(c.id, $event)" class="select-socio socio-selected"
+                  style="border-color: #f59e0b; background-color: #fffbeb; color: #92400e;">
+                  @for (s of sociosService.sociosActivos(); track s.id) {
+                  <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+                  }
+                </select>
+              </td>
+            </tr>
+            }
+            @empty {
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">
+                No hay retiros ni dinero resguardado de caja en este periodo.
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Sección de Liquidación y Reparto a Socios -->
     <div class="panel-section section-liquidation">
       <div class="panel-header">
         <div>
           <h4>🤝 Liquidación Final por Socio</h4>
           <p>
-            Base activa: <strong>{{ baseCalculo() === 'FLUJO_EFECTIVO' ? 'Caso 1 (Flujo Operativo)' : 'Caso 2 (Utilidad Real FIFO)' }}</strong>.
+            Base activa: <strong>{{ baseCalculo() === 'FLUJO_EFECTIVO' ? 'Caso 1 (Flujo Operativo)' : 'Caso 2 (Utilidad
+              Real FIFO)' }}</strong>.
             Ganancia Neta Base: <strong>{{ gananciaNetaBaseSeleccionada() | currencyMxn }}</strong>.
           </p>
         </div>
@@ -292,7 +481,9 @@
 
       @if (!sociosService.porcentajesValidos()) {
       <div class="alert alert-warning">
-        ⚠️ <strong>Atención:</strong> La suma de los porcentajes activos de los socios es <strong>{{ sociosService.sumaPorcentajes() }}%</strong>. Debe sumar exactamente 100%. Por favor ajusta los porcentajes en la pestaña <strong>Configuración de Socios</strong>.
+        ⚠️ <strong>Atención:</strong> La suma de los porcentajes activos de los socios es <strong>{{
+          sociosService.sumaPorcentajes() }}%</strong>. Debe sumar exactamente 100%. Por favor ajusta los porcentajes en
+        la pestaña <strong>Configuración de Socios</strong>.
       </div>
       }
 
@@ -326,6 +517,27 @@
             </div>
             }
 
+            @if (s.transferenciasRecibidas && s.transferenciasRecibidas > 0) {
+            <div class="sb-row text-danger font-medium">
+              <span>(-) Transferencias recibidas en cuenta:</span>
+              <strong>-{{ s.transferenciasRecibidas | currencyMxn }}</strong>
+            </div>
+            }
+
+            @if (s.tarjetasRecibidas && s.tarjetasRecibidas > 0) {
+            <div class="sb-row font-medium" style="color: #9333ea;">
+              <span>(-) Pagos con tarjeta recibidos:</span>
+              <strong>-{{ s.tarjetasRecibidas | currencyMxn }}</strong>
+            </div>
+            }
+
+            @if (s.resguardosRecibidos && s.resguardosRecibidos > 0) {
+            <div class="sb-row font-medium" style="color: #b45309;">
+              <span>(-) Dinero de caja resguardado:</span>
+              <strong>-{{ s.resguardosRecibidos | currencyMxn }}</strong>
+            </div>
+            }
+
             <div class="sb-row text-muted text-xs">
               <span>Cuota de gastos compartida ({{ s.porcentaje }}%):</span>
               <span>-{{ s.cuotaGastosBolsillo | currencyMxn }}</span>
@@ -334,7 +546,7 @@
             <div class="sb-divider"></div>
 
             <div class="sb-final">
-              <span class="final-label">NETO A ENTREGAR / TRANSFERIR:</span>
+              <span class="final-label">NETO A ENTREGAR EN CAJA:</span>
               <span class="final-value" [class.text-danger]="s.montoNetoACobrar < 0">
                 {{ s.montoNetoACobrar | currencyMxn }}
               </span>
@@ -352,9 +564,11 @@
               <th>Socio</th>
               <th class="text-center">Participación</th>
               <th class="text-right">Ganancia Proporcional</th>
-              <th class="text-right">Gastos de Bolsillo (+)</th>
-              <th class="text-right">Cuota Gastos Absorbida (-)</th>
-              <th class="text-right">Total a Liquidar</th>
+              <th class="text-right">Gastos Bolsillo (+)</th>
+              <th class="text-right">Transf. Recibidas (-)</th>
+              <th class="text-right">Tarjetas Recibidas (-)</th>
+              <th class="text-right">Dinero Resguardado (-)</th>
+              <th class="text-right">Total a Liquidar en Caja</th>
             </tr>
           </thead>
           <tbody>
@@ -364,7 +578,11 @@
               <td class="text-center"><span class="badge-pct">{{ s.porcentaje }}%</span></td>
               <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
               <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
-              <td class="text-right text-muted">-{{ s.cuotaGastosBolsillo | currencyMxn }}</td>
+              <td class="text-right text-danger font-bold">-{{ (s.transferenciasRecibidas || 0) | currencyMxn }}</td>
+              <td class="text-right font-bold" style="color: #9333ea;">-{{ (s.tarjetasRecibidas || 0) | currencyMxn }}
+              </td>
+              <td class="text-right font-bold" style="color: #b45309;">-{{ (s.resguardosRecibidos || 0) | currencyMxn }}
+              </td>
               <td class="text-right font-extrabold text-emerald font-lg">{{ s.montoNetoACobrar | currencyMxn }}</td>
             </tr>
             }
@@ -374,11 +592,45 @@
               <td colspan="2"><strong>TOTALES CONSOLIDADOS</strong></td>
               <td class="text-right text-blue"><strong>{{ gananciaNetaBaseSeleccionada() | currencyMxn }}</strong></td>
               <td class="text-right text-success"><strong>+{{ totalGastosSocios() | currencyMxn }}</strong></td>
-              <td class="text-right text-muted"><strong>-{{ totalGastosSocios() | currencyMxn }}</strong></td>
-              <td class="text-right text-emerald font-extrabold font-xl"><strong>{{ totalNetoRepartido() | currencyMxn }}</strong></td>
+              <td class="text-right text-danger"><strong>-{{ totalTransferenciasPeriodo() | currencyMxn }}</strong></td>
+              <td class="text-right font-bold" style="color: #9333ea;"><strong>-{{ totalTarjetasPeriodo() | currencyMxn
+                  }}</strong></td>
+              <td class="text-right font-bold" style="color: #b45309;"><strong>-{{ totalResguardosPeriodo() |
+                  currencyMxn }}</strong></td>
+              <td class="text-right text-emerald font-extrabold font-xl"><strong>{{ totalNetoRepartido() | currencyMxn
+                  }}</strong></td>
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      <!-- Opción para registrar salida de fondos y saldar caja automáticamente -->
+      <div
+        style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;">
+        <div>
+          <label
+            style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #0f172a; cursor: pointer; font-size: 0.95rem;">
+            <input type="checkbox" [ngModel]="descontarDeCajaAutomatico()"
+              (ngModelChange)="descontarDeCajaAutomatico.set($event)"
+              style="width: 18px; height: 18px; accent-color: #0284c7;" />
+            <span>💸 Descontar automáticamente como gasto para saldar la caja</span>
+          </label>
+          <p style="margin: 4px 0 0 26px; font-size: 0.82rem; color: #64748b;">
+            Se registrará un gasto en el sistema por el total repartido (<strong>{{ totalNetoRepartido() | currencyMxn
+              }}</strong>) para que la caja física quede saldada y en ceros.
+          </p>
+        </div>
+
+        @if (descontarDeCajaAutomatico()) {
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.85rem; font-weight: 600; color: #334155;">Método de Salida:</span>
+          <select [ngModel]="metodoPagoSalida()" (ngModelChange)="metodoPagoSalida.set($event)"
+            style="padding: 6px 12px; font-size: 0.88rem; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: 600;">
+            <option value="EFECTIVO">💵 Efectivo (Descuenta Caja de Turno)</option>
+            <option value="TRANSFERENCIA">📱 Transferencia (Cuenta Bancaria Negocio)</option>
+          </select>
+        </div>
+        }
       </div>
 
       <!-- Acciones de Cierre -->
@@ -387,7 +639,8 @@
           <span>📱</span> Copiar Resumen para WhatsApp
         </button>
         <button class="btn btn-primary btn-lg" (click)="onGuardarLiquidacion()" [disabled]="guardandoLiquidacion()">
-          <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando en Firestore...' : 'Guardar y Cerrar Liquidación en Firestore' }}
+          <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando en Firestore...' : 'Guardar y Cerrar Liquidación en
+          Firestore' }}
         </button>
       </div>
 
@@ -413,7 +666,8 @@
       <div class="empty-state">
         <div class="empty-icon">📂</div>
         <h3>No hay liquidaciones guardadas todavía</h3>
-        <p>Cuando realices un reparto en la calculadora, haz clic en "Guardar Liquidación en Firestore" para archivarlo aquí.</p>
+        <p>Cuando realices un reparto en la calculadora, haz clic en "Guardar Liquidación en Firestore" para archivarlo
+          aquí.</p>
         <button class="btn btn-primary" (click)="tabActiva.set('CALCULADORA')">Ir a la Calculadora</button>
       </div>
       } @else {
@@ -437,7 +691,8 @@
               <td>{{ liq.fechaCreacion | fechaLocal }}</td>
               <td><strong>{{ liq.fechaDesde }}</strong> al <strong>{{ liq.fechaHasta }}</strong></td>
               <td>
-                <span class="tag-cat" [class.badge-blue]="liq.baseCalculo === 'FLUJO_EFECTIVO'" [class.badge-emerald]="liq.baseCalculo === 'UTILIDAD_FIFO'">
+                <span class="tag-cat" [class.badge-blue]="liq.baseCalculo === 'FLUJO_EFECTIVO'"
+                  [class.badge-emerald]="liq.baseCalculo === 'UTILIDAD_FIFO'">
                   {{ liq.baseCalculo === 'FLUJO_EFECTIVO' ? 'Flujo Operativo' : 'Utilidad FIFO' }}
                 </span>
               </td>
@@ -455,13 +710,16 @@
               </td>
               <td class="text-center">
                 <div class="actions-cell">
-                  <button type="button" class="btn-icon" (click)="verDetalleHistorico(liq)" title="Ver Detalle Completo">
+                  <button type="button" class="btn-icon" (click)="verDetalleHistorico(liq)"
+                    title="Ver Detalle Completo">
                     👁️
                   </button>
-                  <button type="button" class="btn-icon" (click)="copiarHistoricoWhatsApp(liq)" title="Copiar para WhatsApp">
+                  <button type="button" class="btn-icon" (click)="copiarHistoricoWhatsApp(liq)"
+                    title="Copiar para WhatsApp">
                     📱
                   </button>
-                  <button type="button" class="btn-icon btn-icon-del" (click)="onEliminarLiquidacion(liq.id)" title="Eliminar Registro">
+                  <button type="button" class="btn-icon btn-icon-del" (click)="onEliminarLiquidacion(liq.id)"
+                    title="Eliminar Registro">
                     🗑️
                   </button>
                 </div>
@@ -485,7 +743,8 @@
       <div class="panel-header">
         <div>
           <h4>⚙️ Configuración Dinámica de Socios</h4>
-          <p>Define quiénes son los socios y qué porcentaje de ganancia y gastos le corresponde a cada uno. Se almacena en la nube (Firestore).</p>
+          <p>Define quiénes son los socios y qué porcentaje de ganancia y gastos le corresponde a cada uno. Se almacena
+            en la nube (Firestore).</p>
         </div>
         <button class="btn btn-primary" (click)="guardarConfiguracionSocios()" [disabled]="guardandoConfig()">
           <span>💾</span> {{ guardandoConfig() ? 'Guardando en Firestore...' : 'Guardar Cambios' }}
@@ -496,7 +755,8 @@
       <div class="pct-progress-container">
         <div class="pct-progress-header">
           <span>Suma total de porcentajes activos:</span>
-          <strong [class.text-success]="sociosService.porcentajesValidos()" [class.text-danger]="!sociosService.porcentajesValidos()">
+          <strong [class.text-success]="sociosService.porcentajesValidos()"
+            [class.text-danger]="!sociosService.porcentajesValidos()">
             {{ sociosService.sumaPorcentajes() }}%
             @if (sociosService.porcentajesValidos()) {
             <span>(¡Cuadrado al 100%! ✅)</span>
@@ -519,9 +779,15 @@
           <thead>
             <tr>
               <th>Nombre del Socio / Persona</th>
-              <th style="width: 180px;">Porcentaje (%)</th>
-              <th style="width: 140px;" class="text-center">Activo</th>
-              <th style="width: 100px;" class="text-center">Acciones</th>
+              <th style="width: 140px;">Porcentaje (%)</th>
+              <th style="width: 90px;" class="text-center">Activo</th>
+              <th style="width: 110px;" class="text-center"
+                title="Socio que recibe por defecto las transferencias que pagan los clientes">Transf. Predet.</th>
+              <th style="width: 110px;" class="text-center"
+                title="Socio que recibe por defecto los pagos con tarjeta en su terminal">Tarjeta Predet.</th>
+              <th style="width: 120px;" class="text-center"
+                title="Socio que recibe por defecto el dinero resguardado de caja">Resguardo Predet.</th>
+              <th style="width: 70px;" class="text-center">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -541,7 +807,32 @@
                 <label for="chk-{{ s.id }}" class="ml-1 text-sm">{{ s.activo ? 'Activo' : 'Pausado' }}</label>
               </td>
               <td class="text-center">
-                <button type="button" class="btn-icon btn-icon-del" (click)="eliminarSocio(s.id)" title="Eliminar socio">
+                <input type="radio" name="socioDefaultTransf" [checked]="s.recibeTransferenciasDefault"
+                  (change)="marcarSocioTransferenciasDefault(s.id)" id="rad-transf-{{ s.id }}"
+                  style="cursor: pointer; width: 16px; height: 16px;" />
+                <label for="rad-transf-{{ s.id }}" class="ml-1 text-xs" style="cursor: pointer; font-weight: 600;"
+                  [class.text-blue]="s.recibeTransferenciasDefault">{{ s.recibeTransferenciasDefault ? '★ Sí' : 'No'
+                  }}</label>
+              </td>
+              <td class="text-center">
+                <input type="radio" name="socioDefaultTarj" [checked]="s.recibeTarjetasDefault"
+                  (change)="marcarSocioTarjetasDefault(s.id)" id="rad-tarj-{{ s.id }}"
+                  style="cursor: pointer; width: 16px; height: 16px;" />
+                <label for="rad-tarj-{{ s.id }}" class="ml-1 text-xs" style="cursor: pointer; font-weight: 600;"
+                  [style.color]="s.recibeTarjetasDefault ? '#9333ea' : '#64748b'">{{ s.recibeTarjetasDefault ? '★ Sí' :
+                  'No' }}</label>
+              </td>
+              <td class="text-center">
+                <input type="radio" name="socioDefaultResg" [checked]="s.recibeResguardosDefault"
+                  (change)="marcarSocioResguardosDefault(s.id)" id="rad-resg-{{ s.id }}"
+                  style="cursor: pointer; width: 16px; height: 16px;" />
+                <label for="rad-resg-{{ s.id }}" class="ml-1 text-xs" style="cursor: pointer; font-weight: 600;"
+                  [style.color]="s.recibeResguardosDefault ? '#b45309' : '#64748b'">{{ s.recibeResguardosDefault ? '★
+                  Sí' : 'No' }}</label>
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn-icon btn-icon-del" (click)="eliminarSocio(s.id)"
+                  title="Eliminar socio">
                   🗑️
                 </button>
               </td>
@@ -555,11 +846,11 @@
       <div class="add-socio-card">
         <h5>➕ Agregar Nuevo Socio</h5>
         <div class="add-socio-grid">
-          <input type="text" placeholder="Nombre completo o alias del socio"
-            [ngModel]="nuevoSocioNombre()" (ngModelChange)="nuevoSocioNombre.set($event)" />
+          <input type="text" placeholder="Nombre completo o alias del socio" [ngModel]="nuevoSocioNombre()"
+            (ngModelChange)="nuevoSocioNombre.set($event)" />
           <div class="pct-input-wrap">
-            <input type="number" placeholder="Porcentaje (ej: 20)" min="1" max="100"
-              [ngModel]="nuevoSocioPorcentaje()" (ngModelChange)="nuevoSocioPorcentaje.set($event)" />
+            <input type="number" placeholder="Porcentaje (ej: 20)" min="1" max="100" [ngModel]="nuevoSocioPorcentaje()"
+              (ngModelChange)="nuevoSocioPorcentaje.set($event)" />
             <span>%</span>
           </div>
           <button type="button" class="btn btn-secondary" (click)="agregarNuevoSocio()">
@@ -587,7 +878,8 @@
       <div class="modal-header">
         <div>
           <h3>Detalle de Liquidación #{{ liq.folio || liq.id }}</h3>
-          <p>Periodo: {{ liq.fechaDesde }} al {{ liq.fechaHasta }} | Guardado el {{ liq.fechaCreacion | fechaLocal }}</p>
+          <p>Periodo: {{ liq.fechaDesde }} al {{ liq.fechaHasta }} | Guardado el {{ liq.fechaCreacion | fechaLocal }}
+          </p>
         </div>
         <button class="modal-close" (click)="cerrarModalDetalle()">✕</button>
       </div>
@@ -626,6 +918,9 @@
               <th class="text-center">%</th>
               <th class="text-right">Ganancia</th>
               <th class="text-right">Reembolso Gastos</th>
+              <th class="text-right">Transf. Recibidas (-)</th>
+              <th class="text-right">Tarjetas Recibidas (-)</th>
+              <th class="text-right">Resguardo Caja (-)</th>
               <th class="text-right">Monto Neto Pagado</th>
             </tr>
           </thead>
@@ -636,6 +931,11 @@
               <td class="text-center">{{ s.porcentaje }}%</td>
               <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
               <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
+              <td class="text-right text-danger">-{{ (s.transferenciasRecibidas || 0) | currencyMxn }}</td>
+              <td class="text-right" style="color: #9333ea; font-weight: 600;">-{{ (s.tarjetasRecibidas || 0) |
+                currencyMxn }}</td>
+              <td class="text-right" style="color: #b45309; font-weight: 600;">-{{ (s.resguardosRecibidos || 0) |
+                currencyMxn }}</td>
               <td class="text-right font-bold text-emerald">{{ s.montoNetoACobrar | currencyMxn }}</td>
             </tr>
             }

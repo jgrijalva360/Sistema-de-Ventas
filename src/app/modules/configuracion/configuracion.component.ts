@@ -81,6 +81,8 @@ export class ConfiguracionComponent implements AfterViewInit {
     sucursalesCount: number;
     bitacoraCount: number;
     usuariosCount: number;
+    sociosCount: number;
+    liquidacionesCount: number;
     hasConfig: boolean;
   } | null>(null);
 
@@ -94,6 +96,7 @@ export class ConfiguracionComponent implements AfterViewInit {
   public optConfiguracion = signal<boolean>(true);
   public optBitacora = signal<boolean>(true);
   public optUsuarios = signal<boolean>(true);
+  public optSocios = signal<boolean>(true);
   public descargandoBackup = signal<boolean>(false);
   public restaurandoBackup = signal<boolean>(false);
 
@@ -214,6 +217,7 @@ export class ConfiguracionComponent implements AfterViewInit {
         this.optConfiguracion.set(resumen.hasConfig);
         this.optBitacora.set((resumen.bitacoraCount || 0) > 0);
         this.optUsuarios.set((resumen.usuariosCount || 0) > 0);
+        this.optSocios.set((resumen.sociosCount || 0) > 0 || (resumen.liquidacionesCount || 0) > 0);
 
         this.modalRestaurarAbierto.set(true);
         input.value = '';
@@ -238,6 +242,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optConfiguracion.set(res.hasConfig);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
     this.optUsuarios.set((res.usuariosCount || 0) > 0);
+    this.optSocios.set((res.sociosCount || 0) > 0 || (res.liquidacionesCount || 0) > 0);
   }
 
   deseleccionarTodoBackup(): void {
@@ -251,6 +256,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optConfiguracion.set(false);
     this.optBitacora.set(false);
     this.optUsuarios.set(false);
+    this.optSocios.set(false);
   }
 
   seleccionarSoloProductosBackup(): void {
@@ -268,6 +274,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optPedidos.set(res.pedidosCount > 0);
     this.optMovimientos.set(res.movimientosCount > 0);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
+    this.optSocios.set((res.liquidacionesCount || 0) > 0);
   }
 
   hayModulosSeleccionados(): boolean {
@@ -281,7 +288,8 @@ export class ConfiguracionComponent implements AfterViewInit {
       this.optSucursales() ||
       this.optConfiguracion() ||
       this.optBitacora() ||
-      this.optUsuarios()
+      this.optUsuarios() ||
+      this.optSocios()
     );
   }
 
@@ -301,7 +309,8 @@ export class ConfiguracionComponent implements AfterViewInit {
         restaurarSucursales: this.optSucursales(),
         restaurarConfiguracion: this.optConfiguracion(),
         restaurarBitacora: this.optBitacora(),
-        restaurarUsuarios: this.optUsuarios()
+        restaurarUsuarios: this.optUsuarios(),
+        restaurarSocios: this.optSocios()
       };
 
       const resultado = await this.configuracionService.restaurarBackupSeleccionado(res.data, opciones);
@@ -316,6 +325,7 @@ export class ConfiguracionComponent implements AfterViewInit {
       if (opciones.restaurarSucursales) mensaje += `• Sucursales: ${resultado.sucursalesCount}\n`;
       if (opciones.restaurarBitacora) mensaje += `• Bitácora: ${resultado.bitacoraCount}\n`;
       if (opciones.restaurarUsuarios) mensaje += `• Colaboradores / Cajas: ${resultado.usuariosCount}\n`;
+      if (opciones.restaurarSocios) mensaje += `• Socios y Liquidaciones: ${resultado.sociosCount} socios, ${resultado.liquidacionesCount} liquidaciones\n`;
       if (opciones.restaurarConfiguracion) mensaje += `• Configuración: Actualizada\n`;
 
       alert(mensaje);

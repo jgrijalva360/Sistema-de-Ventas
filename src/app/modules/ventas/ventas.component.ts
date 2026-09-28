@@ -8,6 +8,7 @@ import { ProductosService } from '../../core/services/productos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SociosService } from '../../core/services/socios.service';
 import { Venta, Producto } from '../../core/models/models';
 
 @Component({
@@ -48,11 +49,16 @@ export class VentasComponent implements AfterViewInit {
   public reponerStockCancelacion = true;
   public cancelandoVenta = signal<boolean>(false);
 
+  // Socio que recibe transferencia o tarjeta
+  public socioTransferenciaId = signal<string>('');
+  public socioTarjetaId = signal<string>('');
+
   public ventasService = inject(VentasService);
   public productosService = inject(ProductosService);
   public sucursalesService = inject(SucursalesService);
   public configuracionService = inject(ConfiguracionService);
   public authService = inject(AuthService);
+  public sociosService = inject(SociosService);
 
   obtenerStockSucursal(prod: Producto): number {
     const sid = this.sucursalesService.activaId() || 'SUC-MAIN';
@@ -264,7 +270,36 @@ export class VentasComponent implements AfterViewInit {
     }
 
     try {
-      const venta = await this.ventasService.procesarVenta();
+      let paramsDigitales: {
+        socioTransferenciaId?: string;
+        socioTransferenciaNombre?: string;
+        socioTarjetaId?: string;
+        socioTarjetaNombre?: string;
+      } | undefined;
+
+      if (this.ventasService.pagos().transferencia > 0) {
+        const idSocio = this.socioTransferenciaId() || this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+        const socio = this.sociosService.socios().find((s) => s.id === idSocio);
+        if (socio) {
+          if (!paramsDigitales) paramsDigitales = {};
+          paramsDigitales.socioTransferenciaId = socio.id;
+          paramsDigitales.socioTransferenciaNombre = socio.nombre;
+        }
+      }
+
+      if (this.ventasService.pagos().tarjeta > 0) {
+        const idSocio = this.socioTarjetaId() || this.sociosService.socioTarjetasDefault()?.id || this.sociosService.sociosActivos()[0]?.id;
+        const socio = this.sociosService.socios().find((s) => s.id === idSocio);
+        if (socio) {
+          if (!paramsDigitales) paramsDigitales = {};
+          paramsDigitales.socioTarjetaId = socio.id;
+          paramsDigitales.socioTarjetaNombre = socio.nombre;
+        }
+      }
+
+      const venta = await this.ventasService.procesarVenta(paramsDigitales);
+      this.socioTransferenciaId.set('');
+      this.socioTarjetaId.set('');
       this.ticketVenta.set(venta);
       this.modalTicketAbierto.set(false); // No mostramos modal intrusivo
 

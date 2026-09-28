@@ -4,6 +4,7 @@ import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
 import { GastosService } from '../../core/services/gastos.service';
 import { SociosService } from '../../core/services/socios.service';
+import { Gasto } from '../../core/models/models';
 
 @Component({
   selector: 'app-gastos',
@@ -15,12 +16,20 @@ import { SociosService } from '../../core/services/socios.service';
 export class GastosComponent implements AfterViewInit {
   @ViewChild('conceptoInputRef') conceptoInputRef?: ElementRef<HTMLInputElement>;
 
+  // Formulario Registro Nuevo
   public concepto = '';
   public monto = 0;
   public categoria = 'SERVICIOS';
-  public metodoPago = 'EFECTIVO';
   public origenGasto = 'CAJA'; // 'CAJA' o socioId
+  public metodoPago = 'EFECTIVO';
   public observaciones = '';
+
+  // Formulario / Modal Modificar Gasto
+  public gastoEditando = signal<Gasto | null>(null);
+  public editCategoria = signal<string>('SERVICIOS');
+  public editOrigenGasto = signal<string>('CAJA');
+  public editMetodoPago = signal<string>('EFECTIVO');
+  public guardandoEdicion = signal<boolean>(false);
 
   public gastosService = inject(GastosService);
   public sociosService = inject(SociosService);
@@ -71,6 +80,75 @@ export class GastosComponent implements AfterViewInit {
     this.origenGasto = 'CAJA';
     this.metodoPago = 'EFECTIVO';
     this.observaciones = '';
+  }
+
+  // --- MODIFICACIÓN DE GASTO ---
+  abrirModalEditar(g: Gasto): void {
+    this.gastoEditando.set(g);
+    this.editCategoria.set(g.categoria || 'OTROS');
+
+    if (g.socioId) {
+      this.editOrigenGasto.set(g.socioId);
+    } else {
+      const p = (g.persona || '').trim().toLowerCase();
+      if (!p || p.includes('caja') || p.includes('empresa') || p === '-') {
+        this.editOrigenGasto.set('CAJA');
+      } else {
+        const socio = this.sociosService.sociosActivos().find(
+          (s) => s.nombre.trim().toLowerCase() === p || p.includes(s.nombre.trim().toLowerCase())
+        );
+        this.editOrigenGasto.set(socio ? socio.id : 'CAJA');
+      }
+    }
+
+    this.editMetodoPago.set(g.metodoPago || 'EFECTIVO');
+  }
+
+  cerrarModalEditar(): void {
+    this.gastoEditando.set(null);
+  }
+
+  onEditOrigenGastoChange(nuevoOrigen: string): void {
+    this.editOrigenGasto.set(nuevoOrigen);
+    if (nuevoOrigen === 'CAJA') {
+      if (this.editMetodoPago() === 'BOLSILLO_SOCIO') {
+        this.editMetodoPago.set('EFECTIVO');
+      }
+    } else {
+      this.editMetodoPago.set('BOLSILLO_SOCIO');
+    }
+  }
+
+  async onGuardarEdicionGasto(): Promise<void> {
+    const actual = this.gastoEditando();
+    if (!actual) return;
+
+    let personaNombre = 'Caja (Negocio)';
+    let socioId: string | undefined = undefined;
+
+    if (this.editOrigenGasto() !== 'CAJA') {
+      const socio = this.sociosService.sociosActivos().find((s) => s.id === this.editOrigenGasto());
+      personaNombre = socio ? socio.nombre : 'Socio';
+      socioId = this.editOrigenGasto();
+    }
+
+    const gastoModificado: Gasto = {
+      ...actual,
+      categoria: this.editCategoria(),
+      persona: personaNombre,
+      socioId,
+      metodoPago: this.editMetodoPago()
+    };
+
+    this.guardandoEdicion.set(true);
+    try {
+      await this.gastosService.actualizarGasto(gastoModificado);
+      this.cerrarModalEditar();
+    } catch (err) {
+      alert('Error al actualizar los datos del gasto.');
+    } finally {
+      this.guardandoEdicion.set(false);
+    }
   }
 
   async onEliminarGasto(id: string): Promise<void> {
