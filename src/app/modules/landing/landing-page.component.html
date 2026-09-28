@@ -114,36 +114,38 @@
 
     <div class="pricing-grid">
       @for (plan of mpService.planesDisponibles(); track plan.id) {
-      <div class="pricing-card" [class.popular]="plan.destacado">
-        @if (plan.destacado) {
-        <div class="popular-ribbon">⭐ MÁS RECOMENDADO</div>
+        @if (plan.id !== 'TRIAL') {
+          <div class="pricing-card" [class.popular]="plan.destacado">
+            @if (plan.destacado) {
+              <div class="popular-ribbon">⭐ MÁS RECOMENDADO</div>
+            }
+
+            <div class="card-header">
+              <h3>{{ plan.titulo }}</h3>
+              <p class="card-desc">{{ plan.subtitulo }}</p>
+            </div>
+
+            <div class="price-box">
+              <span class="currency">$</span>
+              <span class="amount">{{ plan.precio | number }}</span>
+              <span class="unit">{{ plan.moneda }} / {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
+            </div>
+
+            <ul class="features">
+              @for (feat of plan.caracteristicas; track feat) {
+                <li>
+                  <span class="icon-check">✓</span>
+                  <span>{{ feat }}</span>
+                </li>
+              }
+            </ul>
+
+            <button type="button" class="btn btn-block" [class.btn-primary]="plan.destacado"
+              [class.btn-outline]="!plan.destacado" (click)="abrirRegistroConPlan(plan)">
+              {{ plan.destacado ? '🚀 Contratar Plan Pro' : 'Elegir ' + plan.titulo }}
+            </button>
+          </div>
         }
-
-        <div class="card-header">
-          <h3>{{ plan.titulo }}</h3>
-          <p class="card-desc">{{ plan.subtitulo }}</p>
-        </div>
-
-        <div class="price-box">
-          <span class="currency">$</span>
-          <span class="amount">{{ plan.precio | number }}</span>
-          <span class="unit">{{ plan.moneda }} / {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
-        </div>
-
-        <ul class="features">
-          @for (feat of plan.caracteristicas; track feat) {
-          <li>
-            <span class="icon-check">✓</span>
-            <span>{{ feat }}</span>
-          </li>
-          }
-        </ul>
-
-        <button type="button" class="btn btn-block" [class.btn-primary]="plan.destacado"
-          [class.btn-outline]="!plan.destacado" (click)="abrirRegistroConPlan(plan)">
-          {{ plan.destacado ? '🚀 Contratar Plan Pro' : 'Elegir ' + plan.titulo }}
-        </button>
-      </div>
       }
     </div>
 

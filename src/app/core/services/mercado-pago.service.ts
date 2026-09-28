@@ -8,6 +8,28 @@ import { Subscription } from 'rxjs';
 
 export const DEFAULT_PLANES: PlanCatalogo[] = [
   {
+    id: 'TRIAL',
+    titulo: 'Período de Prueba',
+    subtitulo: 'Acceso inicial gratuito de 15 días para nuevos negocios.',
+    precio: 0,
+    moneda: 'MXN',
+    periodo: 'MENSUAL',
+    meses: 0,
+    destacado: false,
+    maxUsuarios: 2,
+    maxSucursales: 1,
+    maxProductos: 100,
+    caracteristicas: [
+      '15 días de acceso de prueba gratis',
+      'Hasta 2 usuarios (Cajeros/Admin)',
+      '1 Sucursal',
+      'Hasta 100 productos / registros',
+      'Ventas en Vivo & POS ilimitado',
+      'Cortes de caja y arqueos',
+      'Soporte técnico por WhatsApp'
+    ]
+  },
+  {
     id: 'BASICO',
     titulo: 'Plan Básico',
     subtitulo: 'Ideal para pequeños negocios o emprendedores iniciando.',
@@ -18,9 +40,11 @@ export const DEFAULT_PLANES: PlanCatalogo[] = [
     destacado: false,
     maxUsuarios: 2,
     maxSucursales: 1,
+    maxProductos: 200,
     caracteristicas: [
       'Hasta 2 usuarios (Cajeros/Admin)',
       '1 Sucursal',
+      'Hasta 200 productos / registros',
       'Ventas en Vivo & POS ilimitado',
       'Cortes de caja y arqueos',
       'Inventario y catálogo de productos',
@@ -38,9 +62,11 @@ export const DEFAULT_PLANES: PlanCatalogo[] = [
     destacado: true,
     maxUsuarios: 6,
     maxSucursales: 3,
+    maxProductos: 1000,
     caracteristicas: [
       'Hasta 6 usuarios y roles configurables',
       'Hasta 3 Sucursales interconectadas',
+      'Hasta 1,000 productos / registros',
       'Gestión de Pedidos Personalizados y Abonos',
       'Reportes financieros y gráficos de utilidad',
       'Kardex y auditoría con Bitácora en vivo',
@@ -51,7 +77,7 @@ export const DEFAULT_PLANES: PlanCatalogo[] = [
   {
     id: 'ENTERPRISE',
     titulo: 'Plan Anual VIP',
-    subtitulo: 'Máximo ahorro (2 meses gratis) y capacidad ilimitada.',
+    subtitulo: 'Máximo ahorro (2 meses gratis) y capacidad ampliada.',
     precio: 4990,
     moneda: 'MXN',
     periodo: 'ANUAL',
@@ -59,9 +85,11 @@ export const DEFAULT_PLANES: PlanCatalogo[] = [
     destacado: false,
     maxUsuarios: 99,
     maxSucursales: 10,
+    maxProductos: 10000,
     caracteristicas: [
       'Usuarios y Cajeros ILIMITADOS',
       'Hasta 10 Sucursales',
+      'Hasta 10,000 productos / registros',
       'Ahorra 2 meses de suscripción anual',
       'Capacitación y asesoría personalizada',
       'Todas las funciones del Plan Pro incluidas',
@@ -93,7 +121,13 @@ export class MercadoPagoService {
     this.subLive = docStream$(planDocRef).subscribe({
       next: (snap) => {
         if (snap.exists() && Array.isArray(snap.data()['items']) && snap.data()['items'].length > 0) {
-          this.planesDisponibles.set(snap.data()['items'] as PlanCatalogo[]);
+          const items = snap.data()['items'] as PlanCatalogo[];
+          const tieneTrial = items.some(p => p.id === 'TRIAL');
+          if (!tieneTrial) {
+            const defaultTrial = DEFAULT_PLANES.find(p => p.id === 'TRIAL');
+            if (defaultTrial) items.unshift(defaultTrial);
+          }
+          this.planesDisponibles.set(items);
         }
       },
       error: (e) => console.warn('Usando catálogo default de planes:', e)
@@ -174,4 +208,40 @@ export class MercadoPagoService {
 
     throw new Error(data.error || 'No se pudo generar la orden de pago en Mercado Pago.');
   }
+
+  /**
+   * Crea una Suscripción Recurrente Mensual (Débito automático mes con mes con PreApproval).
+   * Redirige al cliente a Mercado Pago para autorizar la domiciliación a su tarjeta.
+   */
+  async iniciarSuscripcionRecurrente(plan: PlanCatalogo, suscripcion: SuscripcionEmpresa): Promise<string> {
+    const origin = window.location.origin;
+    const empresaId = suscripcion.empresaId;
+    const email = suscripcion.contactoEmail || 'cliente@stockup.com';
+
+    console.log('[MercadoPagoService] Solicitando suscripción recurrente:', { planId: plan.id, empresaId });
+
+    const functionUrl = 'https://us-central1-sistemadeventas-d7877.cloudfunctions.net/crearSuscripcionRecurrente';
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresaId,
+        planId: plan.id,
+        precio: plan.precio,
+        titulo: `${plan.titulo} (Suscripción Mensual Automática)`,
+        email,
+        nombreNegocio: suscripcion.nombreNegocio,
+        returnUrl: origin
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.init_point) {
+      return data.init_point;
+    }
+
+    throw new Error(data.error || 'No se pudo generar la suscripción recurrente en Mercado Pago.');
+  }
 }
+

@@ -66,81 +66,250 @@
     </div>
   </div>
 
+  <!-- Banner Informativo: Configuración Multi-Equipo para Cajas -->
+  <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+    <div style="font-size: 2rem; line-height: 1;">🖥️</div>
+    <div style="flex: 1;">
+      <strong style="color: #166534; font-size: 0.95rem; display: block; margin-bottom: 4px;">
+        Configuración de Cajas en Múltiples Computadoras (Sin Usar tu Cuenta de Administrador)
+      </strong>
+      <p style="margin: 0; color: #15803d; font-size: 0.84rem; line-height: 1.45;">
+        Para proteger la administración de tu negocio, <strong>no inicies sesión como Administrador en las computadoras de cobro</strong>. 
+        Crea un acceso para cada equipo (ej: <strong>Caja 1</strong>, <strong>Caja 2</strong>), copia su <strong>Correo</strong> y <strong>Contraseña</strong> e inicia sesión directamente en esa máquina. 
+        Cada equipo quedará restringido únicamente a su rol de cobro y nadie podrá acceder a la administración ni al panel del dueño.
+      </p>
+    </div>
+  </div>
+
   <!-- Listado de Colaboradores -->
   <div class="card">
-    <div class="card-header">
-      <span>👤 Colaboradores & Accesos ({{ usuarios().length }})</span>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <span>👤 Cuentas de Cajas y Colaboradores ({{ usuarios().length }})</span>
+      <button type="button" class="btn btn-primary btn-sm" (click)="abrirModalNuevo()">
+        ➕ Nueva Caja o Colaborador
+      </button>
     </div>
     <div class="card-body table-container">
-      <table>
+      <table class="admin-table">
         <thead>
           <tr>
-            <th>Nombre / Colaborador</th>
-            <th>Email / Cuenta</th>
+            <th>Colaborador / Cuenta</th>
+            <th style="text-align: center;">Contraseña</th>
             <th>Rol de Acceso</th>
-            <th>Sucursal Asignada</th>
+            <th>Sucursal</th>
+            <th>Equipo Autorizado</th>
             <th style="text-align: center;">Estado</th>
-            <th style="text-align: center;">Acciones</th>
+            <th style="text-align: right;">Acciones</th>
           </tr>
         </thead>
         <tbody>
           @for (u of usuarios(); track u.uid) {
             <tr>
+              <!-- Colaborador (Nombre + Correo unificados) -->
               <td>
-                <strong>{{ u.nombre }}</strong>
-                @if (u.uid === authService.currentUser()?.uid) {
-                  <span class="badge badge-success" style="margin-left: 6px;">Tú</span>
-                }
-              </td>
-              <td><code>{{ u.email }}</code></td>
-              <td>
-                <select [value]="u.rol" (change)="cambiarRol(u, $event)" [disabled]="u.uid === authService.currentUser()?.uid" class="select-rol">
-                  <option value="ADMIN">🛡️ Administrador</option>
-                  <option value="ENCARGADO">👔 Encargado / Supervisor</option>
-                  <option value="CAJERO">🛒 Cajero / Vendedor</option>
-                </select>
-              </td>
-              <td>
-                <span>🏪 {{ u.sucursalNombre || 'Matriz' }}</span>
-              </td>
-              <td style="text-align: center;">
-                @if (u.activo) {
-                  <span class="badge badge-success">Activo</span>
-                } @else {
-                  <span class="badge badge-danger">Inactivo</span>
-                }
-              </td>
-              <td style="text-align: center;">
-                @if (u.uid !== authService.currentUser()?.uid) {
-                  <div style="display: flex; gap: 6px; justify-content: center;">
+                <div class="user-cell">
+                  <div class="user-name-row">
+                    <span>{{ u.nombre }}</span>
+                    @if (u.uid === authService.currentUser()?.uid) {
+                      <span class="badge badge-success" style="font-size: 0.68rem; padding: 2px 6px;">Tú (Admin)</span>
+                    }
+                  </div>
+                  <div class="user-email-row">
+                    <span>{{ u.email }}</span>
                     <button
                       type="button"
-                      class="btn btn-sm"
-                      [class.btn-warning]="u.activo"
-                      [class.btn-success]="!u.activo"
-                      (click)="toggleActivo(u)"
-                      title="{{ u.activo ? 'Pausar acceso temporalmente' : 'Reactivar acceso' }}"
+                      class="btn-copy-mini"
+                      (click)="copiarTexto(u.email, 'Correo')"
+                      title="Copiar correo para iniciar sesión"
                     >
-                      {{ u.activo ? 'Pausar' : 'Activar' }}
+                      📋
+                    </button>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Contraseña de Acceso -->
+              <td style="text-align: center;">
+                @if (u.claveAcceso) {
+                  <div class="pass-pill">
+                    <span class="pass-text">
+                      {{ passVisibleMap[u.uid] ? u.claveAcceso : '••••••' }}
+                    </span>
+                    <button
+                      type="button"
+                      class="pass-action-btn"
+                      (click)="togglePassVisible(u.uid)"
+                      title="{{ passVisibleMap[u.uid] ? 'Ocultar' : 'Mostrar' }} Contraseña"
+                    >
+                      {{ passVisibleMap[u.uid] ? '🙈' : '👁️' }}
                     </button>
                     <button
                       type="button"
-                      class="btn btn-sm btn-danger"
+                      class="pass-action-btn"
+                      (click)="copiarTexto(u.claveAcceso, 'Contraseña')"
+                      title="Copiar Contraseña"
+                    >
+                      📋
+                    </button>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-secondary"
+                    style="padding: 3px 8px; font-size: 0.74rem;"
+                    (click)="abrirModalEditar(u)"
+                    title="Asignar contraseña para operar"
+                  >
+                    ➕ Asignar Clave
+                  </button>
+                }
+              </td>
+
+              <!-- Rol de Acceso -->
+              <td>
+                <select [value]="u.rol" (change)="cambiarRol(u, $event)" [disabled]="u.uid === authService.currentUser()?.uid" class="select-rol">
+                  <option value="ADMIN">🛡️ Administrador</option>
+                  <option value="ENCARGADO">👔 Encargado</option>
+                  <option value="CAJERO">🛒 Cajero</option>
+                </select>
+              </td>
+
+              <!-- Sucursal Asignada -->
+              <td>
+                <span style="font-size: 0.84rem; color: #334155; font-weight: 500;">
+                  🏪 {{ u.sucursalNombre || 'Matriz' }}
+                </span>
+              </td>
+
+              <!-- Equipo Físico Vinculado -->
+              <td>
+                @if (u.uid === authService.currentUser()?.uid || u.rol === 'ADMIN') {
+                  <span class="device-badge open" title="El Administrador puede acceder desde cualquier dispositivo">
+                    🌐 Cualquier equipo
+                  </span>
+                } @else if (u.permitirCualquierDispositivo) {
+                  <span class="device-badge open">
+                    🌐 Libre (Sin restricción)
+                    <button
+                      type="button"
+                      class="device-btn-unlink"
+                      (click)="togglePermitirCualquierDispositivo(u)"
+                      title="Restringir a la computadora física de la tienda"
+                    >
+                      🔒
+                    </button>
+                  </span>
+                } @else if (u.dispositivoAutorizadoId) {
+                  <span class="device-badge linked" title="Vinculado: {{ (u.fechaVinculacionDispositivo | date:'dd/MM/yy HH:mm') || 'Registrado' }}">
+                    🔒 {{ u.dispositivoAutorizadoNombre || 'PC Asignada' }}
+                    <button
+                      type="button"
+                      class="device-btn-unlink"
+                      (click)="desvincularEquipo(u)"
+                      title="Desvincular equipo (para poder cambiar de máquina)"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                } @else {
+                  <div style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span class="device-badge pending">
+                      🟡 Pendiente
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-action"
+                      style="height: 24px; padding: 0 6px; font-size: 0.7rem;"
+                      (click)="vincularEstaComputadora(u)"
+                      title="Vincular esta computadora como su equipo ahora"
+                    >
+                      💻 Esta PC
+                    </button>
+                  </div>
+                }
+              </td>
+
+              <!-- Estado de Conexión -->
+              <td style="text-align: center;">
+                @if (!u.activo) {
+                  <span class="status-pill inactive">
+                    <span class="status-dot red"></span> En pausa
+                  </span>
+                } @else if (u.sesionActivaId) {
+                  <span class="status-pill online" title="Equipo: {{ u.dispositivoActual || 'Activo' }}">
+                    <span class="status-dot green"></span> En línea
+                  </span>
+                } @else {
+                  <span class="status-pill offline">
+                    <span class="status-dot gray"></span> Desconectado
+                  </span>
+                }
+              </td>
+
+              <!-- Barra de Acciones (Horizontal compacta) -->
+              <td style="text-align: right;">
+                <div class="actions-toolbar">
+                  <!-- Copiar Ficha de credenciales -->
+                  <button
+                    type="button"
+                    class="btn-action"
+                    (click)="copiarFichaAcceso(u)"
+                    title="Copiar ficha de acceso completa para enviar al colaborador o abrir en otra terminal"
+                  >
+                    📋 Ficha
+                  </button>
+
+                  <!-- Modificar Datos -->
+                  <button
+                    type="button"
+                    class="btn-action icon-only"
+                    (click)="abrirModalEditar(u)"
+                    title="Modificar nombre o contraseña"
+                  >
+                    ✏️
+                  </button>
+
+                  @if (u.uid !== authService.currentUser()?.uid) {
+                    <!-- Desconectar sesión remota si está en línea -->
+                    @if (u.sesionActivaId) {
+                      <button
+                        type="button"
+                        class="btn-action icon-only disconnect-action"
+                        (click)="forzarCierreSesion(u)"
+                        title="Desconectar y cerrar sesión de este equipo remotamente"
+                      >
+                        ⚡
+                      </button>
+                    }
+
+                    <!-- Pausar / Reactivar -->
+                    <button
+                      type="button"
+                      class="btn-action icon-only"
+                      [class.warning-action]="u.activo"
+                      (click)="toggleActivo(u)"
+                      title="{{ u.activo ? 'Pausar acceso temporalmente' : 'Reactivar acceso' }}"
+                    >
+                      {{ u.activo ? '⏸️' : '▶️' }}
+                    </button>
+
+                    <!-- Eliminar -->
+                    <button
+                      type="button"
+                      class="btn-action icon-only danger-action"
                       (click)="eliminarColaborador(u)"
                       title="Eliminar colaborador definitivamente"
                     >
                       🗑️
                     </button>
-                  </div>
-                } @else {
-                  <span style="color: #94a3b8; font-size: 0.8rem;">Principal</span>
-                }
+                  }
+                </div>
               </td>
             </tr>
           } @empty {
             <tr>
-              <td colspan="6" style="text-align: center; padding: 25px; color: #94a3b8;">
-                No hay otros colaboradores registrados.
+              <td colspan="7" style="text-align: center; padding: 30px; color: #94a3b8;">
+                No hay otros colaboradores o cajas registradas. Haz clic en "Nueva Caja o Colaborador".
               </td>
             </tr>
           }
@@ -156,7 +325,7 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3>➕ Alta de Nuevo Colaborador</h3>
-        <button type="button" class="modal-close" (click)="modalAbierto.set(false)">&times;</button>
+        <button type="button" class="modal-close" (click)="cerrarModalNuevo()">&times;</button>
       </div>
 
       <form (ngSubmit)="crearColaborador()" class="modal-body form-grid">
@@ -167,18 +336,48 @@
         }
 
         <div class="form-group" style="grid-column: 1 / -1;">
-          <label>Nombre Completo *</label>
-          <input type="text" [(ngModel)]="nombreNuevo" name="nombreNuevo" placeholder="Ej: Juan Pérez" required />
+          <label>Nombre de la Caja o Colaborador *</label>
+          <input type="text" [(ngModel)]="nombreNuevo" (input)="actualizarEmailSugerido()" name="nombreNuevo" placeholder="Ej: Caja 1 o Carlos López" required />
         </div>
 
         <div class="form-group">
-          <label>Correo Electrónico *</label>
-          <input type="email" [(ngModel)]="emailNuevo" name="emailNuevo" placeholder="cajero@mitienda.com" required />
+          <label>Correo Electrónico de Acceso *</label>
+          <input
+            type="email"
+            [(ngModel)]="emailNuevo"
+            name="emailNuevo"
+            placeholder="caja1@mitienda.pos"
+            required
+          />
+          <small style="color: #64748b; font-size: 0.74rem; margin-top: 3px; display: block;">
+            Úsalo para iniciar sesión en la computadora de cobro.
+          </small>
         </div>
 
         <div class="form-group">
-          <label>Contraseña Inicial (mín 6 car.) *</label>
-          <input type="password" [(ngModel)]="passNuevo" name="passNuevo" placeholder="••••••••" required minlength="6" />
+          <label>Contraseña de Acceso (mínimo 6 caracteres) *</label>
+          <div style="display: flex; gap: 8px;">
+            <input
+              type="text"
+              [(ngModel)]="passNuevo"
+              name="passNuevo"
+              placeholder="123456"
+              minlength="6"
+              required
+              style="font-family: monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: 2px; text-align: center; width: 140px;"
+            />
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="regenerarPasswordNuevo()"
+              title="Generar contraseña aleatoria"
+            >
+              🎲 Generar
+            </button>
+          </div>
+          <small style="color: #64748b; font-size: 0.74rem; margin-top: 3px; display: block;">
+            Clave con la que esta caja iniciará sesión en su máquina.
+          </small>
         </div>
 
         <div class="form-group">
@@ -200,12 +399,178 @@
         </div>
 
         <div class="modal-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
-          <button type="button" class="btn btn-secondary" (click)="modalAbierto.set(false)" [disabled]="guardando()">Cancelar</button>
+          <button type="button" class="btn btn-secondary" (click)="cerrarModalNuevo()" [disabled]="guardando()">Cancelar</button>
           <button type="submit" class="btn btn-primary" [disabled]="guardando()">
-            {{ guardando() ? 'Creando cuenta...' : '💾 Crear Colaborador' }}
+            {{ guardando() ? 'Guardando...' : '💾 Crear Caja / Colaborador' }}
           </button>
         </div>
       </form>
+    </div>
+  </div>
+}
+
+<!-- Modal Editar Colaborador / Usuario -->
+@if (modalEditarAbierto()) {
+  @if (usuarioAEditar(); as uEdit) {
+    <div class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>✏️ Modificar Colaborador</h3>
+        <button type="button" class="modal-close" (click)="cerrarModalEditar()">&times;</button>
+      </div>
+
+      <form (ngSubmit)="guardarEdicionColaborador()" class="modal-body form-grid">
+        @if (errorModalEdit()) {
+          <div class="form-group" style="grid-column: 1 / -1; background: #fee2e2; color: #dc2626; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+            ⚠️ {{ errorModalEdit() }}
+          </div>
+        }
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>Nombre del {{ uEdit.uid === authService.currentUser()?.uid ? 'Cliente / Administrador' : 'Colaborador' }} *</label>
+          <input type="text" [(ngModel)]="nombreEdit" name="nombreEdit" placeholder="Ej: Juan Pérez" required />
+        </div>
+
+        @if (uEdit.uid !== authService.currentUser()?.uid) {
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Contraseña de Acceso (mínimo 6 caracteres)</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input
+                type="text"
+                [(ngModel)]="passEdit"
+                name="passEdit"
+                placeholder="Ej: 123456"
+                minlength="6"
+                style="font-family: monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: 2px; text-align: center; max-width: 140px;"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                (click)="regenerarPasswordEdit()"
+                title="Generar contraseña aleatoria"
+              >
+                🎲 Generar
+              </button>
+              <span style="font-size: 0.78rem; color: #64748b;">
+                Cambia la clave de inicio de sesión para esta máquina.
+              </span>
+            </div>
+          </div>
+        }
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>Identificador / Correo de Acceso</label>
+          <input type="email" [value]="uEdit.email" disabled style="background: #f1f5f9; cursor: not-allowed; color: #64748b;" />
+        </div>
+
+        @if (uEdit.uid !== authService.currentUser()?.uid) {
+          <div class="form-group">
+            <label>Rol de Permisos *</label>
+            <select [(ngModel)]="rolEdit" name="rolEdit">
+              <option value="CAJERO">🛒 Cajero / Vendedor (Solo Ventas y Caja)</option>
+              <option value="ENCARGADO">👔 Encargado (Inventario, Gastos y Ventas)</option>
+              <option value="ADMIN">🛡️ Administrador (Acceso Total)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Sucursal Asignada</label>
+            <select [(ngModel)]="sucursalIdEdit" name="sucursalIdEdit">
+              @for (suc of sucursalesService.sucursales(); track suc.id) {
+                <option [value]="suc.id">{{ suc.nombre }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="device-toggle-card">
+            <label class="toggle-control">
+              <input type="checkbox" [(ngModel)]="permitirCualquierDispositivoEdit" name="permitirCualquierDispositivoEdit" />
+              <div class="toggle-text">
+                <span class="toggle-title">🌐 Permitir iniciar sesión desde cualquier equipo</span>
+                <span class="toggle-desc">Si está desactivado, el colaborador solo podrá acceder desde la computadora física autorizada de la tienda.</span>
+              </div>
+            </label>
+          </div>
+        }
+
+        <div class="modal-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModalEditar()" [disabled]="guardandoEdit()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="guardandoEdit()">
+            {{ guardandoEdit() ? 'Guardando...' : '💾 Guardar Cambios' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  }
+}
+
+<!-- Modal de Ficha de Credenciales Creadas -->
+@if (credencialesCreadas(); as cred) {
+  <div class="modal-overlay">
+    <div class="modal-card" style="max-width: 520px; border-top: 5px solid #16a34a;">
+      <div class="modal-header">
+        <h3 style="color: #166534; display: flex; align-items: center; gap: 8px;">
+          <span>🎉</span> ¡Cuenta de Cobro Creada Exitosamente!
+        </h3>
+        <button type="button" class="modal-close" (click)="cerrarModalCredenciales()">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <h4 style="margin: 0 0 12px 0; color: #166534; font-size: 0.95rem;">
+            🖥️ Credenciales de Acceso para: <strong>{{ cred.nombre }}</strong>
+          </h4>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <div>
+                <small style="color: #64748b; display: block; font-size: 0.72rem; font-weight: 700;">CORREO DE ACCESO</small>
+                <code style="font-size: 0.95rem; font-weight: 700; color: #0f172a;">{{ cred.email }}</code>
+              </div>
+              <button type="button" class="btn btn-sm btn-secondary" (click)="copiarTexto(cred.email, 'Correo')">
+                📋 Copiar
+              </button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <div>
+                <small style="color: #64748b; display: block; font-size: 0.72rem; font-weight: 700;">CONTRASEÑA DE ACCESO</small>
+                <code style="font-size: 1.15rem; font-weight: 800; color: #0284c7; letter-spacing: 2px;">{{ cred.clave }}</code>
+              </div>
+              <button type="button" class="btn btn-sm btn-secondary" (click)="copiarTexto(cred.clave, 'Contraseña')">
+                📋 Copiar
+              </button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <div>
+                <small style="color: #64748b; display: block; font-size: 0.72rem; font-weight: 700;">ROL ASIGNADO</small>
+                <span class="badge badge-info">{{ cred.rol }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; font-size: 0.82rem; color: #1e40af; line-height: 1.45;">
+          <strong>💡 ¿Cómo configurar tu computadora de cobro?</strong>
+          <ol style="margin: 6px 0 0 16px; padding: 0;">
+            <li>Ve a la computadora que usarás para cobrar (Caja 1 o Caja 2).</li>
+            <li>Abre el punto de venta en el navegador.</li>
+            <li>Inicia sesión con el correo y la contraseña mostrados arriba.</li>
+            <li>¡Listo! Esa computadora quedará operando como <strong>{{ cred.rol }}</strong> y nadie podrá acceder a la administración.</li>
+          </ol>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" (click)="copiarFichaCredenciales()">
+            📋 Copiar Todo
+          </button>
+          <button type="button" class="btn btn-primary" (click)="cerrarModalCredenciales()">
+            Listo, Continuar
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 }

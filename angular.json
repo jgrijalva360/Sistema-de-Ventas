@@ -80,7 +80,8 @@
             "development": {
               "optimization": false,
               "extractLicenses": false,
-              "sourceMap": true
+              "sourceMap": true,
+              "watch": false
             }
           },
           "defaultConfiguration": "production"

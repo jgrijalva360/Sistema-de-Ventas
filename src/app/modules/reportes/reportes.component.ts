@@ -55,6 +55,24 @@ export class ReportesComponent implements AfterViewInit {
     return this.ventasFiltradas().reduce((acc, v) => acc + (v.total || 0), 0);
   });
 
+  public totalCostoVentasCalculado = computed(() => {
+    return this.ventasFiltradas().reduce((acc, v) => {
+      const costoTicket = (v.items || []).reduce((sum, it) => sum + (it.costoTotalFifo || 0), 0);
+      return acc + costoTicket;
+    }, 0);
+  });
+
+  public utilidadBrutaVentas = computed(() => {
+    return this.totalVentasCalculado() - this.totalCostoVentasCalculado();
+  });
+
+  public margenBrutoPorcentaje = computed(() => {
+    const ventas = this.totalVentasCalculado();
+    const costo = this.totalCostoVentasCalculado();
+    if (ventas <= 0) return 0;
+    return Math.round(((ventas - costo) / ventas) * 100);
+  });
+
   public totalVentasEfectivo = computed(() => {
     return this.ventasFiltradas().reduce((acc, v) => acc + (v.pagos?.efectivo || 0), 0);
   });
@@ -245,19 +263,25 @@ export class ReportesComponent implements AfterViewInit {
       ]);
       this.reportesService.exportarCSV(`Reporte_Global_Consolidado_${sufijoArchivo}`, headers, rows);
     } else if (this.tipoReporte() === 'VENTAS') {
-      const headers = ['Folio', 'Fecha y Hora (Local)', 'Sucursal', 'Cajero', 'Productos Vendidos', 'Cant. Ítems', 'Total', 'Efectivo', 'Tarjeta', 'Transferencia'];
-      const rows = this.ventasFiltradas().map((v) => [
-        v.id,
-        this.formatearFechaLocal(v.fecha),
-        v.sucursalNombre,
-        v.usuario || '',
-        (v.items || []).map((i) => `${i.cantidad}x ${i.nombre} ($${(i.subtotal || (i.cantidad * i.precioUnitario) || 0).toFixed(2)})`).join(' | ') || 'Sin detalle',
-        String(v.items?.length || 0),
-        (v.total || 0).toFixed(2),
-        (v.pagos?.efectivo || 0).toFixed(2),
-        (v.pagos?.tarjeta || 0).toFixed(2),
-        (v.pagos?.transferencia || 0).toFixed(2)
-      ]);
+      const headers = ['Folio', 'Fecha y Hora (Local)', 'Sucursal', 'Cajero', 'Productos Vendidos', 'Cant. Ítems', 'Total Venta', 'Costo FIFO', 'Utilidad Bruta', 'Efectivo', 'Tarjeta', 'Transferencia'];
+      const rows = this.ventasFiltradas().map((v) => {
+        const costoVenta = (v.items || []).reduce((sum, i) => sum + (i.costoTotalFifo || 0), 0);
+        const utilidad = (v.total || 0) - costoVenta;
+        return [
+          v.id,
+          this.formatearFechaLocal(v.fecha),
+          v.sucursalNombre,
+          v.usuario || '',
+          (v.items || []).map((i) => `${i.cantidad}x ${i.nombre} ($${(i.subtotal || (i.cantidad * i.precioUnitario) || 0).toFixed(2)})`).join(' | ') || 'Sin detalle',
+          String(v.items?.length || 0),
+          (v.total || 0).toFixed(2),
+          costoVenta.toFixed(2),
+          utilidad.toFixed(2),
+          (v.pagos?.efectivo || 0).toFixed(2),
+          (v.pagos?.tarjeta || 0).toFixed(2),
+          (v.pagos?.transferencia || 0).toFixed(2)
+        ];
+      });
       this.reportesService.exportarCSV(`Reporte_Ventas_${sufijoArchivo}`, headers, rows);
     } else if (this.tipoReporte() === 'PEDIDOS') {
       const headers = ['Folio', 'Cliente', 'Teléfono', 'Fecha Registro (Local)', 'Fecha Entrega (Local)', 'Productos / Insumos', 'Estado', 'Sucursal', 'Total Acordado', 'Cobrado / Anticipo', 'Saldo Restante'];

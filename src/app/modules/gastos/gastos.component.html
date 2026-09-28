@@ -15,12 +15,14 @@
       <form (ngSubmit)="onRegistrarGasto()" class="form-grid">
         <div class="form-group">
           <label for="gastoConcepto">Concepto / Descripción *</label>
-          <input #conceptoInputRef id="gastoConcepto" type="text" [(ngModel)]="concepto" name="concepto" required placeholder="Ej: Pago de luz, bolsas..." />
+          <input #conceptoInputRef id="gastoConcepto" type="text" [(ngModel)]="concepto" name="concepto" required
+            placeholder="Ej: Pago de luz, bolsas..." />
         </div>
 
         <div class="form-group">
           <label for="gastoMonto">Monto ($) *</label>
-          <input id="gastoMonto" type="number" min="0.01" step="0.01" [(ngModel)]="monto" name="monto" required placeholder="0.00" />
+          <input id="gastoMonto" type="number" min="0.01" step="0.01" [(ngModel)]="monto" name="monto" required
+            placeholder="0.00" />
         </div>
 
         <div class="form-group">
@@ -36,22 +38,38 @@
         </div>
 
         <div class="form-group">
-          <label for="gastoMetodo">Método de Pago *</label>
-          <select id="gastoMetodo" [(ngModel)]="metodoPago" name="metodoPago" required>
-            <option value="EFECTIVO">💵 Efectivo (Afecta Caja de Turno)</option>
-            <option value="TARJETA">💳 Tarjeta (Gasto Bancario)</option>
-            <option value="TRANSFERENCIA">📱 Transferencia (Gasto Bancario)</option>
+          <label for="gastoOrigen">Pagado Por *</label>
+          <select id="gastoOrigen" [ngModel]="origenGasto" (ngModelChange)="onOrigenGastoChange($event)"
+            name="origenGasto" required>
+            <option value="CAJA">🏢 Caja / Negocio (Empresa)</option>
+            <optgroup label="Socios (Bolsillo de Socio)">
+              @for (s of sociosService.sociosActivos(); track s.id) {
+              <option [value]="s.id">👤 Socio: {{ s.nombre }}</option>
+              }
+            </optgroup>
           </select>
         </div>
 
         <div class="form-group">
-          <label for="gastoPersona">Autorizado / Pagado Por</label>
-          <input id="gastoPersona" type="text" [(ngModel)]="persona" name="persona" placeholder="Ej: Juan Pérez" />
+          <label for="gastoMetodo">Método de Pago *</label>
+          <select id="gastoMetodo" [(ngModel)]="metodoPago" name="metodoPago" required>
+            @if (origenGasto === 'CAJA') {
+            <option value="EFECTIVO">💵 Efectivo (Afecta Caja de Turno)</option>
+            <option value="TARJETA">💳 Tarjeta (Gasto Bancario Empresa)</option>
+            <option value="TRANSFERENCIA">📱 Transferencia (Gasto Bancario Empresa)</option>
+            } @else {
+            <option value="BOLSILLO_SOCIO">👛 Bolsillo Personal del Socio (No afecta caja)</option>
+            <option value="EFECTIVO">💵 Efectivo (Tomado de Caja de Turno)</option>
+            <option value="TRANSFERENCIA">📱 Transferencia Personal</option>
+            <option value="TARJETA">💳 Tarjeta Personal</option>
+            }
+          </select>
         </div>
 
         <div class="form-group">
           <label for="gastoObs">Observaciones</label>
-          <input id="gastoObs" type="text" [(ngModel)]="observaciones" name="observaciones" placeholder="Detalles adicionales..." />
+          <input id="gastoObs" type="text" [(ngModel)]="observaciones" name="observaciones"
+            placeholder="Detalles adicionales..." />
         </div>
 
         <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
@@ -79,33 +97,44 @@
             <th>Concepto</th>
             <th>Categoría</th>
             <th>Método</th>
-            <th>Autorizó</th>
+            <th>Pagado Por</th>
             <th style="text-align: right;">Monto</th>
             <th style="text-align: center;">Acción</th>
           </tr>
         </thead>
         <tbody>
           @for (g of gastosService.gastos(); track g.id) {
-            <tr>
-              <td>{{ g.fecha | fechaLocal }}</td>
-              <td><strong>{{ g.concepto }}</strong></td>
-              <td><span class="badge badge-info">{{ g.categoria }}</span></td>
-              <td>
-                @if (g.metodoPago === 'EFECTIVO') { <span class="badge badge-success">Efectivo</span> }
-                @else { <span class="badge badge-warning">{{ g.metodoPago }}</span> }
-              </td>
-              <td>{{ g.persona || '-' }}</td>
-              <td style="text-align: right;"><strong style="color: #dc2626;">{{ g.monto | currencyMxn }}</strong></td>
-              <td style="text-align: center;">
-                <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarGasto(g.id)">🗑️</button>
-              </td>
-            </tr>
+          <tr>
+            <td>{{ g.fecha | fechaLocal }}</td>
+            <td><strong>{{ g.concepto }}</strong></td>
+            <td><span class="badge badge-info">{{ g.categoria }}</span></td>
+            <td>
+              @if (g.metodoPago === 'EFECTIVO') { <span class="badge badge-success">💵 Efectivo</span> }
+              @else if (g.metodoPago === 'BOLSILLO_SOCIO') { <span class="badge"
+                style="background: #fef3c7; color: #92400e;">👛 Bolsillo Socio</span> }
+              @else { <span class="badge badge-warning">{{ g.metodoPago }}</span> }
+            </td>
+            <td>
+              @if (g.socioId || (g.persona && !g.persona.toLowerCase().includes('caja') &&
+              !g.persona.toLowerCase().includes('empresa') && g.persona !== '-')) {
+              <span class="badge" style="background: #eff6ff; color: #1d4ed8; font-weight: 600;">👤 {{ g.persona
+                }}</span>
+              } @else {
+              <span class="badge" style="background: #f1f5f9; color: #475569; font-weight: 600;">🏢 Caja /
+                Negocio</span>
+              }
+            </td>
+            <td style="text-align: right;"><strong style="color: #dc2626;">{{ g.monto | currencyMxn }}</strong></td>
+            <td style="text-align: center;">
+              <button type="button" class="btn btn-sm btn-danger" (click)="onEliminarGasto(g.id)">🗑️</button>
+            </td>
+          </tr>
           } @empty {
-            <tr>
-              <td colspan="7" style="text-align: center; color: #94a3b8; padding: 25px;">
-                No hay gastos registrados.
-              </td>
-            </tr>
+          <tr>
+            <td colspan="7" style="text-align: center; color: #94a3b8; padding: 25px;">
+              No hay gastos registrados.
+            </td>
+          </tr>
           }
         </tbody>
       </table>

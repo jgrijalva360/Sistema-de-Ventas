@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { Producto, StockSucursal } from '../models/models';
+import { Producto, StockSucursal, LoteFifo } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { SyncService } from './sync.service';
 import { Subscription } from 'rxjs';
@@ -68,12 +68,34 @@ export class ProductosService {
     const totalActual = Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
     const totalMinimo = Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockMinimo || 0), 0);
 
+    // Normalizar Lotes FIFO
+    const lotesFifo: LoteFifo[] = [];
+    if (Array.isArray(p.lotesFifo)) {
+      p.lotesFifo.forEach((lote: any) => {
+        if (lote && typeof lote === 'object') {
+          lotesFifo.push({
+            id: String(lote.id || '').trim(),
+            movimientoId: lote.movimientoId ? String(lote.movimientoId).trim() : undefined,
+            fecha: lote.fecha || new Date().toISOString(),
+            cantidadInicial: Number(lote.cantidadInicial) || 0,
+            cantidadDisponible: Math.max(0, Number(lote.cantidadDisponible) || 0),
+            costoUnitario: Number(lote.costoUnitario) || 0,
+            sucursalId: lote.sucursalId || 'SUC-MAIN'
+          });
+        }
+      });
+    }
+
     const prod: Producto = {
       codigo: (p.codigo || '').trim(),
       nombre: p.nombre || 'Producto',
       stockMinimo: Number(totalMinimo) || Number(stockMin) || 1,
       stockActual: Number(totalActual) || 0,
       precioVenta: typeof p.precioVenta === 'number' ? p.precioVenta : parseFloat(p.precioVenta) || 0,
+      ultimoCosto: p.ultimoCosto !== undefined ? Number(p.ultimoCosto) : undefined,
+      fechaUltimoCosto: p.fechaUltimoCosto || undefined,
+      costoPromedio: p.costoPromedio !== undefined ? Number(p.costoPromedio) : undefined,
+      lotesFifo,
       precioVariable: Boolean(p.precioVariable),
       grupo: p.grupo || 'General',
       unidad: p.unidad || 'Unidades',
@@ -197,8 +219,34 @@ export class ProductosService {
         ...(norm.stockPorSucursal || {})
       };
       norm.stockActual = Object.values(norm.stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
+
+      // Conservar costos previos y lotes si no se sobreescribieron
+      if (norm.ultimoCosto === undefined && previo.ultimoCosto !== undefined) {
+        norm.ultimoCosto = previo.ultimoCosto;
+        norm.fechaUltimoCosto = previo.fechaUltimoCosto;
+      }
+      if (!norm.lotesFifo || norm.lotesFifo.length === 0) {
+        norm.lotesFifo = previo.lotesFifo || [];
+      }
+      if (norm.costoPromedio === undefined && previo.costoPromedio !== undefined) {
+        norm.costoPromedio = previo.costoPromedio;
+      }
+
       current[idx] = { ...norm };
     } else {
+      // Si es un producto nuevo con stock inicial y costo, inicializar su primer lote FIFO
+      if (norm.stockActual > 0 && norm.ultimoCosto && norm.ultimoCosto > 0) {
+        norm.lotesFifo = [
+          {
+            id: `LOTE-INI-${Date.now()}`,
+            fecha: new Date().toISOString(),
+            cantidadInicial: norm.stockActual,
+            cantidadDisponible: norm.stockActual,
+            costoUnitario: norm.ultimoCosto,
+            sucursalId: sid
+          }
+        ];
+      }
       current.push({ ...norm });
     }
 
@@ -254,6 +302,36 @@ export class ProductosService {
     }
   }
 
+  async actualizarPrecioVenta(codigo: string, nuevoPrecio: number): Promise<void> {
+    const current = [...this.productosSignal()];
+    const idx = current.findIndex((p) => (p.codigo || '').toLowerCase() === (codigo || '').toLowerCase().trim());
+    if (idx >= 0) {
+      const prod = current[idx];
+      const precioAnterior = prod.precioVenta;
+      current[idx] = {
+        ...prod,
+        precioVenta: Math.max(0, Number(nuevoPrecio) || 0)
+      };
+      this.productosSignal.set(current);
+      this.syncService.setStatus('saving', 'Actualizando precio de venta...');
+      try {
+        await this.persistirCatalogo(current);
+        await this.syncService.incrementarRevision();
+        this.syncService.setStatus('online', 'En Línea');
+
+        await this.bitacoraService.registrarEvento({
+          modulo: 'INVENTARIO',
+          accion: 'EDITAR',
+          descripcion: `Precio de venta de "${prod.nombre}" (${prod.codigo}) actualizado de $${precioAnterior.toFixed(2)} a $${Number(nuevoPrecio).toFixed(2)}`,
+          detalles: { codigo: prod.codigo, precioAnterior, nuevoPrecio }
+        });
+      } catch (e) {
+        console.warn('Error al actualizar precio de venta:', e);
+        this.syncService.setStatus('online', 'En Línea');
+      }
+    }
+  }
+
   async eliminarProducto(codigo: string): Promise<void> {
     const prodEliminado = this.productosSignal().find(
       (p) => (p.codigo || '').toLowerCase() === (codigo || '').toLowerCase().trim()
@@ -283,9 +361,149 @@ export class ProductosService {
     }
   }
 
-  async descontarStockVenta(itemsVendidos: { codigo: string; cantidad: number }[], sucursalId: string = 'SUC-MAIN'): Promise<void> {
+  /**
+   * Registra una nueva capa/lote FIFO cuando ingresa mercancía por compra o surtido.
+   */
+  async registrarEntradaFifo(
+    codigo: string,
+    cantidad: number,
+    costoUnitario: number,
+    sucursalId: string = 'SUC-MAIN',
+    movimientoId?: string
+  ): Promise<void> {
+    const current = [...this.productosSignal()];
+    const idx = current.findIndex(
+      (p) => (p.codigo || '').toLowerCase() === (codigo || '').toLowerCase().trim()
+    );
+    if (idx < 0) return;
+
+    const prod = current[idx];
+    const lotes = [...(prod.lotesFifo || [])];
+    const fechaIso = new Date().toISOString();
+    const loteId = movimientoId ? `LOTE-${movimientoId}` : `LOTE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const nuevoLote: LoteFifo = {
+      id: loteId,
+      movimientoId,
+      fecha: fechaIso,
+      cantidadInicial: Number(cantidad) || 0,
+      cantidadDisponible: Number(cantidad) || 0,
+      costoUnitario: Number(costoUnitario) || 0,
+      sucursalId
+    };
+
+    lotes.push(nuevoLote);
+
+    // Calcular costo promedio ponderado de los lotes activos con saldo
+    const lotesConSaldo = lotes.filter((l) => l.cantidadDisponible > 0);
+    const sumaCosto = lotesConSaldo.reduce((acc, l) => acc + l.cantidadDisponible * l.costoUnitario, 0);
+    const sumaCant = lotesConSaldo.reduce((acc, l) => acc + l.cantidadDisponible, 0);
+    const costoProm = sumaCant > 0 ? sumaCosto / sumaCant : Number(costoUnitario) || 0;
+
+    current[idx] = {
+      ...prod,
+      ultimoCosto: Number(costoUnitario) || 0,
+      fechaUltimoCosto: fechaIso,
+      costoPromedio: Math.round(costoProm * 100) / 100,
+      lotesFifo: lotes
+    };
+
+    this.productosSignal.set(current);
+    try {
+      await this.persistirCatalogo(current);
+    } catch (e) {
+      console.warn('Error al persistir entrada FIFO en productos:', e);
+    }
+  }
+
+  /**
+   * Consume unidades de los lotes FIFO ordenados por fecha ascendente (el más viejo primero).
+   */
+  consumirStockFifo(
+    prod: Producto,
+    cantidadAConsumir: number,
+    sucursalId: string = 'SUC-MAIN'
+  ): {
+    lotesActualizados: LoteFifo[];
+    costoTotalFifo: number;
+    costoUnitarioPonderado: number;
+  } {
+    let cantRestante = Math.max(0, Number(cantidadAConsumir) || 0);
+    const lotes = (prod.lotesFifo || []).map((l) => ({ ...l }));
+    let costoTotal = 0;
+    let cantConsumidaDeLotes = 0;
+
+    // Ordenar lotes por fecha ascendente (el más viejo primero)
+    // Filtramos lotes con saldo para esta sucursal (o generales sin sucursal fija)
+    const lotesCandidatos = lotes
+      .filter((l) => l.cantidadDisponible > 0 && (l.sucursalId === sucursalId || !l.sucursalId))
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    for (const lote of lotesCandidatos) {
+      if (cantRestante <= 0) break;
+      const tomar = Math.min(cantRestante, lote.cantidadDisponible);
+      lote.cantidadDisponible -= tomar;
+      cantRestante -= tomar;
+      costoTotal += tomar * (lote.costoUnitario || 0);
+      cantConsumidaDeLotes += tomar;
+    }
+
+    // Si aún quedó cantidad por consumir (ej: existencias previas sin registro de lote FIFO),
+    // aplicamos el costo de fallback (ultimoCosto o costoPromedio)
+    if (cantRestante > 0) {
+      const costoFallback = Number(prod.ultimoCosto) || Number(prod.costoPromedio) || 0;
+      costoTotal += cantRestante * costoFallback;
+      cantConsumidaDeLotes += cantRestante;
+    }
+
+    const costoUnitarioPonderado =
+      cantConsumidaDeLotes > 0 ? costoTotal / cantConsumidaDeLotes : Number(prod.ultimoCosto) || 0;
+
+    return {
+      lotesActualizados: lotes,
+      costoTotalFifo: Math.round(costoTotal * 100) / 100,
+      costoUnitarioPonderado: Math.round(costoUnitarioPonderado * 100) / 100
+    };
+  }
+
+  /**
+   * Obtiene el costo unitario de la capa FIFO más antigua con saldo disponible para el producto.
+   * Si no hay capas con saldo, retorna el último costo registrado.
+   */
+  obtenerCostoFifoActual(prod: Producto, sucursalId?: string): number {
+    if (!prod) return 0;
+    const lotes = prod.lotesFifo || [];
+    const sid = sucursalId || 'SUC-MAIN';
+
+    const lotesActivos = lotes
+      .filter((l) => l.cantidadDisponible > 0 && (sid === 'TODAS' || l.sucursalId === sid))
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    if (lotesActivos.length > 0) {
+      return lotesActivos[0].costoUnitario || 0;
+    }
+    return Number(prod.ultimoCosto) || Number(prod.costoPromedio) || 0;
+  }
+
+  /**
+   * Devuelve los lotes FIFO con saldo activo para un producto y sucursal.
+   */
+  obtenerLotesFifoActivos(prod: Producto, sucursalId?: string): LoteFifo[] {
+    if (!prod || !Array.isArray(prod.lotesFifo)) return [];
+    return prod.lotesFifo
+      .filter(
+        (l) => l.cantidadDisponible > 0 && (!sucursalId || sucursalId === 'TODAS' || l.sucursalId === sucursalId)
+      )
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+  }
+
+  async descontarStockVenta(
+    itemsVendidos: { codigo: string; cantidad: number }[],
+    sucursalId: string = 'SUC-MAIN'
+  ): Promise<{ codigo: string; cantidad: number; costoUnitarioFifo: number; costoTotalFifo: number }[]> {
     const current = [...this.productosSignal()];
     let huboCambios = false;
+    const desgloseFifo: { codigo: string; cantidad: number; costoUnitarioFifo: number; costoTotalFifo: number }[] = [];
 
     itemsVendidos.forEach((item) => {
       const idx = current.findIndex(
@@ -293,10 +511,21 @@ export class ProductosService {
       );
       if (idx >= 0) {
         const prod = current[idx];
+        const cant = Number(item.cantidad) || 0;
+
+        // 1. Consumir de capas FIFO
+        const resultadoFifo = this.consumirStockFifo(prod, cant, sucursalId);
+        desgloseFifo.push({
+          codigo: prod.codigo,
+          cantidad: cant,
+          costoUnitarioFifo: resultadoFifo.costoUnitarioPonderado,
+          costoTotalFifo: resultadoFifo.costoTotalFifo
+        });
+
+        // 2. Actualizar existencias de la sucursal
         const stocks = { ...(prod.stockPorSucursal || {}) };
         const sucData = stocks[sucursalId] || { stockActual: 0, stockMinimo: 1 };
-
-        const nuevoSuc = Math.max(0, (sucData.stockActual || 0) - (Number(item.cantidad) || 0));
+        const nuevoSuc = Math.max(0, (sucData.stockActual || 0) - cant);
         stocks[sucursalId] = {
           ...sucData,
           stockActual: nuevoSuc
@@ -307,9 +536,17 @@ export class ProductosService {
         current[idx] = {
           ...prod,
           stockActual: totalAct,
-          stockPorSucursal: stocks
+          stockPorSucursal: stocks,
+          lotesFifo: resultadoFifo.lotesActualizados
         };
         huboCambios = true;
+      } else {
+        desgloseFifo.push({
+          codigo: item.codigo,
+          cantidad: Number(item.cantidad) || 0,
+          costoUnitarioFifo: 0,
+          costoTotalFifo: 0
+        });
       }
     });
 
@@ -321,9 +558,14 @@ export class ProductosService {
         console.warn('Error al descontar stock de venta:', e);
       }
     }
+
+    return desgloseFifo;
   }
 
-  async reponerStockDevolucion(itemsDevueltos: { codigo: string; cantidad: number }[], sucursalId: string = 'SUC-MAIN'): Promise<void> {
+  async reponerStockDevolucion(
+    itemsDevueltos: { codigo: string; cantidad: number; costoUnitarioFifo?: number }[],
+    sucursalId: string = 'SUC-MAIN'
+  ): Promise<void> {
     const current = [...this.productosSignal()];
     let huboCambios = false;
 
@@ -333,10 +575,11 @@ export class ProductosService {
       );
       if (idx >= 0) {
         const prod = current[idx];
+        const cant = Number(item.cantidad) || 0;
         const stocks = { ...(prod.stockPorSucursal || {}) };
         const sucData = stocks[sucursalId] || { stockActual: 0, stockMinimo: 1 };
 
-        const nuevoSuc = (sucData.stockActual || 0) + (Number(item.cantidad) || 0);
+        const nuevoSuc = (sucData.stockActual || 0) + cant;
         stocks[sucursalId] = {
           ...sucData,
           stockActual: nuevoSuc
@@ -344,10 +587,24 @@ export class ProductosService {
 
         const totalAct = Object.values(stocks).reduce((acc, s) => acc + (s.stockActual || 0), 0);
 
+        // Si el ítem devuelto tenía costo FIFO, reingresarlo como lote disponible para futuras ventas
+        const lotes = [...(prod.lotesFifo || [])];
+        const costo = item.costoUnitarioFifo !== undefined ? Number(item.costoUnitarioFifo) : (prod.ultimoCosto || 0);
+
+        lotes.unshift({
+          id: `LOTE-DEV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          fecha: new Date().toISOString(),
+          cantidadInicial: cant,
+          cantidadDisponible: cant,
+          costoUnitario: costo,
+          sucursalId
+        });
+
         current[idx] = {
           ...prod,
           stockActual: totalAct,
-          stockPorSucursal: stocks
+          stockPorSucursal: stocks,
+          lotesFifo: lotes
         };
         huboCambios = true;
       }

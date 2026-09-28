@@ -80,9 +80,9 @@ export class LandingPageComponent {
         }
       }
 
-      // Si inició prueba gratis, ir directo al punto de venta
+      // Si inició prueba gratis, ir a la verificación de correo
       this.cerrarModal();
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/verificar-correo']);
     } catch (e: any) {
       this.errorRegistro.set(e.message || 'Error al crear tu cuenta.');
     } finally {

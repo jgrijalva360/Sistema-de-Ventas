@@ -133,7 +133,7 @@ export class CortesService {
 
     gastosTurno.forEach((g) => {
       const met = (g.metodoPago || '').toUpperCase();
-      if (met === 'TARJETA' || met === 'TRANSFERENCIA') {
+      if (met === 'TARJETA' || met === 'TRANSFERENCIA' || met === 'BOLSILLO_SOCIO') {
         gastosBancarios += g.monto || 0;
       } else {
         gastosEfectivo += g.monto || 0;

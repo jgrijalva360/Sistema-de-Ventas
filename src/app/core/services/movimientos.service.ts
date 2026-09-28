@@ -288,7 +288,8 @@ export class MovimientosService {
     codigo: string,
     cantidad: number,
     motivo = '',
-    sucursalId?: string
+    sucursalId?: string,
+    costoUnitario?: number
   ): Promise<void> {
     const prod = this.productosService.obtenerPorCodigo(codigo);
     if (!prod) throw new Error('Producto no encontrado');
@@ -321,6 +322,12 @@ export class MovimientosService {
 
     const nuevoId = generarSiguienteConsecutivo(this.movimientosSignal().map((m) => m.id), 'MOV', 4);
 
+    const costoUnit =
+      costoUnitario !== undefined && costoUnitario !== null && !isNaN(Number(costoUnitario)) && Number(costoUnitario) >= 0
+        ? Number(costoUnitario)
+        : undefined;
+    const costoTot = costoUnit !== undefined ? costoUnit * cantNum : undefined;
+
     const nuevoMov: MovimientoInventario = {
       id: nuevoId,
       fecha: fechaIso,
@@ -330,9 +337,27 @@ export class MovimientosService {
       cantidad: cantNum,
       stockAnterior,
       stockNuevo,
+      costoUnitario: costoUnit,
+      costoTotal: costoTot,
       motivo: motivo.trim(),
       sucursalId: sid
     };
+
+    // 3. Manejo de Lotes FIFO en el producto
+    if (tipo === 'ENTRADA' && costoUnit !== undefined) {
+      await this.productosService.registrarEntradaFifo(prod.codigo, cantNum, costoUnit, sid, nuevoId);
+    } else if (tipo === 'SALIDA') {
+      const consumo = this.productosService.consumirStockFifo(prod, cantNum, sid);
+      const currentProds = [...this.productosService.productos()];
+      const pIdx = currentProds.findIndex((p) => p.codigo.toLowerCase() === prod.codigo.toLowerCase());
+      if (pIdx >= 0) {
+        currentProds[pIdx] = {
+          ...currentProds[pIdx],
+          lotesFifo: consumo.lotesActualizados
+        };
+        this.productosService.setProductos(currentProds);
+      }
+    }
 
     const current = this.validarYLimpiarDuplicados([nuevoMov, ...this.movimientosSignal()]);
     this.movimientosSignal.set(current);
@@ -345,10 +370,13 @@ export class MovimientosService {
 
       // Registrar en Bitácora
       const sucursalNombre = this.sucursalesService.sucursales().find((s) => s.id === sid)?.nombre || 'Matriz';
+      const costoDesc =
+        costoUnit !== undefined ? ` a $${costoUnit.toFixed(2)} c/u (Total: $${(costoTot || 0).toFixed(2)})` : '';
+
       await this.bitacoraService.registrarEvento({
         modulo: 'INVENTARIO',
         accion: tipo === 'AJUSTE' ? 'EDITAR' : 'CREAR',
-        descripcion: `${tipo} de ${cantNum} pza(s) para "${prod.nombre}" (${prod.codigo}). Stock resultante: ${stockNuevo}. ${motivo ? '(' + motivo + ')' : ''}`,
+        descripcion: `${tipo} de ${cantNum} pza(s)${costoDesc} para "${prod.nombre}" (${prod.codigo}). Stock resultante: ${stockNuevo}. ${motivo ? '(' + motivo + ')' : ''}`,
         detalles: nuevoMov,
         sucursalId: sid,
         sucursalNombre

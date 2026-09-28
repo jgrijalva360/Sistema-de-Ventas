@@ -7,41 +7,43 @@
 
   <div class="planes-grid">
     @for (plan of mpService.planesDisponibles(); track plan.id) {
-      <div class="plan-card" [class.destacado]="plan.destacado">
-        @if (plan.destacado) {
-          <div class="badge-popular">⭐ MÁS POPULAR</div>
-        }
-
-        <div class="plan-top">
-          <h3>{{ plan.titulo }}</h3>
-          <p class="plan-sub">{{ plan.subtitulo }}</p>
-        </div>
-
-        <div class="plan-precio">
-          <span class="signo">$</span>
-          <span class="monto">{{ plan.precio | number }}</span>
-          <span class="moneda">{{ plan.moneda }}</span>
-          <span class="periodo">/ {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
-        </div>
-
-        <ul class="features-list">
-          @for (item of plan.caracteristicas; track item) {
-            <li>
-              <span class="check-icon">✓</span>
-              <span>{{ item }}</span>
-            </li>
+      @if (plan.id !== 'TRIAL') {
+        <div class="plan-card" [class.destacado]="plan.destacado">
+          @if (plan.destacado) {
+            <div class="badge-popular">⭐ MÁS POPULAR</div>
           }
-        </ul>
 
-        <button
-          type="button"
-          class="btn-plan"
-          [class.btn-destacado]="plan.destacado"
-          (click)="seleccionarPlan(plan)"
-        >
-          💳 Contratar con Mercado Pago
-        </button>
-      </div>
+          <div class="plan-top">
+            <h3>{{ plan.titulo }}</h3>
+            <p class="plan-sub">{{ plan.subtitulo }}</p>
+          </div>
+
+          <div class="plan-precio">
+            <span class="signo">$</span>
+            <span class="monto">{{ plan.precio | number }}</span>
+            <span class="moneda">{{ plan.moneda }}</span>
+            <span class="periodo">/ {{ plan.periodo === 'ANUAL' ? 'año' : 'mes' }}</span>
+          </div>
+
+          <ul class="features-list">
+            @for (item of plan.caracteristicas; track item) {
+              <li>
+                <span class="check-icon">✓</span>
+                <span>{{ item }}</span>
+              </li>
+            }
+          </ul>
+
+          <button
+            type="button"
+            class="btn-plan"
+            [class.btn-destacado]="plan.destacado"
+            (click)="seleccionarPlan(plan)"
+          >
+            💳 Contratar con Mercado Pago
+          </button>
+        </div>
+      }
     }
   </div>
 
@@ -69,6 +71,49 @@
       </div>
 
       <div class="modal-body">
+        <!-- Selector de Modalidad de Cobro para Planes Mensuales -->
+        @if (p.periodo === 'MENSUAL') {
+          <div class="billing-mode-selector">
+            <label class="selector-title">Selecciona la forma de pago:</label>
+            <div class="mode-options">
+              <button
+                type="button"
+                class="mode-btn"
+                [class.active]="modalidadCobro() === 'RECURRENTE'"
+                (click)="setModalidad('RECURRENTE')"
+              >
+                <div class="mode-btn-header">
+                  <span class="mode-icon">🔄</span>
+                  <span class="mode-name">Cobro Automático Mensual</span>
+                  <span class="mode-badge-rec">Recomendado</span>
+                </div>
+                <p class="mode-desc">Domiciliación a tarjeta. Se cobra automáticamente mes a mes para que tu sistema nunca se detenga.</p>
+              </button>
+
+              <button
+                type="button"
+                class="mode-btn"
+                [class.active]="modalidadCobro() === 'UNICO'"
+                (click)="setModalidad('UNICO')"
+              >
+                <div class="mode-btn-header">
+                  <span class="mode-icon">💳</span>
+                  <span class="mode-name">Pago Único (1 Mes)</span>
+                </div>
+                <p class="mode-desc">Paga 1 solo mes con Tarjeta, Transferencia SPEI o Efectivo en OXXO. Deberás renovar manualmente cada mes.</p>
+              </button>
+            </div>
+          </div>
+        } @else {
+          <div class="annual-banner">
+            <span class="icon">✨</span>
+            <div class="banner-text">
+              <strong>Plan Anual — 12 Meses de Acceso</strong>
+              <p>Ahorras 2 meses completos de suscripción. Pago único con Tarjeta, Oxxo o Transferencia SPEI.</p>
+            </div>
+          </div>
+        }
+
         <div class="order-summary">
           <div class="order-row">
             <span>Concepto:</span>
@@ -78,6 +123,18 @@
             <span>Organización:</span>
             <strong>{{ suscripcionService.suscripcion()?.nombreNegocio || 'Mi Negocio' }}</strong>
           </div>
+          <div class="order-row">
+            <span>Modalidad:</span>
+            <strong>
+              @if (p.periodo === 'ANUAL') {
+                Pago Anual Único (12 Meses)
+              } @else if (modalidadCobro() === 'RECURRENTE') {
+                🔄 Cargo Automático Mensual
+              } @else {
+                💳 Pago Único Manual (1 Mes)
+              }
+            </strong>
+          </div>
           <div class="order-row total-row">
             <span>Total a Pagar:</span>
             <strong class="total-price">${{ p.precio | number }} {{ p.moneda }}</strong>
@@ -85,7 +142,7 @@
         </div>
 
         <div class="mp-security-note">
-          <span>🛡️ Serás redirigido a la pasarela cifrada de Mercado Pago para completar tu pago de forma segura.</span>
+          <span>🛡️ Serás redirigido a la plataforma segura de Mercado Pago para autorizar tu pago.</span>
         </div>
 
         <div class="modal-actions">
@@ -98,7 +155,13 @@
             (click)="confirmarPagoMercadoPago()"
             [disabled]="procesandoPlan()"
           >
-            {{ procesandoPlan() ? 'Conectando con Mercado Pago...' : '🚀 Proceder al Pago con Mercado Pago' }}
+            @if (procesandoPlan()) {
+              Conectando con Mercado Pago...
+            } @else if (p.periodo === 'MENSUAL' && modalidadCobro() === 'RECURRENTE') {
+              🔄 Domiciliar Suscripción Mensual (${{ p.precio | number }} MXN/mes)
+            } @else {
+              🚀 Proceder al Pago con Mercado Pago
+            }
           </button>
         </div>
       </div>

@@ -21,29 +21,29 @@ export class SuscripcionService {
     const sub = this.suscripcionSignal();
     const planId = sub?.plan || 'TRIAL';
 
-    if (planId === 'TRIAL') {
-      return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 300, nombre: 'Período de Prueba' };
-    }
-
     const planCatalogo = this.mpService.planesDisponibles().find(p => p.id === planId);
     if (planCatalogo) {
       return {
-        maxUsuarios: planCatalogo.maxUsuarios || 2,
+        maxUsuarios: planCatalogo.maxUsuarios || (planId === 'TRIAL' ? 2 : 2),
         maxSucursales: planCatalogo.maxSucursales || 1,
-        maxProductos: planCatalogo.maxProductos || (planId === 'BASICO' ? 500 : (planId === 'PRO' ? 5000 : 50000)),
+        maxProductos: planCatalogo.maxProductos || (planId === 'TRIAL' ? 100 : (planId === 'BASICO' ? 200 : (planId === 'PRO' ? 1000 : 10000))),
         nombre: planCatalogo.titulo
       };
     }
 
+    if (planId === 'TRIAL') {
+      return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 100, nombre: 'Período de Prueba' };
+    }
+
     switch (planId) {
       case 'BASICO':
-        return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 500, nombre: 'Plan Básico' };
+        return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 200, nombre: 'Plan Básico' };
       case 'PRO':
-        return { maxUsuarios: 6, maxSucursales: 3, maxProductos: 5000, nombre: 'Plan Pro' };
+        return { maxUsuarios: 6, maxSucursales: 3, maxProductos: 1000, nombre: 'Plan Pro' };
       case 'ENTERPRISE':
-        return { maxUsuarios: 99, maxSucursales: 10, maxProductos: 50000, nombre: 'Plan Anual VIP' };
+        return { maxUsuarios: 99, maxSucursales: 10, maxProductos: 10000, nombre: 'Plan Anual VIP' };
       default:
-        return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 300, nombre: 'Período de Prueba' };
+        return { maxUsuarios: 2, maxSucursales: 1, maxProductos: 100, nombre: 'Período de Prueba' };
     }
   });
 
@@ -100,7 +100,7 @@ export class SuscripcionService {
     if (cantidadActual >= max) {
       return {
         permitido: false,
-        mensaje: `Has alcanzado el límite máximo de ${max} productos permitidos en tu ${this.limites().nombre}. Mejora tu plan para ampliar tu catálogo.`
+        mensaje: `Has alcanzado el límite máximo de ${max.toLocaleString()} productos / registros permitidos en tu ${this.limites().nombre}. Mejora tu plan para ampliar tu catálogo.`
       };
     }
     return { permitido: true };
@@ -314,7 +314,13 @@ export class SuscripcionService {
   /**
    * Extiende o reduce días manualmente a cualquier empresa cliente
    */
-  async modificarVigenciaManual(empresaId: string, diasSumar: number, nuevoPlan?: PlanSuscripcion, nuevoEstado?: EstadoSuscripcion): Promise<void> {
+  async modificarVigenciaManual(
+    empresaId: string,
+    diasSumar: number,
+    nuevoPlan?: PlanSuscripcion,
+    nuevoEstado?: EstadoSuscripcion,
+    nombreNegocio?: string
+  ): Promise<void> {
     const subRef = doc(this.fb.firestore, 'suscripciones', empresaId);
     const snap = await getDoc(subRef);
     if (!snap.exists()) throw new Error('La empresa no existe');
@@ -339,6 +345,125 @@ export class SuscripcionService {
       updatePayload.plan = nuevoPlan;
     }
 
+    if (nombreNegocio !== undefined && nombreNegocio.trim()) {
+      updatePayload.nombreNegocio = nombreNegocio.trim();
+    }
+
     await setDoc(subRef, updatePayload, { merge: true });
+  }
+
+  /**
+   * Elimina completamente un negocio de la plataforma:
+   * 1. Elimina todos los colaboradores y administradores de la colección 'usuarios'
+   * 2. Elimina todos los tickets de soporte pertenecientes a este negocio
+   * 3. Elimina todas las subcolecciones y documentos operativos bajo /sistema/{empresaId}/...
+   * 4. Elimina el documento raíz /sistema/{empresaId}
+   * 5. Elimina el registro de suscripción /suscripciones/{empresaId}
+   */
+  async eliminarEmpresaCompleta(empresaId: string): Promise<void> {
+    if (!empresaId || !empresaId.trim()) {
+      throw new Error('ID de negocio no válido.');
+    }
+
+    const { collection, getDocs, deleteDoc, doc, query, where, writeBatch } = await import('firebase/firestore');
+
+    // 1. Eliminar usuarios asociados a este negocio
+    try {
+      const usersCol = collection(this.fb.firestore, 'usuarios');
+      const qUsers = query(usersCol, where('empresaId', '==', empresaId));
+      const usersSnap = await getDocs(qUsers);
+      
+      const userDocRefs = new Map<string, any>();
+      usersSnap.docs.forEach((d) => userDocRefs.set(d.id, d.ref));
+
+      // Si el id de la empresa es el uid del dueño/creador, asegurarse de incluirlo
+      const ownerDocRef = doc(this.fb.firestore, 'usuarios', empresaId);
+      userDocRefs.set(empresaId, ownerDocRef);
+
+      const allRefs = Array.from(userDocRefs.values());
+      for (let i = 0; i < allRefs.length; i += 400) {
+        const batch = writeBatch(this.fb.firestore);
+        const slice = allRefs.slice(i, i + 400);
+        slice.forEach((ref) => batch.delete(ref));
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('Aviso al eliminar usuarios del negocio:', err);
+    }
+
+    // 2. Eliminar tickets de soporte
+    try {
+      const ticketsCol = collection(this.fb.firestore, 'tickets_soporte');
+      const qTickets = query(ticketsCol, where('empresaId', '==', empresaId));
+      const ticketsSnap = await getDocs(qTickets);
+      if (!ticketsSnap.empty) {
+        const docs = ticketsSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(this.fb.firestore);
+          const slice = docs.slice(i, i + 400);
+          slice.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.warn('Aviso al eliminar tickets de soporte:', err);
+    }
+
+    // 3. Eliminar todas las subcolecciones operativas de /sistema/{empresaId}/...
+    const subcolecciones = [
+      'chunks_productos',
+      'chunks_ventas',
+      'chunks_movimientos',
+      'chunks_gastos',
+      'chunks_cortes',
+      'chunks_pedidos',
+      'chunks_bitacora',
+      'config',
+      'productos',
+      'ventas',
+      'movimientos',
+      'gastos',
+      'cortes',
+      'pedidos',
+      'bitacora',
+      'sucursales',
+      'clientes',
+      'auditoria'
+    ];
+
+    for (const nomCol of subcolecciones) {
+      try {
+        const collRef = collection(this.fb.firestore, 'sistema', empresaId, nomCol);
+        const snap = await getDocs(collRef);
+        if (!snap.empty) {
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(this.fb.firestore);
+            const slice = docs.slice(i, i + 400);
+            slice.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+      } catch (err) {
+        console.warn(`Aviso al vaciar subcolección ${nomCol}:`, err);
+      }
+    }
+
+    // 4. Eliminar documento raíz /sistema/{empresaId}
+    try {
+      const docSistema = doc(this.fb.firestore, 'sistema', empresaId);
+      await deleteDoc(docSistema);
+    } catch (err) {
+      console.warn('Aviso al eliminar nodo raíz en sistema:', err);
+    }
+
+    // 5. Eliminar documento de suscripción /suscripciones/{empresaId}
+    try {
+      const docSub = doc(this.fb.firestore, 'suscripciones', empresaId);
+      await deleteDoc(docSub);
+    } catch (err) {
+      console.error('Error al eliminar registro de suscripción:', err);
+      throw err;
+    }
   }
 }

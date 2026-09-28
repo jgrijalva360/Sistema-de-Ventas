@@ -3,6 +3,16 @@ export interface StockSucursal {
   stockMinimo: number;
 }
 
+export interface LoteFifo {
+  id: string;
+  movimientoId?: string;
+  fecha: string;
+  cantidadInicial: number;
+  cantidadDisponible: number;
+  costoUnitario: number;
+  sucursalId: string;
+}
+
 export interface Producto {
   id?: string;
   codigo: string;
@@ -10,6 +20,10 @@ export interface Producto {
   stockMinimo: number;
   stockActual: number;
   precioVenta: number;
+  ultimoCosto?: number;
+  fechaUltimoCosto?: string;
+  costoPromedio?: number;
+  lotesFifo?: LoteFifo[];
   precioVariable?: boolean;
   grupo?: string;
   unidad?: string;
@@ -25,6 +39,8 @@ export interface ItemCarrito {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  costoUnitarioFifo?: number;
+  costoTotalFifo?: number;
   precioVariable?: boolean;
 }
 
@@ -71,6 +87,7 @@ export interface Gasto {
   observaciones?: string;
   sucursalId: string;
   sucursalNombre: string;
+  socioId?: string;
 }
 
 export interface CorteActivo {
@@ -164,6 +181,8 @@ export interface MovimientoInventario {
   cantidad: number;
   stockAnterior: number;
   stockNuevo: number;
+  costoUnitario?: number;
+  costoTotal?: number;
   motivo?: string;
   usuario?: string;
   sucursalId: string;
@@ -203,7 +222,9 @@ export type ModuloBitacora =
   | 'PEDIDOS'
   | 'SUCURSALES'
   | 'CONFIGURACION'
-  | 'SEGURIDAD';
+  | 'SEGURIDAD'
+  | 'REPORTES'
+  | 'SOCIOS';
 
 export type TipoAccionBitacora =
   | 'CREAR'
@@ -246,6 +267,15 @@ export interface UsuarioSistema {
   activo: boolean;
   fechaCreacion: string;
   ultimoAcceso?: string;
+  sesionActivaId?: string;
+  dispositivoActual?: string;
+  pin?: string;
+  claveAcceso?: string;
+  creadoPorAdmin?: boolean;
+  dispositivoAutorizadoId?: string;
+  dispositivoAutorizadoNombre?: string;
+  fechaVinculacionDispositivo?: string;
+  permitirCualquierDispositivo?: boolean;
 }
 
 export type PlanSuscripcion = 'TRIAL' | 'BASICO' | 'PRO' | 'ENTERPRISE';
@@ -266,6 +296,8 @@ export interface SuscripcionEmpresa {
     maxSucursales: number;
   };
   codigoActivacionUsado?: string;
+  tipoCobro?: 'RECURRENTE' | 'UNICO';
+  preapprovalId?: string;
   ultimoPago?: {
     idPago?: string;
     monto?: number;
@@ -304,6 +336,86 @@ export interface CodigoPromocional {
   expiraEn?: string;
   descripcion?: string;
   empresasQueCanjearon?: string[];
+}
+
+export interface MensajeTicket {
+  id: string;
+  remitenteUid: string;
+  remitenteNombre: string;
+  remitenteRol: 'SUPERADMIN' | 'CLIENTE';
+  texto: string;
+  imagenUrl?: string;
+  fecha: string;
+}
+
+export interface TicketSoporte {
+  id?: string;
+  folio: string;
+  empresaId: string;
+  nombreNegocio: string;
+  plan: string;
+  usuarioUid: string;
+  usuarioEmail: string;
+  usuarioNombre: string;
+  categoria: string;
+  prioridad: string;
+  telefono?: string;
+  descripcion: string;
+  imagenAdjunta?: string;
+  estado: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO' | 'CERRADO';
+  fechaCreacion: string;
+  respuestaAdmin?: string;
+  fechaRespuesta?: string;
+  mensajes?: MensajeTicket[];
+  ultimaActualizacion?: string;
+}
+
+export interface SocioConfig {
+  id: string;
+  nombre: string;
+  porcentaje: number; // Ej: 40, 40, 20
+  activo: boolean;
+}
+
+export interface DetalleLiquidacionSocio {
+  socioId: string;
+  nombre: string;
+  porcentaje: number;
+  gananciaAsignada: number;
+  gastosBolsilloAportados: number;
+  cuotaGastosBolsillo: number;
+  montoNetoACobrar: number;
+}
+
+export interface GastoBolsilloItem {
+  id: string;
+  concepto: string;
+  monto: number;
+  fecha: string;
+  socioId: string;
+  socioNombre: string;
+  origen: 'SISTEMA_GASTOS' | 'MANUAL';
+  gastoOriginalId?: string;
+}
+
+export interface LiquidacionSocios {
+  id: string;
+  folio?: string;
+  fechaCreacion: string;
+  fechaDesde: string;
+  fechaHasta: string;
+  baseCalculo: 'FLUJO_EFECTIVO' | 'UTILIDAD_FIFO';
+  totalIngresos: number;
+  totalCostoFifo: number;
+  totalGastosNegocio: number;
+  totalGastosSocios: number;
+  utilidadBaseReparto: number;
+  socios: DetalleLiquidacionSocio[];
+  gastosBolsilloDetalle: GastoBolsilloItem[];
+  observaciones?: string;
+  usuarioRegistro?: string;
+  sucursalId?: string;
+  sucursalNombre?: string;
 }
 
 

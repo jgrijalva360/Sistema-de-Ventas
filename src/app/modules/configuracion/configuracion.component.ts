@@ -1,5 +1,7 @@
 import { Component, signal, inject, effect, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { SyncService } from '../../core/services/sync.service';
@@ -14,7 +16,7 @@ import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [FormsModule, CurrencyMxnPipe],
+  imports: [FormsModule, CurrencyMxnPipe, RouterLink, DatePipe],
   templateUrl: './configuracion.component.html',
   styleUrl: './configuracion.component.scss'
 })
@@ -28,7 +30,7 @@ export class ConfiguracionComponent implements AfterViewInit {
   public ventasService = inject(VentasService);
   public pedidosService = inject(PedidosService);
   public suscripcionService = inject(SuscripcionService);
-  private authService = inject(AuthService);
+  public authService = inject(AuthService);
 
   // Form Negocio (sincronizado reactivamente)
   public bizName = '';
@@ -78,6 +80,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     pedidosCount: number;
     sucursalesCount: number;
     bitacoraCount: number;
+    usuariosCount: number;
     hasConfig: boolean;
   } | null>(null);
 
@@ -90,6 +93,8 @@ export class ConfiguracionComponent implements AfterViewInit {
   public optSucursales = signal<boolean>(true);
   public optConfiguracion = signal<boolean>(true);
   public optBitacora = signal<boolean>(true);
+  public optUsuarios = signal<boolean>(true);
+  public descargandoBackup = signal<boolean>(false);
   public restaurandoBackup = signal<boolean>(false);
 
   async guardarNegocio(): Promise<void> {
@@ -175,6 +180,20 @@ export class ConfiguracionComponent implements AfterViewInit {
     }
   }
 
+  // ── Descarga de Respaldo ──────────────────────────────────
+  async descargarBackup(): Promise<void> {
+    if (this.descargandoBackup()) return;
+    this.descargandoBackup.set(true);
+    try {
+      await this.configuracionService.descargarBackupJSON();
+    } catch (e: any) {
+      console.error('Error al descargar backup:', e);
+      alert('❌ Error al generar la copia de seguridad: ' + (e.message || e));
+    } finally {
+      this.descargandoBackup.set(false);
+    }
+  }
+
   // ── Restauración de Respaldo ────────────────────────────────
   async onRestaurarFile(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -193,6 +212,8 @@ export class ConfiguracionComponent implements AfterViewInit {
         this.optPedidos.set(resumen.pedidosCount > 0);
         this.optSucursales.set(resumen.sucursalesCount > 0);
         this.optConfiguracion.set(resumen.hasConfig);
+        this.optBitacora.set((resumen.bitacoraCount || 0) > 0);
+        this.optUsuarios.set((resumen.usuariosCount || 0) > 0);
 
         this.modalRestaurarAbierto.set(true);
         input.value = '';
@@ -216,6 +237,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optSucursales.set(res.sucursalesCount > 0);
     this.optConfiguracion.set(res.hasConfig);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
+    this.optUsuarios.set((res.usuariosCount || 0) > 0);
   }
 
   deseleccionarTodoBackup(): void {
@@ -228,6 +250,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optSucursales.set(false);
     this.optConfiguracion.set(false);
     this.optBitacora.set(false);
+    this.optUsuarios.set(false);
   }
 
   seleccionarSoloProductosBackup(): void {
@@ -257,7 +280,8 @@ export class ConfiguracionComponent implements AfterViewInit {
       this.optPedidos() ||
       this.optSucursales() ||
       this.optConfiguracion() ||
-      this.optBitacora()
+      this.optBitacora() ||
+      this.optUsuarios()
     );
   }
 
@@ -276,7 +300,8 @@ export class ConfiguracionComponent implements AfterViewInit {
         restaurarPedidos: this.optPedidos(),
         restaurarSucursales: this.optSucursales(),
         restaurarConfiguracion: this.optConfiguracion(),
-        restaurarBitacora: this.optBitacora()
+        restaurarBitacora: this.optBitacora(),
+        restaurarUsuarios: this.optUsuarios()
       };
 
       const resultado = await this.configuracionService.restaurarBackupSeleccionado(res.data, opciones);
@@ -290,6 +315,7 @@ export class ConfiguracionComponent implements AfterViewInit {
       if (opciones.restaurarPedidos) mensaje += `• Pedidos: ${resultado.pedidosCount}\n`;
       if (opciones.restaurarSucursales) mensaje += `• Sucursales: ${resultado.sucursalesCount}\n`;
       if (opciones.restaurarBitacora) mensaje += `• Bitácora: ${resultado.bitacoraCount}\n`;
+      if (opciones.restaurarUsuarios) mensaje += `• Colaboradores / Cajas: ${resultado.usuariosCount}\n`;
       if (opciones.restaurarConfiguracion) mensaje += `• Configuración: Actualizada\n`;
 
       alert(mensaje);

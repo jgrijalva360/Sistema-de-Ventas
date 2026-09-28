@@ -21,9 +21,19 @@ export class PlanesSuscripcionComponent {
 
   public procesandoPlan = signal<string | null>(null);
   public modalConfirmacion = signal<PlanCatalogo | null>(null);
+  public modalidadCobro = signal<'RECURRENTE' | 'UNICO'>('RECURRENTE');
 
   seleccionarPlan(plan: PlanCatalogo): void {
+    if (plan.periodo === 'ANUAL') {
+      this.modalidadCobro.set('UNICO');
+    } else {
+      this.modalidadCobro.set('RECURRENTE');
+    }
     this.modalConfirmacion.set(plan);
+  }
+
+  setModalidad(modo: 'RECURRENTE' | 'UNICO'): void {
+    this.modalidadCobro.set(modo);
   }
 
   async confirmarPagoMercadoPago(): Promise<void> {
@@ -38,10 +48,15 @@ export class PlanesSuscripcionComponent {
         throw new Error('No se encontró la información de tu organización.');
       }
 
-      // 1. Obtener la preferencia oficial generada por Mercado Pago
-      const linkPago = await this.mpService.iniciarCheckoutPlan(plan, sub);
+      let linkPago = '';
+      if (plan.periodo === 'MENSUAL' && this.modalidadCobro() === 'RECURRENTE') {
+        // Débito automático recurrente mensual (PreApproval)
+        linkPago = await this.mpService.iniciarSuscripcionRecurrente(plan, sub);
+      } else {
+        // Pago único mensual o anual (Checkout Pro con tarjeta, OXXO, SPEI)
+        linkPago = await this.mpService.iniciarCheckoutPlan(plan, sub);
+      }
 
-      // 2. Redirigir al Checkout Pro oficial de Mercado Pago
       this.modalConfirmacion.set(null);
       if (linkPago.startsWith('http')) {
         window.location.href = linkPago;

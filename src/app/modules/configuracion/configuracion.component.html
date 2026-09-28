@@ -35,10 +35,44 @@
     </div>
   </div>
 
-  <!-- 2. Sucursales -->
+  <!-- 2. Colaboradores & Licencia -->
+  <div class="card" style="border-left: 4px solid #3b82f6;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 1.3rem;">👥</span>
+        <span style="font-weight: 700; font-size: 1.05rem;">2. Colaboradores del Sistema & Licencia de Uso</span>
+      </div>
+      <a routerLink="/administracion" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 8px 16px; font-weight: 700; font-size: 0.9rem; border-radius: 8px;">
+        <span>👥 Gestionar Colaboradores y Licencia</span>
+        <span style="font-size: 1.05rem;">➔</span>
+      </a>
+    </div>
+    <div class="card-body">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <p style="font-size: 0.92rem; color: #475569; margin: 0; max-width: 620px; line-height: 1.5;">
+          Administra las cuentas de usuario de tu personal (cajeros, encargados y administradores), configura contraseñas, controla sesiones concurrentes y consulta o renueva tu licencia de software.
+        </p>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="padding: 7px 14px; background: #f8fafc; border-radius: 8px; font-size: 0.88rem; border: 1px solid #e2e8f0; display: flex; gap: 6px; align-items: center;">
+            <span style="color: #64748b;">Plan:</span>
+            <strong style="color: #2563eb; font-weight: 800;">{{ suscripcionService.suscripcion()?.plan || 'TRIAL' }}</strong>
+          </div>
+          <div style="padding: 7px 14px; background: #f8fafc; border-radius: 8px; font-size: 0.88rem; border: 1px solid #e2e8f0; display: flex; gap: 6px; align-items: center;">
+            <span style="color: #64748b;">Vence:</span>
+            <strong>{{ (suscripcionService.suscripcion()?.fechaVencimiento | date:'dd/MM/yyyy') || 'N/A' }}</strong>
+          </div>
+          <a routerLink="/administracion" class="btn btn-secondary" style="text-decoration: none; padding: 7px 14px; font-size: 0.88rem; border-radius: 8px;">
+            Ver Detalles ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Sucursales -->
   <div class="card">
     <div class="card-header">
-      <span>🏢 2. Administración de Sucursales</span>
+      <span>🏢 3. Administración de Sucursales</span>
       <button type="button" class="btn btn-sm btn-primary" (click)="abrirModalSucursal()">
         ➕ Nueva Sucursal
       </button>
@@ -79,10 +113,10 @@
     </div>
   </div>
 
-  <!-- 3. Multi-Equipo & Dispositivos -->
+  <!-- 4. Multi-Equipo & Dispositivos -->
   <div class="card">
     <div class="card-header">
-      <span>📱 3. Sincronización Multi-Equipo & Dispositivos</span>
+      <span>📱 4. Sincronización Multi-Equipo & Dispositivos</span>
     </div>
     <div class="card-body">
       <div class="form-grid">
@@ -107,10 +141,10 @@
     </div>
   </div>
 
-  <!-- 4. Seguridad -->
+  <!-- 5. Seguridad -->
   <div class="card">
     <div class="card-header">
-      <span>🛡️ 4. Seguridad y Contraseña</span>
+      <span>🛡️ 5. Seguridad y Contraseña</span>
     </div>
     <div class="card-body">
       <form (ngSubmit)="cambiarPassword()">
@@ -172,18 +206,18 @@
     </div>
   </div>
 
-  <!-- 5. Respaldos JSON -->
+  <!-- 6. Respaldos JSON -->
   <div class="card">
     <div class="card-header">
-      <span>💾 5. Copias de Seguridad (Backup JSON)</span>
+      <span>💾 6. Copias de Seguridad (Backup JSON)</span>
     </div>
     <div class="card-body">
       <p style="font-size: 0.9rem; color: var(--slate); margin-bottom: 14px;">
-        Exporta o restaura una copia de seguridad íntegra de toda tu base de datos (inventario, ventas, gastos, sucursales y cortes).
+        Exporta o restaura una copia de seguridad íntegra de toda tu base de datos: catálogo e inventario, ventas, gastos, sucursales, cortes de caja, pedidos, cuentas de colaboradores y configuración de dispositivos vinculados.
       </p>
       <div style="display: flex; gap: 14px; flex-wrap: wrap;">
-        <button type="button" class="btn btn-primary" (click)="configuracionService.descargarBackupJSON()">
-          📥 Descargar Backup JSON Completo
+        <button type="button" class="btn btn-primary" (click)="descargarBackup()" [disabled]="descargandoBackup()">
+          {{ descargandoBackup() ? '⏳ Generando Copia de Seguridad...' : '📥 Descargar Backup JSON Completo' }}
         </button>
         <label class="btn btn-secondary" style="cursor: pointer;">
           📤 Restaurar desde Archivo JSON
@@ -193,10 +227,10 @@
     </div>
   </div>
 
-  <!-- 6. Zona de Mantenimiento & Periodos -->
+  <!-- 7. Zona de Mantenimiento & Periodos -->
   <div class="card" style="border-color: #fca5a5;">
     <div class="card-header" style="background: #fee2e2; color: #991b1b;">
-      <span>⚠️ 6. Mantenimiento y Cierre de Periodos</span>
+      <span>⚠️ 7. Mantenimiento y Cierre de Periodos</span>
     </div>
     <div class="card-body maintenance-section">
       <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px 14px; font-size: 0.84rem; color: #9f1239;">
@@ -456,6 +490,16 @@
             <div class="module-info">
               <strong>Bitácora y Auditoría</strong>
               <small>{{ resumenBackup()?.bitacoraCount || 0 }} eventos registrados</small>
+            </div>
+          </label>
+
+          <!-- 10. Colaboradores y Cajas -->
+          <label class="module-card" [class.selected]="optUsuarios()">
+            <input type="checkbox" [ngModel]="optUsuarios()" (ngModelChange)="optUsuarios.set($event)" />
+            <div class="module-icon">👥</div>
+            <div class="module-info">
+              <strong>Cuentas de Cajas y Colaboradores</strong>
+              <small>{{ resumenBackup()?.usuariosCount || 0 }} colaboradores y dispositivos</small>
             </div>
           </label>
         </div>

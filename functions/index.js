@@ -79,6 +79,58 @@ exports.crearPreferenciaPago = functions.https.onRequest(async (req, res) => {
 });
 
 /**
+ * Endpoint para crear la Suscripción Recurrente Mensual (Débito Automático con PreApproval)
+ */
+exports.crearSuscripcionRecurrente = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+
+  try {
+    const { empresaId, planId, precio, titulo, email, returnUrl } = req.body;
+
+    if (!empresaId || !precio) {
+      return res.status(400).json({ error: 'Faltan datos obligatorios (empresaId, precio).' });
+    }
+
+    const preapprovalInstance = new PreApproval(client);
+    const isHttps = returnUrl && returnUrl.startsWith('https://');
+    const origin = isHttps ? returnUrl : 'https://sistemadeventas-d7877.web.app';
+
+    const preapprovalBody = {
+      reason: `Stockup POS: ${titulo || 'Suscripción Mensual'}`,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: Number(precio),
+        currency_id: 'MXN'
+      },
+      payer_email: email || 'cliente@stockup.com',
+      back_url: `${origin}/suscripcion/pago-resultado?status=success&plan=${planId || 'PRO'}&meses=1&tipo=recurrente`,
+      external_reference: `${empresaId}|${planId || 'PRO'}|1`,
+      status: 'pending'
+    };
+
+    const preapproval = await preapprovalInstance.create({
+      body: preapprovalBody
+    });
+
+    console.log(`[Crear Suscripción] PreApproval ID generado: ${preapproval.id}`);
+    return res.status(200).json({
+      id: preapproval.id,
+      init_point: preapproval.init_point
+    });
+  } catch (error) {
+    console.error('[Crear Suscripción] Error:', error);
+    return res.status(500).json({ error: error.message || 'Error al crear suscripción recurrente' });
+  }
+});
+
+/**
  * Webhook Receptor de Eventos de Mercado Pago
  * Escucha pagos únicos (Checkout Pro) y suscripciones recurrentes (PreApproval)
  */
@@ -109,14 +161,14 @@ exports.webhookMercadoPago = functions.https.onRequest(async (req, res) => {
           await aplicarRenovacionSuscripcion(empresaId, planId || 'PRO', meses, {
             idPago: String(payment.id),
             monto: payment.transaction_amount,
-            metodo: payment.payment_method_id,
-            fecha: payment.date_approved
+            metodo: payment.payment_method_id || 'TARJETA_MERCADOPAGO',
+            fecha: payment.date_approved || new Date().toISOString()
           });
         }
       }
     }
 
-    // 2. Caso: Suscripción recurrente autorizada (subscription_preapproval)
+    // 2. Caso: Suscripción recurrente autorizada o actualizada (subscription_preapproval o preapproval)
     if (topic === 'subscription_preapproval' || topic === 'preapproval') {
       const preapprovalInstance = new PreApproval(client);
       const preapproval = await preapprovalInstance.get({ id });
@@ -124,15 +176,47 @@ exports.webhookMercadoPago = functions.https.onRequest(async (req, res) => {
       console.log(`[Webhook MP] Estado de Suscripción Recurrente ${id}: ${preapproval.status}`);
 
       if (preapproval.status === 'authorized') {
-        const empresaId = preapproval.external_reference;
-        if (empresaId) {
-          await aplicarRenovacionSuscripcion(empresaId, 'PRO', 1, {
+        const externalRef = preapproval.external_reference;
+        if (externalRef) {
+          const [empresaId, planId] = externalRef.split('|');
+          await aplicarRenovacionSuscripcion(empresaId, planId || 'PRO', 1, {
             idPago: `SUB-${id}`,
             monto: preapproval.auto_recurring?.transaction_amount,
             metodo: 'DEBITO_AUTOMATICO_MENSUAL',
+            preapprovalId: id,
             fecha: new Date().toISOString()
           });
         }
+      } else if (preapproval.status === 'cancelled') {
+        const externalRef = preapproval.external_reference;
+        if (externalRef) {
+          const [empresaId] = externalRef.split('|');
+          const subRef = db.collection('suscripciones').doc(empresaId);
+          await subRef.set({ estado: 'CANCELADA', canceladoEn: new Date().toISOString() }, { merge: true });
+        }
+      }
+    }
+
+    // 3. Caso: Cobro mensual recurrente ejecutado (subscription_authorized_payment)
+    if (topic === 'subscription_authorized_payment') {
+      console.log(`[Webhook MP] Pago recurrente mensual ejecutado para suscripción ID: ${id}`);
+      try {
+        const paymentInstance = new Payment(client);
+        const payment = await paymentInstance.get({ id });
+        if (payment && payment.status === 'approved') {
+          const externalRef = payment.external_reference;
+          if (externalRef) {
+            const [empresaId, planId] = externalRef.split('|');
+            await aplicarRenovacionSuscripcion(empresaId, planId || 'PRO', 1, {
+              idPago: String(payment.id),
+              monto: payment.transaction_amount,
+              metodo: 'DEBITO_AUTOMATICO_MENSUAL',
+              fecha: payment.date_approved || new Date().toISOString()
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Webhook MP] Error al consultar pago recurrente detallado:', e);
       }
     }
 

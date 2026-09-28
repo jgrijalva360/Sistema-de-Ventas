@@ -177,7 +177,17 @@
         <strong>{{ totalVentasCalculado() | currencyMxn }}</strong>
         <small>{{ ventasFiltradas().length }} ticket(s)</small>
       </div>
+      <div class="corte-kpi corte-kpi--down">
+        <span>Costo de Ventas (FIFO)</span>
+        <strong>{{ totalCostoVentasCalculado() | currencyMxn }}</strong>
+        <small style="color: #64748b;">Costo real de mercancía vendida</small>
+      </div>
       <div class="corte-kpi corte-kpi--up">
+        <span>Utilidad Bruta Mostrador</span>
+        <strong>{{ utilidadBrutaVentas() | currencyMxn }}</strong>
+        <small style="color: #16a34a; font-weight: 700;">Margen comercial: {{ margenBrutoPorcentaje() }}%</small>
+      </div>
+      <div class="corte-kpi">
         <span>Efectivo Total</span>
         <strong>{{ totalVentasEfectivo() | currencyMxn }}</strong>
       </div>

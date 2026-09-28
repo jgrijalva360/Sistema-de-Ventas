@@ -77,7 +77,7 @@ export class BitacoraService {
     const sucursalActiva = this.sucursalesService.sucursalActiva();
     const sucId = params.sucursalId || sucursalActiva?.id || 'SUC-MAIN';
     const sucNom = params.sucursalNombre || sucursalActiva?.nombre || 'Matriz Principal';
-    const usuarioActual = params.usuario || this.authService.currentUser()?.email || 'Usuario POS';
+    const usuarioActual = params.usuario || this.authService.nombreOperadorActual() || this.authService.currentUser()?.email || 'Usuario POS';
     const dispositivo = this.syncService.getNombreDispositivoLocal();
 
     const nuevoId = generarSiguienteConsecutivo(

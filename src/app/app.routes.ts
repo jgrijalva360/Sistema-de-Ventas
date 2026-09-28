@@ -20,11 +20,14 @@ import { PagoResultadoComponent } from './modules/suscripcion/pago-resultado.com
 import { UsuariosAdminComponent } from './modules/administracion/usuarios-admin.component';
 import { LandingPageComponent } from './modules/landing/landing-page.component';
 import { SuperAdminComponent } from './modules/super-admin/super-admin.component';
+import { VerificarCorreoComponent } from './modules/auth/verificar-correo.component';
+import { SociosComponent } from './modules/socios/socios.component';
 
 export const routes: Routes = [
   {
     path: '',
     component: LandingPageComponent,
+    // redirectTo: '/login',
     pathMatch: 'full'
   },
   {
@@ -34,6 +37,10 @@ export const routes: Routes = [
   {
     path: 'login',
     component: LoginComponent
+  },
+  {
+    path: 'verificar-correo',
+    component: VerificarCorreoComponent
   },
   {
     path: 'suscripcion-vencida',
@@ -63,6 +70,7 @@ export const routes: Routes = [
       { path: 'pedidos', component: PedidosComponent },
       { path: 'cortes', component: CortesComponent },
       { path: 'reportes', component: ReportesComponent, canActivate: [roleGuard(['ADMIN', 'ENCARGADO'])] },
+      { path: 'socios', component: SociosComponent, canActivate: [roleGuard(['ADMIN'])] },
       { path: 'bitacora', component: BitacoraComponent, canActivate: [roleGuard(['ADMIN'])] },
       { path: 'configuracion', component: ConfiguracionComponent, canActivate: [roleGuard(['ADMIN'])] },
       { path: 'administracion', component: UsuariosAdminComponent, canActivate: [roleGuard(['ADMIN'])] },

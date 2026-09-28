@@ -1,5 +1,7 @@
 import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { DecimalPipe } from '@angular/common';
 import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
 import { ProductosService } from '../../core/services/productos.service';
@@ -31,7 +33,7 @@ export interface ItemAuditoria {
 @Component({
   selector: 'app-inventario',
   standalone: true,
-  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe],
+  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe, RouterLink, DecimalPipe],
   templateUrl: './inventario.component.html',
   styleUrl: './inventario.component.scss'
 })
@@ -52,6 +54,7 @@ export class InventarioComponent implements AfterViewInit {
     codigo: '',
     nombre: '',
     precioVenta: 0,
+    ultimoCosto: 0,
     stockActual: 0,
     stockMinimo: 1,
     grupo: 'GENERAL',
@@ -70,6 +73,51 @@ export class InventarioComponent implements AfterViewInit {
   public movimientosService = inject(MovimientosService);
   public sucursalesService = inject(SucursalesService);
   public suscripcionService = inject(SuscripcionService);
+
+  // Capacidad de registros según el Plan de Suscripción
+  public totalProductosRegistrados = computed(() => this.productosService.productos().length);
+  public maxProductosPermitidos = computed(() => this.suscripcionService.limites().maxProductos);
+  public productosDisponibles = computed(() => {
+    const max = this.maxProductosPermitidos();
+    const act = this.totalProductosRegistrados();
+    return Math.max(0, max - act);
+  });
+  public porcentajeUsoProductos = computed(() => {
+    const max = this.maxProductosPermitidos();
+    if (!max || max <= 0) return 0;
+    const act = this.totalProductosRegistrados();
+    return Math.min(100, Math.round((act / max) * 100));
+  });
+  public limiteAlcanzado = computed(() => this.totalProductosRegistrados() >= this.maxProductosPermitidos());
+  public nombrePlanActual = computed(() => this.suscripcionService.limites().nombre);
+  public planIdActual = computed(() => this.suscripcionService.suscripcion()?.plan || 'TRIAL');
+
+  // ── Métricas Financieras y Valuación FIFO de Inventario ──────
+  public valorInventarioCosto = computed(() => {
+    return this.productosService.productos().reduce((acc, p) => {
+      const stock = this.obtenerStockMostrado(p).stockActual || 0;
+      const costo = this.obtenerCostoProducto(p);
+      return acc + (stock * costo);
+    }, 0);
+  });
+
+  public valorInventarioVenta = computed(() => {
+    return this.productosService.productos().reduce((acc, p) => {
+      const stock = this.obtenerStockMostrado(p).stockActual || 0;
+      return acc + (stock * (p.precioVenta || 0));
+    }, 0);
+  });
+
+  public gananciaPotencial = computed(() => {
+    return Math.max(0, this.valorInventarioVenta() - this.valorInventarioCosto());
+  });
+
+  public margenPotencialPromedio = computed(() => {
+    const venta = this.valorInventarioVenta();
+    const costo = this.valorInventarioCosto();
+    if (venta <= 0) return 0;
+    return Math.round(((venta - costo) / venta) * 100);
+  });
 
   ngAfterViewInit(): void {
     setTimeout(() => this.busquedaInputRef?.nativeElement.focus(), 100);
@@ -154,10 +202,9 @@ export class InventarioComponent implements AfterViewInit {
   }
 
   onCodigoChange(): void {
-    if (this.nuevoProducto.codigo && this.nuevoProducto.codigo.length > 8) {
-      this.nuevoProducto.codigo = this.nuevoProducto.codigo.slice(0, 8);
-    }
+    // Se permite cualquier longitud de código ingresada manualmente o con lector de barras
   }
+
 
   guardarCodigoBarrasComoImagen(): void {
     if (!this.nuevoProducto.codigo) {
@@ -194,11 +241,28 @@ export class InventarioComponent implements AfterViewInit {
     link.click();
   }
 
+  public obtenerCostoProducto(prod: Producto): number {
+    return this.productosService.obtenerCostoFifoActual(prod, this.sucursalFiltro());
+  }
+
+  public calcularMargenProducto(prod: Producto): {
+    costo: number;
+    ganancia: number;
+    porcentaje: number;
+  } {
+    const costo = this.obtenerCostoProducto(prod);
+    const precio = prod.precioVenta || 0;
+    const ganancia = precio - costo;
+    const porcentaje = precio > 0 ? Math.round((ganancia / precio) * 100) : 0;
+    return { costo, ganancia, porcentaje };
+  }
+
   limpiarFormulario(): void {
     this.nuevoProducto = {
       codigo: '',
       nombre: '',
       precioVenta: 0,
+      ultimoCosto: 0,
       stockActual: 0,
       stockMinimo: 1,
       grupo: 'GENERAL',
@@ -213,6 +277,8 @@ export class InventarioComponent implements AfterViewInit {
       return;
     }
 
+    this.nuevoProducto.codigo = (this.nuevoProducto.codigo || '').trim();
+
     if (!this.nuevoProducto.codigo || !this.nuevoProducto.nombre) {
       alert('Por favor ingresa el código y nombre del producto.');
       return;
@@ -225,6 +291,9 @@ export class InventarioComponent implements AfterViewInit {
         stockMinimo: Number(this.nuevoProducto.stockMinimo) || 1
       }
     };
+    if (this.nuevoProducto.ultimoCosto !== undefined) {
+      this.nuevoProducto.ultimoCosto = Number(this.nuevoProducto.ultimoCosto) || 0;
+    }
 
     await this.productosService.guardarProducto(this.nuevoProducto, sucursalDestino);
     this.limpiarFormulario();
@@ -247,6 +316,9 @@ export class InventarioComponent implements AfterViewInit {
     const prod = this.productoEnEdicion();
     if (prod) {
       prod.stockPorSucursal = { ...this.stocksEdicion() };
+      if (prod.ultimoCosto !== undefined) {
+        prod.ultimoCosto = Number(prod.ultimoCosto) || 0;
+      }
       await this.productosService.guardarProducto(prod);
       this.productoEnEdicion.set(null);
     }

@@ -1,0 +1,679 @@
+<div class="socios-container">
+  <!-- Feedback Banner Flotante -->
+  @if (mensajeFeedback()) {
+  <div class="feedback-banner">
+    {{ mensajeFeedback() }}
+  </div>
+  }
+
+  <!-- Header Principal -->
+  <div class="content-header">
+    <div class="header-left">
+      <h2>🤝 Reparto de Ganancias & Liquidación de Socios</h2>
+      <p>Cálculo de utilidades proporcionales, reembolso exacto de gastos de bolsillo e historial contable.</p>
+    </div>
+    <div class="header-actions">
+      @if (tabActiva() === 'CALCULADORA') {
+      <button class="btn btn-secondary btn-whatsapp" (click)="copiarParaWhatsApp()">
+        <span>📱</span> Copiar para WhatsApp
+      </button>
+      <button class="btn btn-primary" (click)="onGuardarLiquidacion()" [disabled]="guardandoLiquidacion()">
+        <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando...' : 'Guardar Liquidación' }}
+      </button>
+      }
+    </div>
+  </div>
+
+  <!-- Barra de Pestañas / Tabs -->
+  <div class="tabs-nav">
+    <button class="tab-btn" [class.active]="tabActiva() === 'CALCULADORA'" (click)="tabActiva.set('CALCULADORA')">
+      <span>🧮</span> Calculadora & Liquidación
+    </button>
+    <button class="tab-btn" [class.active]="tabActiva() === 'HISTORIAL'" (click)="tabActiva.set('HISTORIAL')">
+      <span>📜</span> Historial de Repartos
+      @if (sociosService.liquidaciones().length > 0) {
+      <span class="tab-badge">{{ sociosService.liquidaciones().length }}</span>
+      }
+    </button>
+    <button class="tab-btn" [class.active]="tabActiva() === 'CONFIG'" (click)="tabActiva.set('CONFIG')">
+      <span>⚙️</span> Configuración de Socios
+      @if (!sociosService.porcentajesValidos()) {
+      <span class="tab-badge badge-warning">!</span>
+      }
+    </button>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- TAB 1: CALCULADORA & LIQUIDACIÓN           -->
+  <!-- ========================================== -->
+  @if (tabActiva() === 'CALCULADORA') {
+  <div class="tab-content">
+
+    <!-- Barra de Filtros de Periodo -->
+    <div class="filter-card">
+      <div class="filter-row">
+        <div class="form-group date-group">
+          <label>📅 Desde:</label>
+          <input type="date" [ngModel]="fechaDesde()" (ngModelChange)="fechaDesde.set($event)" />
+        </div>
+        <div class="form-group date-group">
+          <label>📅 Hasta:</label>
+          <input type="date" [ngModel]="fechaHasta()" (ngModelChange)="fechaHasta.set($event)" />
+        </div>
+        <div class="form-group sucursal-group">
+          <label>🏢 Sucursal:</label>
+          <select [ngModel]="sucursalSeleccionada()" (ngModelChange)="sucursalSeleccionada.set($event)">
+            <option value="TODAS">Todas las Sucursales</option>
+            @for (s of sucursalesService.sucursales(); track s.id) {
+            <option [value]="s.id">{{ s.nombre }}</option>
+            }
+          </select>
+        </div>
+        <div class="quick-ranges">
+          <button type="button" class="btn-quick" (click)="seleccionarRango('HOY')">Hoy</button>
+          <button type="button" class="btn-quick" (click)="seleccionarRango('QUINCENA_ACTUAL')">Esta Quincena</button>
+          <button type="button" class="btn-quick" (click)="seleccionarRango('ESTE_MES')">Este Mes</button>
+          <button type="button" class="btn-quick" (click)="seleccionarRango('MES_ANTERIOR')">Mes Anterior</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparativa de Ganancias (Caso 1 vs Caso 2) -->
+    <div class="comparison-grid">
+      <!-- Tarjeta Caso 1: Flujo de Efectivo -->
+      <div class="comparison-card" [class.selected]="baseCalculo() === 'FLUJO_EFECTIVO'"
+        (click)="baseCalculo.set('FLUJO_EFECTIVO')">
+        <div class="card-radio-header">
+          <div class="radio-indicator">
+            <span class="dot" *ngIf="baseCalculo() === 'FLUJO_EFECTIVO'"></span>
+          </div>
+          <div class="card-title-group">
+            <span class="card-badge badge-blue">Caso 1: Flujo Operativo</span>
+            <h3>Cobranza Neta en Caja</h3>
+          </div>
+        </div>
+        <p class="card-desc">Basado en el dinero real cobrado menos gastos operativos pagados.</p>
+
+        <div class="calc-breakdown">
+          <div class="calc-row">
+            <span>(+) Total Ventas Mostrador:</span>
+            <strong>{{ totalVentas() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row">
+            <span>(+) Cobros / Anticipos Pedidos:</span>
+            <strong>{{ totalCobrosPedidos() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row text-muted">
+            <span>(=) Total Ingresos Cobrados:</span>
+            <span>{{ totalIngresosCobrados() | currencyMxn }}</span>
+          </div>
+          <div class="calc-row text-danger">
+            <span>(-) Gastos Operativos Negocio:</span>
+            <strong>-{{ totalGastosNegocio() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row text-amber">
+            <span>(-) Gastos de Bolsillo Socios:</span>
+            <strong>-{{ totalGastosSocios() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-divider"></div>
+          <div class="calc-total">
+            <span>Utilidad Neta a Repartir:</span>
+            <span class="total-amount text-blue">{{ gananciaNetaFlujo() | currencyMxn }}</span>
+          </div>
+        </div>
+
+        <div class="select-hint" *ngIf="baseCalculo() === 'FLUJO_EFECTIVO'">
+          ✅ Base activa para liquidación
+        </div>
+        <div class="select-hint click-hint" *ngIf="baseCalculo() !== 'FLUJO_EFECTIVO'">
+          Hacer clic para usar esta base
+        </div>
+      </div>
+
+      <!-- Tarjeta Caso 2: Utilidad Real FIFO -->
+      <div class="comparison-card" [class.selected]="baseCalculo() === 'UTILIDAD_FIFO'"
+        (click)="baseCalculo.set('UTILIDAD_FIFO')">
+        <div class="card-radio-header">
+          <div class="radio-indicator">
+            <span class="dot" *ngIf="baseCalculo() === 'UTILIDAD_FIFO'"></span>
+          </div>
+          <div class="card-title-group">
+            <span class="card-badge badge-emerald">Caso 2: Utilidad Real Contable</span>
+            <h3>Con Costo de Mercancía (FIFO)</h3>
+          </div>
+        </div>
+        <p class="card-desc">Deduce el costo de compra de los productos vendidos más los gastos operativos.</p>
+
+        <div class="calc-breakdown">
+          <div class="calc-row">
+            <span>(+) Total Ingresos Cobrados:</span>
+            <strong>{{ totalIngresosCobrados() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row text-danger">
+            <span>(-) Costo Mercancía Vendida (FIFO):</span>
+            <strong>-{{ totalCostoMercanciaFifo() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row text-danger">
+            <span>(-) Gastos Operativos Negocio:</span>
+            <strong>-{{ totalGastosNegocio() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-row text-amber">
+            <span>(-) Gastos de Bolsillo Socios:</span>
+            <strong>-{{ totalGastosSocios() | currencyMxn }}</strong>
+          </div>
+          <div class="calc-divider"></div>
+          <div class="calc-total">
+            <span>Utilidad Neta Real a Repartir:</span>
+            <span class="total-amount text-emerald">{{ gananciaNetaFifo() | currencyMxn }}</span>
+          </div>
+        </div>
+
+        <div class="select-hint" *ngIf="baseCalculo() === 'UTILIDAD_FIFO'">
+          ✅ Base activa para liquidación
+        </div>
+        <div class="select-hint click-hint" *ngIf="baseCalculo() !== 'UTILIDAD_FIFO'">
+          Hacer clic para usar esta base
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección de Gastos de Bolsillo de Socios -->
+    <div class="panel-section">
+      <div class="panel-header">
+        <div>
+          <h4>👛 Gastos de Bolsillo Pagados por Socios</h4>
+          <p>Los gastos asignados a un socio se reembolsan íntegramente a quien los pagó, distribuyendo el costo de forma proporcional entre todos.</p>
+        </div>
+        <div class="gastos-summary-badge">
+          Total Bolsillo: <strong>{{ totalGastosSocios() | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      <!-- Tabla de Gastos del Periodo y su Asignación -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Concepto</th>
+              <th>Categoría</th>
+              <th>Monto</th>
+              <th>Autorizado / Pagado Por</th>
+              <th>¿Quién lo pagó de su bolsa?</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of gastosFiltrados(); track g.id) {
+            <tr>
+              <td>{{ g.fecha | fechaLocal }}</td>
+              <td><strong>{{ g.concepto }}</strong></td>
+              <td><span class="tag-cat">{{ g.categoria }}</span></td>
+              <td class="text-danger font-bold">{{ g.monto | currencyMxn }}</td>
+              <td>{{ g.persona || 'No especificado' }}</td>
+              <td>
+                <select [ngModel]="asignacionesGastos()[g.id] || 'EMPRESA'"
+                  (ngModelChange)="onCambiarAsignacionGasto(g.id, $event)"
+                  class="select-socio"
+                  [class.socio-selected]="asignacionesGastos()[g.id] && asignacionesGastos()[g.id] !== 'EMPRESA'">
+                  <option value="EMPRESA">🏢 Empresa / Caja General</option>
+                  @for (s of sociosService.sociosActivos(); track s.id) {
+                  <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+                  }
+                </select>
+              </td>
+            </tr>
+            }
+            @empty {
+            <tr>
+              <td colspan="6" class="text-center text-muted py-3">
+                No hay gastos registrados en el sistema para este periodo.
+              </td>
+            </tr>
+            }
+
+            <!-- Gastos Manuales Adicionales -->
+            @for (gm of gastosManuales(); track gm.id) {
+            <tr class="row-manual">
+              <td>{{ gm.fecha | fechaLocal }}</td>
+              <td>
+                <strong>{{ gm.concepto }}</strong>
+                <span class="badge-manual">Directo</span>
+              </td>
+              <td><span class="tag-cat">EXTRAORDINARIO</span></td>
+              <td class="text-danger font-bold">{{ gm.monto | currencyMxn }}</td>
+              <td>{{ gm.socioNombre }}</td>
+              <td>
+                <div class="manual-action-cell">
+                  <span class="socio-tag">👤 {{ gm.socioNombre }}</span>
+                  <button type="button" class="btn-del-sm" (click)="eliminarGastoManual(gm.id)" title="Quitar gasto">✕</button>
+                </div>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mini-formulario para agregar gasto de bolsillo manual -->
+      <div class="add-manual-expense-box">
+        <h5>➕ Registrar Gasto de Bolsillo Adicional (Solo para esta liquidación)</h5>
+        <div class="manual-expense-form">
+          <input type="text" placeholder="Concepto (Ej: Gasolina, Refacción, Almuerzo trabajo)"
+            [ngModel]="nuevoGastoConcepto()" (ngModelChange)="nuevoGastoConcepto.set($event)" />
+          <input type="number" placeholder="Monto ($)" min="1" step="0.50"
+            [ngModel]="nuevoGastoMonto()" (ngModelChange)="nuevoGastoMonto.set($event)" />
+          <select [ngModel]="nuevoGastoSocioId()" (ngModelChange)="nuevoGastoSocioId.set($event)">
+            @for (s of sociosService.sociosActivos(); track s.id) {
+            <option [value]="s.id">Pagado por: {{ s.nombre }}</option>
+            }
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="agregarGastoManual()"
+            [disabled]="!nuevoGastoConcepto() || !nuevoGastoMonto() || nuevoGastoMonto()! <= 0">
+            Agregar Gasto
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección de Liquidación y Reparto a Socios -->
+    <div class="panel-section section-liquidation">
+      <div class="panel-header">
+        <div>
+          <h4>🤝 Liquidación Final por Socio</h4>
+          <p>
+            Base activa: <strong>{{ baseCalculo() === 'FLUJO_EFECTIVO' ? 'Caso 1 (Flujo Operativo)' : 'Caso 2 (Utilidad Real FIFO)' }}</strong>.
+            Ganancia Neta Base: <strong>{{ gananciaNetaBaseSeleccionada() | currencyMxn }}</strong>.
+          </p>
+        </div>
+        <div class="total-reparto-badge">
+          Total a Entregar a Socios: <strong>{{ totalNetoRepartido() | currencyMxn }}</strong>
+        </div>
+      </div>
+
+      @if (!sociosService.porcentajesValidos()) {
+      <div class="alert alert-warning">
+        ⚠️ <strong>Atención:</strong> La suma de los porcentajes activos de los socios es <strong>{{ sociosService.sumaPorcentajes() }}%</strong>. Debe sumar exactamente 100%. Por favor ajusta los porcentajes en la pestaña <strong>Configuración de Socios</strong>.
+      </div>
+      }
+
+      <!-- Tarjetas de Socios -->
+      <div class="socios-cards-grid">
+        @for (s of liquidacionCalculada(); track s.socioId) {
+        <div class="socio-card">
+          <div class="socio-card-header">
+            <div class="socio-avatar">👤</div>
+            <div class="socio-info">
+              <h3>{{ s.nombre }}</h3>
+              <span class="socio-pct-badge">{{ s.porcentaje }}% de participación</span>
+            </div>
+          </div>
+
+          <div class="socio-breakdown">
+            <div class="sb-row">
+              <span>Ganancia Base ({{ s.porcentaje }}%):</span>
+              <strong class="text-blue">+{{ s.gananciaAsignada | currencyMxn }}</strong>
+            </div>
+
+            @if (s.gastosBolsilloAportados > 0) {
+            <div class="sb-row text-success">
+              <span>Reembolso Gastos de Bolsillo:</span>
+              <strong>+{{ s.gastosBolsilloAportados | currencyMxn }}</strong>
+            </div>
+            } @else {
+            <div class="sb-row text-muted">
+              <span>Gastos de Bolsillo Aportados:</span>
+              <span>$0.00</span>
+            </div>
+            }
+
+            <div class="sb-row text-muted text-xs">
+              <span>Cuota de gastos compartida ({{ s.porcentaje }}%):</span>
+              <span>-{{ s.cuotaGastosBolsillo | currencyMxn }}</span>
+            </div>
+
+            <div class="sb-divider"></div>
+
+            <div class="sb-final">
+              <span class="final-label">NETO A ENTREGAR / TRANSFERIR:</span>
+              <span class="final-value" [class.text-danger]="s.montoNetoACobrar < 0">
+                {{ s.montoNetoACobrar | currencyMxn }}
+              </span>
+            </div>
+          </div>
+        </div>
+        }
+      </div>
+
+      <!-- Resumen en Tabla Comparativa -->
+      <div class="table-responsive mt-4">
+        <table class="data-table table-summary">
+          <thead>
+            <tr>
+              <th>Socio</th>
+              <th class="text-center">Participación</th>
+              <th class="text-right">Ganancia Proporcional</th>
+              <th class="text-right">Gastos de Bolsillo (+)</th>
+              <th class="text-right">Cuota Gastos Absorbida (-)</th>
+              <th class="text-right">Total a Liquidar</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of liquidacionCalculada(); track s.socioId) {
+            <tr>
+              <td><strong>{{ s.nombre }}</strong></td>
+              <td class="text-center"><span class="badge-pct">{{ s.porcentaje }}%</span></td>
+              <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
+              <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
+              <td class="text-right text-muted">-{{ s.cuotaGastosBolsillo | currencyMxn }}</td>
+              <td class="text-right font-extrabold text-emerald font-lg">{{ s.montoNetoACobrar | currencyMxn }}</td>
+            </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="row-total">
+              <td colspan="2"><strong>TOTALES CONSOLIDADOS</strong></td>
+              <td class="text-right text-blue"><strong>{{ gananciaNetaBaseSeleccionada() | currencyMxn }}</strong></td>
+              <td class="text-right text-success"><strong>+{{ totalGastosSocios() | currencyMxn }}</strong></td>
+              <td class="text-right text-muted"><strong>-{{ totalGastosSocios() | currencyMxn }}</strong></td>
+              <td class="text-right text-emerald font-extrabold font-xl"><strong>{{ totalNetoRepartido() | currencyMxn }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Acciones de Cierre -->
+      <div class="liquidation-bottom-actions">
+        <button class="btn btn-secondary btn-whatsapp" (click)="copiarParaWhatsApp()">
+          <span>📱</span> Copiar Resumen para WhatsApp
+        </button>
+        <button class="btn btn-primary btn-lg" (click)="onGuardarLiquidacion()" [disabled]="guardandoLiquidacion()">
+          <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando en Firestore...' : 'Guardar y Cerrar Liquidación en Firestore' }}
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- TAB 2: HISTORIAL DE REPARTOS (FIRESTORE)   -->
+  <!-- ========================================== -->
+  @if (tabActiva() === 'HISTORIAL') {
+  <div class="tab-content">
+    <div class="panel-section">
+      <div class="panel-header">
+        <div>
+          <h4>📜 Historial de Liquidaciones Guardadas en Firestore</h4>
+          <p>Registros de repartos cerrados anteriormente para auditoría, consulta y control de cuentas.</p>
+        </div>
+      </div>
+
+      @if (sociosService.liquidaciones().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <h3>No hay liquidaciones guardadas todavía</h3>
+        <p>Cuando realices un reparto en la calculadora, haz clic en "Guardar Liquidación en Firestore" para archivarlo aquí.</p>
+        <button class="btn btn-primary" (click)="tabActiva.set('CALCULADORA')">Ir a la Calculadora</button>
+      </div>
+      } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Fecha Cierre</th>
+              <th>Periodo Liquidado</th>
+              <th>Base Usada</th>
+              <th class="text-right">Utilidad Repartida</th>
+              <th>Desglose por Socio</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (liq of sociosService.liquidaciones(); track liq.id) {
+            <tr>
+              <td><span class="folio-badge">{{ liq.folio || liq.id }}</span></td>
+              <td>{{ liq.fechaCreacion | fechaLocal }}</td>
+              <td><strong>{{ liq.fechaDesde }}</strong> al <strong>{{ liq.fechaHasta }}</strong></td>
+              <td>
+                <span class="tag-cat" [class.badge-blue]="liq.baseCalculo === 'FLUJO_EFECTIVO'" [class.badge-emerald]="liq.baseCalculo === 'UTILIDAD_FIFO'">
+                  {{ liq.baseCalculo === 'FLUJO_EFECTIVO' ? 'Flujo Operativo' : 'Utilidad FIFO' }}
+                </span>
+              </td>
+              <td class="text-right font-extrabold text-emerald">
+                {{ liq.utilidadBaseReparto | currencyMxn }}
+              </td>
+              <td>
+                <div class="mini-socios-list">
+                  @for (s of liq.socios; track s.socioId) {
+                  <span class="mini-socio-item">
+                    {{ s.nombre }}: <strong>{{ s.montoNetoACobrar | currencyMxn }}</strong>
+                  </span>
+                  }
+                </div>
+              </td>
+              <td class="text-center">
+                <div class="actions-cell">
+                  <button type="button" class="btn-icon" (click)="verDetalleHistorico(liq)" title="Ver Detalle Completo">
+                    👁️
+                  </button>
+                  <button type="button" class="btn-icon" (click)="copiarHistoricoWhatsApp(liq)" title="Copiar para WhatsApp">
+                    📱
+                  </button>
+                  <button type="button" class="btn-icon btn-icon-del" (click)="onEliminarLiquidacion(liq.id)" title="Eliminar Registro">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      }
+    </div>
+  </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- TAB 3: CONFIGURACIÓN DINÁMICA DE SOCIOS    -->
+  <!-- ========================================== -->
+  @if (tabActiva() === 'CONFIG') {
+  <div class="tab-content">
+    <div class="panel-section">
+      <div class="panel-header">
+        <div>
+          <h4>⚙️ Configuración Dinámica de Socios</h4>
+          <p>Define quiénes son los socios y qué porcentaje de ganancia y gastos le corresponde a cada uno. Se almacena en la nube (Firestore).</p>
+        </div>
+        <button class="btn btn-primary" (click)="guardarConfiguracionSocios()" [disabled]="guardandoConfig()">
+          <span>💾</span> {{ guardandoConfig() ? 'Guardando en Firestore...' : 'Guardar Cambios' }}
+        </button>
+      </div>
+
+      <!-- Barra de Estado de Porcentaje -->
+      <div class="pct-progress-container">
+        <div class="pct-progress-header">
+          <span>Suma total de porcentajes activos:</span>
+          <strong [class.text-success]="sociosService.porcentajesValidos()" [class.text-danger]="!sociosService.porcentajesValidos()">
+            {{ sociosService.sumaPorcentajes() }}%
+            @if (sociosService.porcentajesValidos()) {
+            <span>(¡Cuadrado al 100%! ✅)</span>
+            } @else {
+            <span>(Debe sumar exactamente 100% ⚠️)</span>
+            }
+          </strong>
+        </div>
+        <div class="pct-progress-bar">
+          <div class="pct-fill" [style.width.%]="Math.min(sociosService.sumaPorcentajes(), 100)"
+            [class.bg-emerald]="sociosService.porcentajesValidos()"
+            [class.bg-danger]="!sociosService.porcentajesValidos()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de Socios Configurables -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nombre del Socio / Persona</th>
+              <th style="width: 180px;">Porcentaje (%)</th>
+              <th style="width: 140px;" class="text-center">Activo</th>
+              <th style="width: 100px;" class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of sociosEditables(); track s.id) {
+            <tr>
+              <td>
+                <input type="text" class="input-inline" [(ngModel)]="s.nombre" placeholder="Nombre del socio" />
+              </td>
+              <td>
+                <div class="pct-input-wrap">
+                  <input type="number" class="input-inline text-right" [(ngModel)]="s.porcentaje" min="1" max="100" />
+                  <span>%</span>
+                </div>
+              </td>
+              <td class="text-center">
+                <input type="checkbox" [(ngModel)]="s.activo" id="chk-{{ s.id }}" />
+                <label for="chk-{{ s.id }}" class="ml-1 text-sm">{{ s.activo ? 'Activo' : 'Pausado' }}</label>
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn-icon btn-icon-del" (click)="eliminarSocio(s.id)" title="Eliminar socio">
+                  🗑️
+                </button>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Formulario para Agregar Nuevo Socio -->
+      <div class="add-socio-card">
+        <h5>➕ Agregar Nuevo Socio</h5>
+        <div class="add-socio-grid">
+          <input type="text" placeholder="Nombre completo o alias del socio"
+            [ngModel]="nuevoSocioNombre()" (ngModelChange)="nuevoSocioNombre.set($event)" />
+          <div class="pct-input-wrap">
+            <input type="number" placeholder="Porcentaje (ej: 20)" min="1" max="100"
+              [ngModel]="nuevoSocioPorcentaje()" (ngModelChange)="nuevoSocioPorcentaje.set($event)" />
+            <span>%</span>
+          </div>
+          <button type="button" class="btn btn-secondary" (click)="agregarNuevoSocio()">
+            Agregar a la Lista
+          </button>
+        </div>
+      </div>
+
+      <div class="form-actions mt-4">
+        <button class="btn btn-primary btn-lg" (click)="guardarConfiguracionSocios()" [disabled]="guardandoConfig()">
+          <span>💾</span> {{ guardandoConfig() ? 'Guardando en Firestore...' : 'Guardar Configuración en Firestore' }}
+        </button>
+      </div>
+
+    </div>
+  </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- MODAL: DETALLE DE LIQUIDACIÓN HISTÓRICA    -->
+  <!-- ========================================== -->
+  @if (liquidacionSeleccionada(); as liq) {
+  <div class="modal-backdrop" (click)="cerrarModalDetalle()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3>Detalle de Liquidación #{{ liq.folio || liq.id }}</h3>
+          <p>Periodo: {{ liq.fechaDesde }} al {{ liq.fechaHasta }} | Guardado el {{ liq.fechaCreacion | fechaLocal }}</p>
+        </div>
+        <button class="modal-close" (click)="cerrarModalDetalle()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-metrics-grid">
+          <div class="metric-item">
+            <span>Ingresos Totales:</span>
+            <strong>{{ liq.totalIngresos | currencyMxn }}</strong>
+          </div>
+          @if (liq.baseCalculo === 'UTILIDAD_FIFO') {
+          <div class="metric-item">
+            <span>Costo Mercancía (FIFO):</span>
+            <strong class="text-danger">-{{ liq.totalCostoFifo | currencyMxn }}</strong>
+          </div>
+          }
+          <div class="metric-item">
+            <span>Gastos Negocio:</span>
+            <strong class="text-danger">-{{ liq.totalGastosNegocio | currencyMxn }}</strong>
+          </div>
+          <div class="metric-item">
+            <span>Gastos Bolsillo Socios:</span>
+            <strong class="text-amber">-{{ liq.totalGastosSocios | currencyMxn }}</strong>
+          </div>
+          <div class="metric-item highlight">
+            <span>Ganancia Neta Repartida:</span>
+            <strong class="text-emerald">{{ liq.utilidadBaseReparto | currencyMxn }}</strong>
+          </div>
+        </div>
+
+        <h4 class="mt-4 mb-2">Desglose de Pago por Socio</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Socio</th>
+              <th class="text-center">%</th>
+              <th class="text-right">Ganancia</th>
+              <th class="text-right">Reembolso Gastos</th>
+              <th class="text-right">Monto Neto Pagado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of liq.socios; track s.socioId) {
+            <tr>
+              <td><strong>{{ s.nombre }}</strong></td>
+              <td class="text-center">{{ s.porcentaje }}%</td>
+              <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
+              <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
+              <td class="text-right font-bold text-emerald">{{ s.montoNetoACobrar | currencyMxn }}</td>
+            </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (liq.gastosBolsilloDetalle && liq.gastosBolsilloDetalle.length > 0) {
+        <h4 class="mt-4 mb-2">Detalle de Gastos de Bolsillo Reembolsados</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th>Pagado por</th>
+              <th class="text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of liq.gastosBolsilloDetalle; track g.id) {
+            <tr>
+              <td>{{ g.concepto }}</td>
+              <td>👤 {{ g.socioNombre }}</td>
+              <td class="text-right font-bold">{{ g.monto | currencyMxn }}</td>
+            </tr>
+            }
+          </tbody>
+        </table>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-whatsapp" (click)="copiarHistoricoWhatsApp(liq)">
+          <span>📱</span> Copiar para WhatsApp
+        </button>
+        <button class="btn btn-secondary" (click)="cerrarModalDetalle()">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+</div>

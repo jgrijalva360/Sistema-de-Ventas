@@ -1,15 +1,16 @@
 import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
+import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { MovimientosService } from '../../core/services/movimientos.service';
 import { ProductosService } from '../../core/services/productos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
-import { MovimientoInventario, Producto } from '../../core/models/models';
+import { MovimientoInventario, Producto, LoteFifo } from '../../core/models/models';
 
 @Component({
   selector: 'app-movimientos',
   standalone: true,
-  imports: [FormsModule, FechaLocalPipe],
+  imports: [FormsModule, FechaLocalPipe, CurrencyMxnPipe],
   templateUrl: './movimientos.component.html',
   styleUrl: './movimientos.component.scss'
 })
@@ -19,7 +20,11 @@ export class MovimientosComponent implements AfterViewInit {
   public tipoMov = signal<MovimientoInventario['tipo'] | 'TRASPASO'>('ENTRADA');
   public codigoSeleccionado = signal<string>('');
   public cantidad = signal<number>(1);
+  public costoUnitario = signal<number | null>(null);
+  public actualizarPrecioVenta = signal<boolean>(false);
+  public nuevoPrecioVentaSugerido = signal<number | null>(null);
   public motivo = signal<string>('');
+  public modalLotesFifoAbierto = signal<boolean>(false);
 
   // Sucursales para el movimiento
   public sucursalOrigen = signal<string>('SUC-MAIN');
@@ -61,6 +66,80 @@ export class MovimientosComponent implements AfterViewInit {
     return this.productosService.obtenerStockSucursal(prod, sid).stockActual;
   });
 
+  public precioVentaActual = computed(() => {
+    return this.productoSeleccionado()?.precioVenta || 0;
+  });
+
+  public ultimoCostoProducto = computed(() => {
+    const prod = this.productoSeleccionado();
+    return prod?.ultimoCosto ?? null;
+  });
+
+  public fechaUltimoCostoProducto = computed(() => {
+    const prod = this.productoSeleccionado();
+    return prod?.fechaUltimoCosto ?? null;
+  });
+
+  public costoFifoActual = computed(() => {
+    const prod = this.productoSeleccionado();
+    if (!prod) return null;
+    return this.productosService.obtenerCostoFifoActual(prod, this.sucursalOrigen());
+  });
+
+  public lotesFifoActivos = computed(() => {
+    const prod = this.productoSeleccionado();
+    if (!prod) return [];
+    return this.productosService.obtenerLotesFifoActivos(prod, this.sucursalOrigen());
+  });
+
+  public costoTotalCalculado = computed(() => {
+    const c = this.costoUnitario();
+    const cant = this.cantidad() || 0;
+    if (c === null || c === undefined || isNaN(c) || c < 0) return 0;
+    return cant * c;
+  });
+
+  public margenEstimado = computed(() => {
+    const prod = this.productoSeleccionado();
+    const costo = this.costoUnitario();
+    if (!prod || costo === null || costo === undefined || isNaN(costo) || costo < 0) return null;
+    const precioVenta = prod.precioVenta || 0;
+    if (precioVenta <= 0) return null;
+
+    const ganancia = precioVenta - costo;
+    const margenPorcentaje = Math.round((ganancia / precioVenta) * 100);
+    const markup = costo > 0 ? Math.round((ganancia / costo) * 100) : 0;
+
+    return {
+      ganancia,
+      margenPorcentaje,
+      markup
+    };
+  });
+
+  public costoMayorQuePrecio = computed(() => {
+    const costo = this.costoUnitario();
+    const precio = this.precioVentaActual();
+    return costo !== null && costo > 0 && precio > 0 && costo >= precio;
+  });
+
+  public precioSugerido30 = computed(() => {
+    const costo = this.costoUnitario();
+    if (costo === null || costo <= 0) return 0;
+    // Margen deseado de 30%: costo / (1 - 0.30)
+    return Math.ceil((costo / 0.70) * 10) / 10;
+  });
+
+  public margenConNuevoPrecio = computed(() => {
+    const costo = this.costoUnitario();
+    const nuevo = this.nuevoPrecioVentaSugerido();
+    if (costo === null || costo <= 0 || nuevo === null || nuevo <= 0) return null;
+    const ganancia = nuevo - costo;
+    const margenPorcentaje = Math.round((ganancia / nuevo) * 100);
+    const markup = Math.round((ganancia / costo) * 100);
+    return { ganancia, margenPorcentaje, porcentaje: margenPorcentaje, markup };
+  });
+
   public sugerenciasProductos = computed<Producto[]>(() => {
     const query = this.busquedaProducto().trim().toLowerCase();
     const list = this.productosService.productos();
@@ -93,6 +172,9 @@ export class MovimientosComponent implements AfterViewInit {
     const exacto = this.productosService.obtenerPorCodigo(input.value.trim());
     if (exacto) {
       this.codigoSeleccionado.set(exacto.codigo);
+      if (this.tipoMov() === 'ENTRADA' && exacto.ultimoCosto !== undefined && exacto.ultimoCosto > 0) {
+        this.costoUnitario.set(exacto.ultimoCosto);
+      }
     } else {
       this.codigoSeleccionado.set('');
     }
@@ -114,12 +196,56 @@ export class MovimientosComponent implements AfterViewInit {
     this.busquedaProducto.set(`${prod.codigo} - ${prod.nombre}`);
     this.mostrarSugerencias.set(false);
     this.indiceSeleccionado.set(-1);
+
+    this.actualizarPrecioVenta.set(false);
+    this.nuevoPrecioVentaSugerido.set(null);
+
+    if (this.tipoMov() === 'ENTRADA' && prod.ultimoCosto !== undefined && prod.ultimoCosto > 0) {
+      this.costoUnitario.set(prod.ultimoCosto);
+    }
   }
 
   limpiarSeleccion(): void {
     this.codigoSeleccionado.set('');
     this.busquedaProducto.set('');
+    this.costoUnitario.set(null);
+    this.actualizarPrecioVenta.set(false);
+    this.nuevoPrecioVentaSugerido.set(null);
     this.mostrarSugerencias.set(true);
+  }
+
+  onCostoChange(valor: any): void {
+    if (valor === '' || valor === null || valor === undefined) {
+      this.costoUnitario.set(null);
+    } else {
+      const num = Number(valor);
+      this.costoUnitario.set(!isNaN(num) && num >= 0 ? num : null);
+    }
+  }
+
+  onToggleActualizarPrecio(activo: boolean): void {
+    this.actualizarPrecioVenta.set(activo);
+    if (activo && !this.nuevoPrecioVentaSugerido()) {
+      this.aplicarPrecioSugerido(30);
+    }
+  }
+
+  onNuevoPrecioChange(valor: any): void {
+    if (valor === '' || valor === null || valor === undefined) {
+      this.nuevoPrecioVentaSugerido.set(null);
+    } else {
+      const num = Number(valor);
+      this.nuevoPrecioVentaSugerido.set(!isNaN(num) && num > 0 ? num : null);
+    }
+  }
+
+  aplicarPrecioSugerido(margenPorc = 30): void {
+    const costo = this.costoUnitario();
+    if (!costo || costo <= 0) return;
+    const factor = Math.max(0.05, 1 - (margenPorc / 100));
+    const sugerido = Math.ceil((costo / factor) * 10) / 10;
+    this.nuevoPrecioVentaSugerido.set(sugerido);
+    this.actualizarPrecioVenta.set(true);
   }
 
   navegarSugerencias(delta: number, event: Event): void {
@@ -170,6 +296,14 @@ export class MovimientosComponent implements AfterViewInit {
     return suc?.nombre || sucId;
   }
 
+  abrirModalLotesFifo(): void {
+    this.modalLotesFifoAbierto.set(true);
+  }
+
+  cerrarModalLotesFifo(): void {
+    this.modalLotesFifoAbierto.set(false);
+  }
+
   async onRegistrarMovimiento(): Promise<void> {
     const cod = this.codigoSeleccionado();
     const cant = this.cantidad();
@@ -181,6 +315,7 @@ export class MovimientosComponent implements AfterViewInit {
 
     const tipo = this.tipoMov();
     const origenId = this.sucursalOrigen() || this.sucursalesService.activaId() || 'SUC-MAIN';
+    const costoUnit = this.costoUnitario();
 
     try {
       if (tipo === 'TRASPASO') {
@@ -202,12 +337,29 @@ export class MovimientosComponent implements AfterViewInit {
           cod,
           cant,
           this.motivo(),
-          origenId
+          origenId,
+          costoUnit !== null && costoUnit !== undefined && costoUnit >= 0 ? Number(costoUnit) : undefined
         );
-        this.mensajeExito.set('Movimiento de stock registrado exitosamente.');
+
+        // Si el usuario decidió actualizar el precio de venta general del producto en el catálogo
+        if (
+          this.actualizarPrecioVenta() &&
+          this.nuevoPrecioVentaSugerido() !== null &&
+          this.nuevoPrecioVentaSugerido()! > 0
+        ) {
+          await this.productosService.actualizarPrecioVenta(cod, Number(this.nuevoPrecioVentaSugerido()));
+          this.mensajeExito.set(
+            `✅ Movimiento registrado y precio de venta actualizado a $${Number(this.nuevoPrecioVentaSugerido()).toFixed(2)} exitosamente.`
+          );
+        } else {
+          this.mensajeExito.set('Movimiento de stock registrado exitosamente.');
+        }
       }
 
       this.cantidad.set(1);
+      this.costoUnitario.set(null);
+      this.actualizarPrecioVenta.set(false);
+      this.nuevoPrecioVentaSugerido.set(null);
       this.motivo.set('');
       this.limpiarSeleccion();
       this.mostrarSugerencias.set(false);

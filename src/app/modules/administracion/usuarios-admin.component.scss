@@ -102,32 +102,330 @@
 }
 
 .select-rol {
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 6px;
   border: 1px solid #cbd5e1;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   background: white;
+  color: #1e293b;
   cursor: pointer;
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: #94a3b8;
+  }
 }
 
-.btn-warning {
-  background: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fde68a;
-  &:hover { background: #fde68a; }
+/* ── Modern Table Enhancements ── */
+.table-container {
+  overflow-x: auto;
 }
 
-.btn-danger {
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
-  &:hover { background: #fca5a5; }
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 14px;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px 14px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  tbody tr {
+    transition: background-color 0.15s;
+    &:hover {
+      background-color: #f8fafc;
+    }
+  }
 }
 
-.btn-success {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #86efac;
-  &:hover { background: #86efac; }
+/* Colaborador Cell */
+.user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  .user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.92rem;
+  }
+
+  .user-email-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: #64748b;
+    font-family: monospace;
+
+    .btn-copy-mini {
+      background: none;
+      border: none;
+      padding: 0 2px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      opacity: 0.6;
+      transition: opacity 0.15s, transform 0.1s;
+      &:hover {
+        opacity: 1;
+        transform: scale(1.15);
+      }
+    }
+  }
+}
+
+/* Password Pill */
+.pass-pill {
+  display: inline-flex;
+  align-items: center;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 3px 8px;
+  gap: 6px;
+
+  .pass-text {
+    font-family: monospace;
+    font-weight: 800;
+    color: #0284c7;
+    font-size: 0.92rem;
+    letter-spacing: 1px;
+  }
+
+  .pass-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 1px 2px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+    transition: opacity 0.15s, transform 0.1s;
+    &:hover {
+      opacity: 1;
+      transform: scale(1.15);
+    }
+  }
+}
+
+/* Device Badge */
+.device-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.linked {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+
+  &.pending {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+  }
+
+  &.open {
+    background: #f8fafc;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+
+  .device-btn-unlink {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 1px 4px;
+    border-radius: 4px;
+    color: #dc2626;
+    font-weight: 800;
+    line-height: 1;
+    transition: background-color 0.15s;
+    &:hover {
+      background: #fee2e2;
+    }
+  }
+}
+
+/* Status Pill */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &.online {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  &.offline {
+    background: #f1f5f9;
+    color: #64748b;
+  }
+
+  &.inactive {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+
+    &.green { background: #22c55e; }
+    &.gray { background: #94a3b8; }
+    &.red { background: #ef4444; }
+  }
+}
+
+/* Actions Toolbar */
+.actions-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid #cbd5e1;
+    background: white;
+    color: #334155;
+
+    &:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: #0f172a;
+    }
+
+    &.icon-only {
+      width: 32px;
+      padding: 0;
+      font-size: 0.85rem;
+    }
+
+    &.danger-action {
+      color: #dc2626;
+      border-color: #fecdd3;
+      background: #fff1f2;
+      &:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+      }
+    }
+
+    &.warning-action {
+      color: #b45309;
+      border-color: #fde68a;
+      background: #fffbeb;
+      &:hover {
+        background: #fef3c7;
+        border-color: #f59e0b;
+      }
+    }
+
+    &.disconnect-action {
+      color: #e11d48;
+      border-color: #fecdd3;
+      background: #fff1f2;
+      &:hover {
+        background: #ffe4e6;
+        border-color: #f43f5e;
+      }
+    }
+  }
+}
+
+/* ── Device Setting Card in Modal ── */
+.device-toggle-card {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+  }
+
+  .toggle-control {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    margin: 0;
+
+    input[type="checkbox"] {
+      width: 18px !important;
+      height: 18px !important;
+      min-width: 18px;
+      margin: 3px 0 0 0;
+      cursor: pointer;
+      accent-color: #0284c7;
+      flex-shrink: 0;
+    }
+
+    .toggle-text {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+
+      .toggle-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #1e293b;
+        line-height: 1.25;
+      }
+
+      .toggle-desc {
+        font-size: 0.77rem;
+        color: #64748b;
+        line-height: 1.4;
+      }
+    }
+  }
 }

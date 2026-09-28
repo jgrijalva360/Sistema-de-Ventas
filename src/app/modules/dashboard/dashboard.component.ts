@@ -127,7 +127,7 @@ export class DashboardComponent {
       const monto = g.monto || 0;
       if (met === 'TARJETA') {
         totalGastosTarjeta += monto;
-      } else if (met === 'TRANSFERENCIA') {
+      } else if (met === 'TRANSFERENCIA' || met === 'BOLSILLO_SOCIO') {
         totalGastosTransferencia += monto;
       } else {
         totalGastosEfectivo += monto;

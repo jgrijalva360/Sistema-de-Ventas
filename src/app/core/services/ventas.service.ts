@@ -11,6 +11,7 @@ import { collectionStream$, docStream$ } from '../utils/realtime.util';
 import { generarSiguienteConsecutivo } from '../utils/consecutivo.util';
 
 import { BitacoraService } from './bitacora.service';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root'
@@ -88,7 +89,8 @@ export class VentasService {
     private productosService: ProductosService,
     private sucursalesService: SucursalesService,
     private syncService: SyncService,
-    private bitacoraService: BitacoraService
+    private bitacoraService: BitacoraService,
+    private authService: AuthService
   ) {}
 
   // ── Gestión de Carrito ─────────────────────────────────────
@@ -164,25 +166,36 @@ export class VentasService {
       const sucursal = this.sucursalesService.sucursalActiva();
       const nuevoId = generarSiguienteConsecutivo(this.ventasSignal().map((v) => v.id), 'V', 4);
       
+      // 1. Descontar stock de la sucursal activa y obtener el desglose de costo FIFO
+      const desgloseFifo = await this.productosService.descontarStockVenta(items, sucursal.id);
+
+      // Asignar los costos FIFO a cada ítem del ticket
+      const itemsConFifo = items.map((it) => {
+        const infoFifo = desgloseFifo.find((d) => d.codigo.toLowerCase() === it.codigo.toLowerCase());
+        return {
+          ...it,
+          costoUnitarioFifo: infoFifo ? infoFifo.costoUnitarioFifo : 0,
+          costoTotalFifo: infoFifo ? infoFifo.costoTotalFifo : 0
+        };
+      });
+
       const nuevaVenta: Venta = {
         id: nuevoId,
         fecha: new Date().toISOString(),
-        items,
+        items: itemsConFifo,
         total,
         totalPagado: pagado,
         cambio: this.cambio(),
         pagos: { ...this.pagos() },
         sucursalId: sucursal.id,
         sucursalNombre: sucursal.nombre,
+        usuario: this.authService.nombreOperadorActual(),
         estado: 'COMPLETADA'
       };
 
-      // 1. Guardar local y actualizar lista
+      // 2. Guardar local y actualizar lista
       const currentVentas = [nuevaVenta, ...this.ventasSignal()];
       this.ventasSignal.set(currentVentas);
-
-      // 2. Descontar stock de la sucursal activa
-      await this.productosService.descontarStockVenta(items, sucursal.id);
 
       // 3. Guardar en Firestore: chunks_ventas
       try {
@@ -242,17 +255,21 @@ export class VentasService {
       estado: 'CANCELADA',
       fechaCancelacion: new Date().toISOString(),
       motivoCancelacion: motivo.trim() || 'Cancelación solicitada por el usuario',
-      usuarioCancelacion: usuario
+      usuarioCancelacion: usuario || this.authService.nombreOperadorActual()
     };
 
     currentVentas[idx] = ventaActualizada;
     this.ventasSignal.set(currentVentas);
 
-    // 2. Reingresar stock al inventario si aplica y tiene productos
+    // 2. Reingresar stock al inventario si aplica y tiene productos con su costo FIFO
     if (reponerInventario && Array.isArray(venta.items) && venta.items.length > 0) {
       const itemsAReponer = venta.items
         .filter((it) => it.codigo && it.cantidad > 0)
-        .map((it) => ({ codigo: it.codigo, cantidad: it.cantidad }));
+        .map((it) => ({
+          codigo: it.codigo,
+          cantidad: it.cantidad,
+          costoUnitarioFifo: it.costoUnitarioFifo
+        }));
 
       if (itemsAReponer.length > 0) {
         await this.productosService.reponerStockDevolucion(itemsAReponer, venta.sucursalId || 'SUC-MAIN');

@@ -12,11 +12,19 @@ import { SuscripcionService } from '../../core/services/suscripcion.service';
       <div class="result-card">
         @if (status === 'success') {
           <div class="icon-result success">🎉</div>
-          <h2>¡Pago Aprobado con Éxito!</h2>
-          <p class="desc">Tu suscripción ha sido actualizada y tu acceso está completamente activo.</p>
+          @if (tipo === 'recurrente') {
+            <h2>¡Suscripción Automática Activada!</h2>
+            <p class="desc">Tu membresía mensual ha quedado domiciliada con éxito. Cada mes se renovará automáticamente sin interrupciones en tu servicio.</p>
+          } @else {
+            <h2>¡Pago Aprobado con Éxito!</h2>
+            <p class="desc">Tu suscripción ha sido actualizada y tu acceso está completamente activo.</p>
+          }
           <div class="info-tag">
             <span>Plan: <strong>{{ plan }}</strong></span>
             <span>Vigencia: <strong>+{{ meses }} mes(es)</strong></span>
+            @if (tipo === 'recurrente') {
+              <span>Cobro: <strong>🔄 Domiciliado</strong></span>
+            }
           </div>
           <a routerLink="/dashboard" class="btn btn-primary">🚀 Ir al Punto de Venta</a>
         } @else if (status === 'pending') {
@@ -66,6 +74,8 @@ import { SuscripcionService } from '../../core/services/suscripcion.service';
         justify-content: space-around;
         font-size: 0.88rem;
         margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 8px;
       }
       .btn {
         display: inline-block;
@@ -87,12 +97,14 @@ export class PagoResultadoComponent implements OnInit {
   public status = 'success';
   public plan = 'PRO';
   public meses = '1';
+  public tipo = 'unico';
 
   ngOnInit(): void {
     this.route.queryParams.subscribe((params) => {
       this.status = params['status'] || 'success';
       this.plan = params['plan'] || 'PRO';
       this.meses = params['meses'] || '1';
+      this.tipo = params['tipo'] || 'unico';
     });
   }
 }

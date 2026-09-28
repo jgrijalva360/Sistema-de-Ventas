@@ -30,7 +30,7 @@ export class CortesComponent implements AfterViewInit {
   }
 
   // Formulario Apertura
-  public usuarioApertura = this.authService.currentUser()?.email || 'Cajero 1';
+  public usuarioApertura = this.authService.nombreOperadorActual();
   public cajaInicialApertura = 0;
   public observacionesApertura = '';
 

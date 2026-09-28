@@ -14,6 +14,7 @@ import { ConfiguracionService } from '../../core/services/configuracion.service'
 import { AuthService } from '../../core/services/auth.service';
 import { BitacoraService } from '../../core/services/bitacora.service';
 import { SuscripcionService } from '../../core/services/suscripcion.service';
+import { SociosService } from '../../core/services/socios.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -24,8 +25,24 @@ import { SuscripcionService } from '../../core/services/suscripcion.service';
       <app-sidebar [isOpen]="isSidebarOpen()" (closeSidebar)="isSidebarOpen.set(false)" />
 
       <div class="main-wrapper">
+        <!-- Banner de Modo Soporte para SuperAdministrador -->
+        @if (authService.estaEnModoSoporte()) {
+          <div class="support-mode-banner">
+            <div class="support-mode-left">
+              <span class="support-badge">🛡️ MODO SOPORTE ACTIVO</span>
+              <span class="support-text">
+                Viendo datos de la empresa: <strong>{{ authService.nombreEmpresaSoporte() }}</strong>
+              </span>
+              <span class="support-id">ID: {{ authService.idEmpresaSoporte() }}</span>
+            </div>
+            <button type="button" class="btn-exit-support" (click)="authService.salirModoSoporte()">
+              ✕ Salir del Modo Soporte (Regresar a Master SaaS)
+            </button>
+          </div>
+        }
+
         <!-- Banner Preventivo de Vencimiento de Suscripción -->
-        @if (suscripcionService.estaPorVencer()) {
+        @if (suscripcionService.estaPorVencer() && !authService.estaEnModoSoporte()) {
           <div class="sub-alert-banner">
             <span>⏳ <strong>Aviso de Membresía:</strong> Tu suscripción a Stockup vence en <strong>{{ suscripcionService.diasRestantes() }} día(s)</strong>.</span>
             @if (authService.esAdmin()) {
@@ -55,6 +72,71 @@ import { SuscripcionService } from '../../core/services/suscripcion.service';
     .app-layout {
       display: flex;
       min-height: 100vh;
+    }
+
+    .support-mode-banner {
+      background: linear-gradient(90deg, #065f46, #059669);
+      color: #ffffff;
+      padding: 10px 20px;
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+
+      .support-mode-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .support-badge {
+        background: #047857;
+        border: 1px solid #34d399;
+        color: #ecfdf5;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 0.78rem;
+        letter-spacing: 0.5px;
+      }
+
+      .support-text {
+        font-size: 0.92rem;
+      }
+
+      .support-id {
+        font-family: monospace;
+        font-size: 0.8rem;
+        opacity: 0.9;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .btn-exit-support {
+        background: #ffffff;
+        color: #065f46;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-weight: 800;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+
+        &:hover {
+          background: #ecfdf5;
+          transform: translateY(-1px);
+        }
+      }
     }
 
     .sub-alert-banner {
@@ -156,6 +238,7 @@ export class MainLayoutComponent implements OnInit {
   private sucursalesService = inject(SucursalesService);
   private configuracionService = inject(ConfiguracionService);
   private bitacoraService = inject(BitacoraService);
+  private sociosService = inject(SociosService);
 
   async ngOnInit(): Promise<void> {
     // 0. Esperar a que la sesión de Firebase Auth esté lista
@@ -171,7 +254,8 @@ export class MainLayoutComponent implements OnInit {
       this.movimientosService.cargarMovimientos(),
       this.sucursalesService.cargarSucursales(),
       this.configuracionService.cargarConfiguracion(),
-      this.bitacoraService.cargarBitacora()
+      this.bitacoraService.cargarBitacora(),
+      this.sociosService.cargarDatos()
     ]);
 
     // 2. Iniciar escuchadores en tiempo real

@@ -11,7 +11,8 @@ import {
   Corte,
   PedidoPersonalizado,
   MateriaPrimaItem,
-  AbonoPedido
+  AbonoPedido,
+  UsuarioSistema
 } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { ProductosService } from './productos.service';
@@ -22,6 +23,9 @@ import { MovimientosService } from './movimientos.service';
 import { PedidosService } from './pedidos.service';
 import { SucursalesService } from './sucursales.service';
 import { SyncService } from './sync.service';
+import { AuthService } from './auth.service';
+import { SuscripcionService } from './suscripcion.service';
+import { FirebaseService } from './firebase.service';
 import { doc, getDoc, setDoc, deleteDoc, getDocs, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 import { Subscription } from 'rxjs';
@@ -62,7 +66,10 @@ export class ConfiguracionService {
     private pedidosService: PedidosService,
     private sucursalesService: SucursalesService,
     private syncService: SyncService,
-    private bitacoraService: BitacoraService
+    private bitacoraService: BitacoraService,
+    private authService: AuthService,
+    private suscripcionService: SuscripcionService,
+    private fb: FirebaseService
   ) {}
 
   async cargarConfiguracion(): Promise<void> {
@@ -108,10 +115,27 @@ export class ConfiguracionService {
   }
 
   // ── Copias de Seguridad (Backup JSON) ───────────────────────
-  descargarBackupJSON(): void {
+  async descargarBackupJSON(): Promise<void> {
+    let usuarios: UsuarioSistema[] = [];
+    try {
+      usuarios = await this.authService.listarUsuariosEmpresa();
+    } catch (e) {
+      console.warn('Error al obtener lista de colaboradores para el backup:', e);
+    }
+
+    const tenantId = this.authService.getTenantId();
+    const suscripcion = this.suscripcionService.suscripcion();
+
     const backupData = {
-      version: '2.1.0',
+      version: '2.5.0',
       fecha: new Date().toISOString(),
+      empresaId: tenantId,
+      organizacion: {
+        empresaId: tenantId,
+        nombreNegocio: this.configSignal().businessName || 'Mi Negocio',
+        suscripcion: suscripcion || null
+      },
+      usuarios,
       config: this.configSignal(),
       listas: this.listasSignal(),
       sucursales: this.sucursalesService.sucursales(),
@@ -149,6 +173,7 @@ export class ConfiguracionService {
     pedidosCount: number;
     sucursalesCount: number;
     bitacoraCount: number;
+    usuariosCount: number;
     hasConfig: boolean;
   }> {
     const text = await file.text();
@@ -178,12 +203,13 @@ export class ConfiguracionService {
     const rawPedidos = normalizar(data.pedidosPersonalizados, data.pedidos, data.customOrders);
     const rawSucursales = normalizar(data.sucursales, data.branches);
     const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
+    const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
     const hasConfig = Boolean(data.config || data.general || data.listas || data.nombreNegocio || data.businessName);
 
     return {
       fileName: file.name,
       data,
-      fecha: data.timestamp || data.fechaExportacion || data.actualizadoEn,
+      fecha: data.timestamp || data.fechaExportacion || data.actualizadoEn || data.fecha,
       appVersion: data.appVersion || data.version,
       productosCount: rawProductos.length,
       ventasCount: rawVentas.length,
@@ -193,6 +219,7 @@ export class ConfiguracionService {
       pedidosCount: rawPedidos.length,
       sucursalesCount: rawSucursales.length,
       bitacoraCount: rawBitacora.length,
+      usuariosCount: rawUsuarios.length,
       hasConfig
     };
   }
@@ -209,6 +236,7 @@ export class ConfiguracionService {
       restaurarSucursales: boolean;
       restaurarConfiguracion: boolean;
       restaurarBitacora?: boolean;
+      restaurarUsuarios?: boolean;
     }
   ): Promise<{
     productosCount: number;
@@ -219,6 +247,7 @@ export class ConfiguracionService {
     pedidosCount: number;
     sucursalesCount: number;
     bitacoraCount: number;
+    usuariosCount: number;
     configRestaurada: boolean;
   }> {
     this.syncService.setStatus('saving', 'Restaurando copia de seguridad...');
@@ -247,6 +276,8 @@ export class ConfiguracionService {
     const rawCarritos = normalizar(data.carritosPendientes, data.carritos, data.ventasEnEspera);
     const rawPedidos = normalizar(data.pedidosPersonalizados, data.pedidos, data.customOrders);
     const rawSucursales = normalizar(data.sucursales, data.branches);
+    const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
+    const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
 
     let sucursalesRestauradas = 0;
     let productosRestaurados = 0;
@@ -255,6 +286,8 @@ export class ConfiguracionService {
     let gastosRestaurados = 0;
     let cortesRestaurados = 0;
     let pedidosRestaurados = 0;
+    let bitacoraRestaurada = 0;
+    let usuariosRestaurados = 0;
     let configRestaurada = false;
 
     // 0. Sucursales
@@ -599,7 +632,6 @@ export class ConfiguracionService {
     }
 
     // 8. Bitácora y Auditoría de Actividades
-    let bitacoraRestaurada = 0;
     if (opciones.restaurarBitacora) {
       const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
       const bitacora = rawBitacora.map((b: any, idx: number) => ({
@@ -628,6 +660,39 @@ export class ConfiguracionService {
       bitacoraRestaurada = bitacora.length;
     }
 
+    // 9. Cuentas de Usuarios y Colaboradores
+    if (opciones.restaurarUsuarios && rawUsuarios.length > 0) {
+      const currentEmpresaId = this.authService.getTenantId();
+      for (const u of rawUsuarios) {
+        if (!u.uid && !u.email) continue;
+        const uid = u.uid || `USR-${Math.random().toString(36).substring(2, 9)}`;
+        const userDocRef = doc(this.fb.firestore, 'usuarios', uid);
+        const userData: UsuarioSistema = {
+          uid,
+          nombre: u.nombre || 'Colaborador',
+          email: u.email || `${(u.nombre || 'usuario').toLowerCase().replace(/\s+/g, '')}@pos.com`,
+          claveAcceso: u.claveAcceso || u.pin || '',
+          pin: u.pin || u.claveAcceso || '',
+          empresaId: currentEmpresaId,
+          rol: u.rol || 'CAJERO',
+          sucursalId: u.sucursalId || 'SUC-MAIN',
+          sucursalNombre: u.sucursalNombre || 'Matriz Principal',
+          activo: u.activo !== false,
+          creadoPorAdmin: u.creadoPorAdmin !== false,
+          fechaCreacion: u.fechaCreacion || new Date().toISOString(),
+          dispositivoAutorizadoId: u.dispositivoAutorizadoId || null,
+          dispositivoAutorizadoNombre: u.dispositivoAutorizadoNombre || null,
+          fechaVinculacionDispositivo: u.fechaVinculacionDispositivo || null,
+          permitirCualquierDispositivo: Boolean(u.permitirCualquierDispositivo),
+          ultimoAcceso: u.ultimoAcceso || null,
+          sesionActivaId: u.sesionActivaId || null,
+          dispositivoActual: u.dispositivoActual || null
+        };
+        await setDoc(userDocRef, this.firestoreService.sanitizarParaFirestore(userData), { merge: true });
+        usuariosRestaurados++;
+      }
+    }
+
     await this.syncService.incrementarRevision();
     this.syncService.setStatus('online', 'En Línea');
 
@@ -640,6 +705,7 @@ export class ConfiguracionService {
       pedidosCount: pedidosRestaurados,
       sucursalesCount: sucursalesRestauradas,
       bitacoraCount: bitacoraRestaurada,
+      usuariosCount: usuariosRestaurados,
       configRestaurada
     };
   }
@@ -650,7 +716,11 @@ export class ConfiguracionService {
     gastosCount: number;
     movimientosCount: number;
     cortesCount: number;
+    pedidosCount?: number;
+    sucursalesCount?: number;
     bitacoraCount?: number;
+    usuariosCount?: number;
+    configRestaurada?: boolean;
   }> {
     const text = await file.text();
     const data = JSON.parse(text);
@@ -663,7 +733,8 @@ export class ConfiguracionService {
       restaurarPedidos: true,
       restaurarSucursales: true,
       restaurarConfiguracion: true,
-      restaurarBitacora: true
+      restaurarBitacora: true,
+      restaurarUsuarios: true
     });
     return resultado;
   }
@@ -671,7 +742,7 @@ export class ConfiguracionService {
   // ── Mantenimiento y Resets Periódicos ───────────────────────
   async realizarResetPeriodico(tipo: 'simplificar_movimientos' | 'reset_operativo' | 'reset_total'): Promise<void> {
     // 1. Descarga de respaldo de seguridad previa
-    this.descargarBackupJSON();
+    await this.descargarBackupJSON();
 
     if (tipo === 'simplificar_movimientos') {
       const movimientosIniciales = this.productosService.productos().map((p) => ({

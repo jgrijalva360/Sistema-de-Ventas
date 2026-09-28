@@ -8,10 +8,21 @@ service cloud.firestore {
     function getUsuarioDoc() {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
+    function esSuperAdmin() {
+      return estaAutenticado() && (
+        getUsuarioDoc().rol == 'SUPERADMIN' ||
+        (request.auth.token.email != null && (
+          request.auth.token.email.matches('.*jgrijalva.*') ||
+          request.auth.token.email.matches('.*superadmin.*') ||
+          request.auth.token.email == 'admin@stockup.com'
+        ))
+      );
+    }
     function esMiembroDeEmpresa(empresaId) {
       return estaAutenticado() && (
         request.auth.uid == empresaId || 
-        getUsuarioDoc().empresaId == empresaId
+        getUsuarioDoc().empresaId == empresaId ||
+        esSuperAdmin()
       );
     }
     // 1. Perfiles de Usuario (/usuarios/{uid})
@@ -28,6 +39,9 @@ service cloud.firestore {
     }
     // 3. Base de Datos de la Empresa (/sistema/{empresaId}/...)
     // Incluye chunks_productos, chunks_ventas, chunks_pedidos, chunks_cortes, config, etc.
+    match /sistema/{empresaId} {
+      allow read, write: if estaAutenticado() && esMiembroDeEmpresa(empresaId);
+    }
     match /sistema/{empresaId}/{document=**} {
       allow read, write: if estaAutenticado() && esMiembroDeEmpresa(empresaId);
     }
@@ -35,6 +49,14 @@ service cloud.firestore {
     match /sistema_global/{document=**} {
       allow read: if true;
       allow write: if estaAutenticado();
+    }
+    // 5. Códigos Promocionales y Licencias (/codigos_promocionales/...)
+    match /codigos_promocionales/{codigo} {
+      allow read, write: if estaAutenticado();
+    }
+    // 6. Tickets de Soporte (/tickets_soporte/{ticketId})
+    match /tickets_soporte/{ticketId} {
+      allow read, write: if estaAutenticado();
     }
   }
 }
