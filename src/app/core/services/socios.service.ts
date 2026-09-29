@@ -1,5 +1,5 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { SocioConfig, LiquidacionSocios } from '../models/models';
+import { SocioConfig, LiquidacionSocios, AjusteEntreSocios } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { SyncService } from './sync.service';
 import { BitacoraService } from './bitacora.service';
@@ -20,10 +20,16 @@ export class SociosService {
 
   private sociosSignal = signal<SocioConfig[]>(SOCIOS_DEFAULT);
   private liquidacionesSignal = signal<LiquidacionSocios[]>([]);
+  private prestamosSignal = signal<AjusteEntreSocios[]>([]);
   public cargando = signal<boolean>(false);
 
   public socios = this.sociosSignal.asReadonly();
   public liquidaciones = this.liquidacionesSignal.asReadonly();
+  public prestamos = this.prestamosSignal.asReadonly();
+
+  public prestamosPendientes = computed(() => {
+    return this.prestamosSignal().filter((p) => !p.liquidado);
+  });
 
   public sociosActivos = computed(() => {
     return this.sociosSignal().filter((s) => s.activo !== false);
@@ -60,7 +66,8 @@ export class SociosService {
     try {
       await Promise.all([
         this.cargarSociosConfig(),
-        this.cargarLiquidaciones()
+        this.cargarLiquidaciones(),
+        this.cargarPrestamos()
       ]);
     } finally {
       this.cargando.set(false);
@@ -179,6 +186,113 @@ export class SociosService {
       console.error('Error al eliminar liquidación en Firestore:', err);
       this.syncService.setStatus('offline', 'Error al sincronizar');
       throw err;
+    }
+  }
+
+  // --- PRÉSTAMOS / AJUSTES ENTRE SOCIOS EN FIRESTORE ---
+
+  async cargarPrestamos(): Promise<AjusteEntreSocios[]> {
+    try {
+      const list = await this.firestoreService.cargarColeccionChunked<AjusteEntreSocios>('prestamos_socios');
+      this.prestamosSignal.set(list || []);
+      return list || [];
+    } catch (err) {
+      console.warn('Aviso al cargar préstamos entre socios de Firestore:', err);
+      return [];
+    }
+  }
+
+  async guardarAjusteEntreSocios(ajuste: AjusteEntreSocios): Promise<void> {
+    const listActual = this.prestamosSignal();
+    const existeIdx = listActual.findIndex((a) => a.id === ajuste.id);
+    let actualizadas: AjusteEntreSocios[];
+    if (existeIdx >= 0) {
+      actualizadas = [...listActual];
+      actualizadas[existeIdx] = ajuste;
+    } else {
+      actualizadas = [ajuste, ...listActual];
+    }
+
+    this.prestamosSignal.set(actualizadas);
+
+    try {
+      this.syncService.setStatus('saving', 'Guardando préstamo entre socios...');
+      await this.firestoreService.guardarColeccionChunked('prestamos_socios', actualizadas);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+
+      await this.bitacoraService.registrarEvento({
+        modulo: 'REPORTES',
+        accion: 'CREAR',
+        descripcion: `Préstamo registrado: ${ajuste.socioAcreedorNombre} prestó $${ajuste.monto.toFixed(2)} a ${ajuste.socioDeudorNombre} (${ajuste.concepto || 'Sin concepto'})`,
+        detalles: ajuste
+      });
+    } catch (err) {
+      console.error('Error al guardar préstamo entre socios en Firestore:', err);
+      this.syncService.setStatus('offline', 'Error al guardar');
+      throw err;
+    }
+  }
+
+  async eliminarAjusteEntreSocios(id: string): Promise<void> {
+    const prestamoAEliminar = this.prestamosSignal().find((p) => p.id === id);
+    const actualizadas = this.prestamosSignal().filter((p) => p.id !== id);
+    this.prestamosSignal.set(actualizadas);
+
+    try {
+      this.syncService.setStatus('saving', 'Eliminando préstamo entre socios...');
+      await this.firestoreService.guardarColeccionChunked('prestamos_socios', actualizadas);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+
+      if (prestamoAEliminar) {
+        await this.bitacoraService.registrarEvento({
+          modulo: 'REPORTES',
+          accion: 'ELIMINAR',
+          descripcion: `Préstamo entre socios eliminado: ${prestamoAEliminar.socioAcreedorNombre} -> ${prestamoAEliminar.socioDeudorNombre} ($${prestamoAEliminar.monto.toFixed(2)})`,
+          detalles: prestamoAEliminar
+        });
+      }
+    } catch (err) {
+      console.error('Error al eliminar préstamo entre socios en Firestore:', err);
+      this.syncService.setStatus('offline', 'Error al sincronizar');
+      throw err;
+    }
+  }
+
+  async liquidarAjustes(ids: string[], folio: string): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const actualizadas = this.prestamosSignal().map((p) => {
+      if (ids.includes(p.id)) {
+        return { ...p, liquidado: true, liquidacionFolio: folio };
+      }
+      return p;
+    });
+    this.prestamosSignal.set(actualizadas);
+
+    try {
+      await this.firestoreService.guardarColeccionChunked('prestamos_socios', actualizadas);
+      await this.syncService.incrementarRevision();
+    } catch (err) {
+      console.warn('Error al marcar préstamos como liquidados en Firestore:', err);
+    }
+  }
+
+  async reactivarAjustesLiquidados(folio: string): Promise<void> {
+    if (!folio) return;
+    const actualizadas = this.prestamosSignal().map((p) => {
+      if (p.liquidacionFolio === folio) {
+        return { ...p, liquidado: false, liquidacionFolio: undefined };
+      }
+      return p;
+    });
+    this.prestamosSignal.set(actualizadas);
+
+    try {
+      await this.firestoreService.guardarColeccionChunked('prestamos_socios', actualizadas);
+      await this.syncService.incrementarRevision();
+    } catch (err) {
+      console.warn('Error al reactivar préstamos liquidados en Firestore:', err);
     }
   }
 }

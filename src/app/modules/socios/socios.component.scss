@@ -882,3 +882,209 @@
 .text-xs { font-size: 0.75rem; }
 .mt-4 { margin-top: 1rem; }
 .mb-2 { margin-bottom: 0.5rem; }
+
+/* Sección Sutil de Ajustes / Préstamos entre Socios */
+.section-ajustes-subtle {
+  border: 1px dashed #cbd5e1 !important;
+  background: #f8fafc !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  padding: 0 !important;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #94a3b8 !important;
+  }
+
+  .ajustes-subtle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1.1rem;
+    cursor: pointer;
+    user-select: none;
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #334155;
+
+      .icon-toggle {
+        color: #64748b;
+        font-size: 0.85rem;
+      }
+
+      .title {
+        color: #1e293b;
+      }
+
+      .badge-optional {
+        font-size: 0.72rem;
+        background: #f1f5f9;
+        color: #64748b;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+      }
+
+      .badge-active {
+        font-size: 0.75rem;
+        background: #ede9fe;
+        color: #6d28d9;
+        padding: 0.15rem 0.55rem;
+        border-radius: 12px;
+        font-weight: 700;
+        border: 1px solid #ddd6fe;
+      }
+    }
+
+    .btn-subtle-toggle {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.8rem;
+      color: #475569;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+        border-color: #94a3b8;
+      }
+    }
+  }
+
+  .ajustes-subtle-body {
+    padding: 0.5rem 1.1rem 1rem 1.1rem;
+    border-top: 1px solid #e2e8f0;
+
+    .subtle-hint {
+      margin: 0.4rem 0 0.8rem 0;
+      font-size: 0.82rem;
+      color: #64748b;
+      line-height: 1.45;
+    }
+
+    .ajuste-form-compact {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      background: #ffffff;
+      padding: 0.85rem;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 0.75rem;
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+
+        label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #475569;
+        }
+
+        select, input {
+          padding: 0.4rem 0.6rem;
+          font-size: 0.85rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          outline: none;
+          background: white;
+
+          &:focus {
+            border-color: #3b82f6;
+          }
+        }
+
+        &.monto-group {
+          width: 110px;
+        }
+
+        &.concepto-group {
+          flex: 1;
+          min-width: 160px;
+        }
+      }
+
+      .arrow-indicator {
+        padding-bottom: 0.45rem;
+        color: #94a3b8;
+        font-size: 0.95rem;
+      }
+    }
+
+    .ajustes-list-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+
+      .ajuste-card-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 0.45rem 0.8rem;
+        font-size: 0.85rem;
+
+        .chip-transfer {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+
+          .chip-deudor {
+            color: #dc2626;
+            font-weight: 500;
+          }
+
+          .chip-arrow {
+            color: #94a3b8;
+            font-size: 0.85rem;
+          }
+
+          .chip-acreedor {
+            color: #16a34a;
+            font-weight: 500;
+          }
+        }
+
+        .chip-concepto {
+          color: #64748b;
+          font-style: italic;
+          font-size: 0.8rem;
+        }
+
+        .btn-del-chip {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          font-weight: 700;
+          padding: 0.2rem 0.45rem;
+          border-radius: 4px;
+          font-size: 0.9rem;
+          line-height: 1;
+
+          &:hover {
+            background: #fee2e2;
+            color: #dc2626;
+          }
+        }
+      }
+    }
+  }
+}
+

@@ -406,6 +406,20 @@ export interface SocioConfig {
   recibeResguardosDefault?: boolean;
 }
 
+export interface AjusteEntreSocios {
+  id: string;
+  socioAcreedorId: string; // Quien prestó o recibe (+)
+  socioAcreedorNombre: string;
+  socioDeudorId: string;   // Quien debe o se le descuenta (-)
+  socioDeudorNombre: string;
+  monto: number;
+  concepto: string;
+  fecha?: string;
+  liquidado?: boolean;
+  liquidacionFolio?: string;
+  usuarioRegistro?: string;
+}
+
 export interface DetalleLiquidacionSocio {
   socioId: string;
   nombre: string;
@@ -416,6 +430,7 @@ export interface DetalleLiquidacionSocio {
   transferenciasRecibidas?: number;
   tarjetasRecibidas?: number;
   resguardosRecibidos?: number;
+  ajusteDirecto?: number;
   montoNetoACobrar: number;
 }
 
@@ -447,6 +462,7 @@ export interface LiquidacionSocios {
   utilidadBaseReparto: number;
   socios: DetalleLiquidacionSocio[];
   gastosBolsilloDetalle: GastoBolsilloItem[];
+  ajustesEntreSocios?: AjusteEntreSocios[];
   observaciones?: string;
   usuarioRegistro?: string;
   sucursalId?: string;

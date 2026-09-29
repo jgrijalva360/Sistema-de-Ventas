@@ -212,9 +212,9 @@
               <td class="text-danger font-bold">{{ g.monto | currencyMxn }}</td>
               <td>{{ g.persona || 'No especificado' }}</td>
               <td>
-                <select [ngModel]="asignacionesGastos()[g.id] || 'EMPRESA'"
+                <select [ngModel]="obtenerSocioAsignadoGasto(g)"
                   (ngModelChange)="onCambiarAsignacionGasto(g.id, $event)" class="select-socio"
-                  [class.socio-selected]="asignacionesGastos()[g.id] && asignacionesGastos()[g.id] !== 'EMPRESA'">
+                  [class.socio-selected]="obtenerSocioAsignadoGasto(g) !== 'EMPRESA'">
                   <option value="EMPRESA">🏢 Empresa / Caja General</option>
                   @for (s of sociosService.sociosActivos(); track s.id) {
                   <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
@@ -318,7 +318,7 @@
               <td class="text-right font-bold text-blue">{{ (v.pagos.transferencia || 0) | currencyMxn }}</td>
               <td>
                 <select
-                  [ngModel]="asignacionesTransferencias()[v.id] || v.socioTransferenciaId || (sociosService.socioTransferenciasDefault()?.id || '')"
+                  [ngModel]="obtenerSocioTransferencia(v)"
                   (ngModelChange)="onCambiarAsignacionTransferencia(v.id, $event)" class="select-socio socio-selected"
                   style="border-color: #93c5fd; background-color: #f0f9ff; color: #0369a1;">
                   @for (s of sociosService.sociosActivos(); track s.id) {
@@ -382,7 +382,7 @@
               <td class="text-right font-bold" style="color: #9333ea;">{{ (v.pagos.tarjeta || 0) | currencyMxn }}</td>
               <td>
                 <select
-                  [ngModel]="asignacionesTarjetas()[v.id] || v.socioTarjetaId || (sociosService.socioTarjetasDefault()?.id || '')"
+                  [ngModel]="obtenerSocioTarjeta(v)"
                   (ngModelChange)="onCambiarAsignacionTarjeta(v.id, $event)" class="select-socio socio-selected"
                   style="border-color: #e879f9; background-color: #fdf4ff; color: #701a75;">
                   @for (s of sociosService.sociosActivos(); track s.id) {
@@ -441,7 +441,7 @@
               <td class="text-right font-bold" style="color: #b45309;">{{ (c.retiros || 0) | currencyMxn }}</td>
               <td>
                 <select
-                  [ngModel]="asignacionesResguardos()[c.id] || c.socioRetiroId || (sociosService.socioResguardosDefault()?.id || '')"
+                  [ngModel]="obtenerSocioResguardo(c)"
                   (ngModelChange)="onCambiarAsignacionResguardo(c.id, $event)" class="select-socio socio-selected"
                   style="border-color: #f59e0b; background-color: #fffbeb; color: #92400e;">
                   @for (s of sociosService.sociosActivos(); track s.id) {
@@ -461,6 +461,95 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Sección Sutil de Préstamos / Ajustes Directos entre Socios (Opcional) -->
+    <div class="panel-section section-ajustes-subtle" style="margin-top: 24px;">
+      <div class="ajustes-subtle-header" (click)="mostrarFormAjuste.set(!mostrarFormAjuste())">
+        <div class="header-info">
+          <span class="icon-toggle">{{ mostrarFormAjuste() ? '▾' : '▸' }}</span>
+          <span class="title">🔄 Préstamos o Compensaciones Directas entre Socios</span>
+          <span class="badge-optional">Opcional</span>
+          @if (hayAjustesEntreSocios()) {
+          <span class="badge-active">{{ ajustesEntreSocios().length }} ajuste{{ ajustesEntreSocios().length > 1 ? 's' : '' }} aplicado{{ ajustesEntreSocios().length > 1 ? 's' : '' }}</span>
+          }
+        </div>
+        <button type="button" class="btn-subtle-toggle">
+          {{ mostrarFormAjuste() ? 'Ocultar' : (hayAjustesEntreSocios() ? 'Ver / Modificar' : '+ Registrar Ajuste') }}
+        </button>
+      </div>
+
+      @if (mostrarFormAjuste()) {
+      <div class="ajustes-subtle-body">
+        <p class="subtle-hint">
+          💡 Permite registrar préstamos personales entre socios que se guardan en la nube (Firestore). Se descuenta de la liquidación del socio deudor y se le acredita íntegramente al acreedor sin alterar la ganancia de la empresa ni el efectivo de caja.
+        </p>
+
+        <!-- Mini Formulario de Ajuste -->
+        <div class="ajuste-form-compact">
+          <div class="form-group">
+            <label>A quién se le descuenta (Deudor):</label>
+            <select [ngModel]="nuevoAjusteDeudorId()" (ngModelChange)="nuevoAjusteDeudorId.set($event)">
+              <option value="">-- Seleccionar socio --</option>
+              @for (s of sociosService.sociosActivos(); track s.id) {
+              <option [value]="s.id">👤 {{ s.nombre }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="arrow-indicator">➡️</div>
+
+          <div class="form-group">
+            <label>A quién se le suma (Acreedor):</label>
+            <select [ngModel]="nuevoAjusteAcreedorId()" (ngModelChange)="nuevoAjusteAcreedorId.set($event)">
+              <option value="">-- Seleccionar socio --</option>
+              @for (s of sociosService.sociosActivos(); track s.id) {
+              <option [value]="s.id">👤 {{ s.nombre }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-group monto-group">
+            <label>Monto ($):</label>
+            <input type="number" placeholder="0.00" min="1" step="0.50"
+              [ngModel]="nuevoAjusteMonto()" (ngModelChange)="nuevoAjusteMonto.set($event)" />
+          </div>
+
+          <div class="form-group concepto-group">
+            <label>Motivo / Concepto:</label>
+            <input type="text" placeholder="Ej: Préstamo personal"
+              [ngModel]="nuevoAjusteConcepto()" (ngModelChange)="nuevoAjusteConcepto.set($event)" />
+          </div>
+
+          <button type="button" class="btn btn-secondary btn-sm" (click)="agregarAjusteEntreSocios()"
+            [disabled]="!nuevoAjusteDeudorId() || !nuevoAjusteAcreedorId() || nuevoAjusteDeudorId() === nuevoAjusteAcreedorId() || !nuevoAjusteMonto() || nuevoAjusteMonto()! <= 0">
+            💾 Guardar Préstamo
+          </button>
+        </div>
+
+        <!-- Lista de Ajustes Registrados -->
+        @if (ajustesEntreSocios().length > 0) {
+        <div class="ajustes-list-compact">
+          @for (aj of ajustesEntreSocios(); track aj.id) {
+          <div class="ajuste-card-chip">
+            <div class="chip-transfer">
+              <span class="chip-deudor">👤 {{ aj.socioDeudorNombre }} <strong>(-{{ aj.monto | currencyMxn }})</strong></span>
+              <span class="chip-arrow">➔</span>
+              <span class="chip-acreedor">👤 {{ aj.socioAcreedorNombre }} <strong>(+{{ aj.monto | currencyMxn }})</strong></span>
+            </div>
+            @if (aj.concepto) {
+            <span class="chip-concepto">"{{ aj.concepto }}"</span>
+            }
+            @if (aj.fecha) {
+            <small class="text-muted" style="font-size: 0.72rem;">({{ aj.fecha | fechaLocal }})</small>
+            }
+            <button type="button" class="btn-del-chip" (click)="eliminarAjusteEntreSocios(aj.id)" title="Eliminar este préstamo de Firestore">✕</button>
+          </div>
+          }
+        </div>
+        }
+      </div>
+      }
     </div>
 
     <!-- Sección de Liquidación y Reparto a Socios -->
@@ -538,6 +627,13 @@
             </div>
             }
 
+            @if (s.ajusteDirecto && s.ajusteDirecto !== 0) {
+            <div class="sb-row font-medium" [class.text-success]="s.ajusteDirecto > 0" [class.text-danger]="s.ajusteDirecto < 0">
+              <span>{{ s.ajusteDirecto > 0 ? '(+) Préstamo / Ajuste a favor:' : '(-) Préstamo / Ajuste a cargo:' }}</span>
+              <strong>{{ s.ajusteDirecto > 0 ? '+' : '' }}{{ s.ajusteDirecto | currencyMxn }}</strong>
+            </div>
+            }
+
             <div class="sb-row text-muted text-xs">
               <span>Cuota de gastos compartida ({{ s.porcentaje }}%):</span>
               <span>-{{ s.cuotaGastosBolsillo | currencyMxn }}</span>
@@ -568,6 +664,9 @@
               <th class="text-right">Transf. Recibidas (-)</th>
               <th class="text-right">Tarjetas Recibidas (-)</th>
               <th class="text-right">Dinero Resguardado (-)</th>
+              @if (hayAjustesEntreSocios()) {
+              <th class="text-right">Ajuste Directo (±)</th>
+              }
               <th class="text-right">Total a Liquidar en Caja</th>
             </tr>
           </thead>
@@ -583,6 +682,11 @@
               </td>
               <td class="text-right font-bold" style="color: #b45309;">-{{ (s.resguardosRecibidos || 0) | currencyMxn }}
               </td>
+              @if (hayAjustesEntreSocios()) {
+              <td class="text-right font-bold" [class.text-success]="(s.ajusteDirecto || 0) > 0" [class.text-danger]="(s.ajusteDirecto || 0) < 0">
+                {{ (s.ajusteDirecto || 0) > 0 ? '+' : '' }}{{ (s.ajusteDirecto || 0) | currencyMxn }}
+              </td>
+              }
               <td class="text-right font-extrabold text-emerald font-lg">{{ s.montoNetoACobrar | currencyMxn }}</td>
             </tr>
             }
@@ -597,6 +701,9 @@
                   }}</strong></td>
               <td class="text-right font-bold" style="color: #b45309;"><strong>-{{ totalResguardosPeriodo() |
                   currencyMxn }}</strong></td>
+              @if (hayAjustesEntreSocios()) {
+              <td class="text-right text-muted"><strong>$0.00</strong></td>
+              }
               <td class="text-right text-emerald font-extrabold font-xl"><strong>{{ totalNetoRepartido() | currencyMxn
                   }}</strong></td>
             </tr>
@@ -920,6 +1027,9 @@
               <th class="text-right">Transf. Recibidas (-)</th>
               <th class="text-right">Tarjetas Recibidas (-)</th>
               <th class="text-right">Resguardo Caja (-)</th>
+              @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+              <th class="text-right">Ajuste Directo (±)</th>
+              }
               <th class="text-right">Monto Neto Pagado</th>
             </tr>
           </thead>
@@ -935,11 +1045,34 @@
                 currencyMxn }}</td>
               <td class="text-right" style="color: #b45309; font-weight: 600;">-{{ (s.resguardosRecibidos || 0) |
                 currencyMxn }}</td>
+              @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+              <td class="text-right font-bold" [class.text-success]="(s.ajusteDirecto || 0) > 0" [class.text-danger]="(s.ajusteDirecto || 0) < 0">
+                {{ (s.ajusteDirecto || 0) > 0 ? '+' : '' }}{{ (s.ajusteDirecto || 0) | currencyMxn }}
+              </td>
+              }
               <td class="text-right font-bold text-emerald">{{ s.montoNetoACobrar | currencyMxn }}</td>
             </tr>
             }
           </tbody>
         </table>
+
+        @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+        <h4 class="mt-4 mb-2">Préstamos o Compensaciones Directas entre Socios</h4>
+        <div class="ajustes-list-compact" style="margin-bottom: 1rem;">
+          @for (aj of liq.ajustesEntreSocios; track aj.id) {
+          <div class="ajuste-card-chip">
+            <div class="chip-transfer">
+              <span class="chip-deudor">👤 {{ aj.socioDeudorNombre }} <strong>(-{{ aj.monto | currencyMxn }})</strong></span>
+              <span class="chip-arrow">➔</span>
+              <span class="chip-acreedor">👤 {{ aj.socioAcreedorNombre }} <strong>(+{{ aj.monto | currencyMxn }})</strong></span>
+            </div>
+            @if (aj.concepto) {
+            <span class="chip-concepto">"{{ aj.concepto }}"</span>
+            }
+          </div>
+          }
+        </div>
+        }
 
         @if (liq.gastosBolsilloDetalle && liq.gastosBolsilloDetalle.length > 0) {
         <h4 class="mt-4 mb-2">Detalle de Gastos de Bolsillo Reembolsados</h4>
