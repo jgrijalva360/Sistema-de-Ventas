@@ -639,8 +639,7 @@
           <span>📱</span> Copiar Resumen para WhatsApp
         </button>
         <button class="btn btn-primary btn-lg" (click)="onGuardarLiquidacion()" [disabled]="guardandoLiquidacion()">
-          <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando en Firestore...' : 'Guardar y Cerrar Liquidación en
-          Firestore' }}
+          <span>💾</span> {{ guardandoLiquidacion() ? 'Guardando...' : 'Guardar y Cerrar Liquidación' }}
         </button>
       </div>
 
@@ -666,7 +665,7 @@
       <div class="empty-state">
         <div class="empty-icon">📂</div>
         <h3>No hay liquidaciones guardadas todavía</h3>
-        <p>Cuando realices un reparto en la calculadora, haz clic en "Guardar Liquidación en Firestore" para archivarlo
+        <p>Cuando realices un reparto en la calculadora, haz clic en "Guardar Liquidación" para archivarlo
           aquí.</p>
         <button class="btn btn-primary" (click)="tabActiva.set('CALCULADORA')">Ir a la Calculadora</button>
       </div>

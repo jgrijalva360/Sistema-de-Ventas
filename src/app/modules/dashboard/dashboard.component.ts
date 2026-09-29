@@ -8,7 +8,8 @@ import { ProductosService } from '../../core/services/productos.service';
 import { CortesService } from '../../core/services/cortes.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { PedidosService } from '../../core/services/pedidos.service';
-import { PedidoPersonalizado } from '../../core/models/models';
+import { SociosService } from '../../core/services/socios.service';
+import { PedidoPersonalizado, Gasto } from '../../core/models/models';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 
 @Component({
@@ -25,6 +26,7 @@ export class DashboardComponent {
   public cortesService = inject(CortesService);
   public sucursalesService = inject(SucursalesService);
   public pedidosService = inject(PedidosService);
+  public sociosService = inject(SociosService);
 
   public mostrarValores = signal<boolean>(true);
 
@@ -69,6 +71,25 @@ export class DashboardComponent {
       this.fechaDesde.set('2020-01-01');
       this.fechaHasta.set(hoy);
     }
+  }
+
+  public esGastoDeSocio(g: Gasto): boolean {
+    if (g.socioId && g.socioId !== 'CAJA' && g.socioId !== 'EMPRESA') {
+      return true;
+    }
+    const met = (g.metodoPago || '').toUpperCase();
+    if (met === 'BOLSILLO_SOCIO') {
+      return true;
+    }
+    const persona = (g.persona || '').trim().toLowerCase();
+    if (persona && !persona.includes('caja') && !persona.includes('empresa') && persona !== 'local' && persona !== '-') {
+      const socios = this.sociosService.sociosActivos();
+      const esSocio = socios.some(
+        (s) => s.id === g.socioId || s.nombre.trim().toLowerCase() === persona || persona.includes(s.nombre.trim().toLowerCase())
+      );
+      if (esSocio) return true;
+    }
+    return false;
   }
 
   public resumenVentasCaja = computed(() => {
@@ -117,17 +138,23 @@ export class DashboardComponent {
     const totalIngresos = totalVentas;
     const totalEfectivoRecibido = pagosVentasEfectivo;
 
-    // 2. Gastos
+    // 2. Gastos (Los egresos pagados por socios NO afectan las salidas ni la caja del negocio)
     let totalGastosEfectivo = 0;
     let totalGastosTarjeta = 0;
     let totalGastosTransferencia = 0;
+    let totalGastosSocios = 0;
 
     gastos.forEach((g) => {
+      const monto = Number(g.monto) || 0;
+      if (this.esGastoDeSocio(g)) {
+        totalGastosSocios += monto;
+        return; // Excluido del flujo de egresos y caja del negocio
+      }
+
       const met = (g.metodoPago || '').toUpperCase();
-      const monto = g.monto || 0;
       if (met === 'TARJETA') {
         totalGastosTarjeta += monto;
-      } else if (met === 'TRANSFERENCIA' || met === 'BOLSILLO_SOCIO') {
+      } else if (met === 'TRANSFERENCIA') {
         totalGastosTransferencia += monto;
       } else {
         totalGastosEfectivo += monto;
@@ -154,10 +181,11 @@ export class DashboardComponent {
 
       const gastosEfecTurno = gastos
         .filter((g) => {
+          if (this.esGastoDeSocio(g)) return false;
           const met = (g.metodoPago || '').toUpperCase();
           return new Date(g.fecha).getTime() >= fechaInicio && met !== 'TARJETA' && met !== 'TRANSFERENCIA';
         })
-        .reduce((acc, g) => acc + (g.monto || 0), 0);
+        .reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
 
       const cajaInicial = corteActivo.cajaInicial || 0;
       dineroEnCaja = cajaInicial + pagosEfecTurno - gastosEfecTurno;
@@ -187,10 +215,11 @@ export class DashboardComponent {
 
       const gastosEfecDesde = gastos
         .filter((g) => {
+          if (this.esGastoDeSocio(g)) return false;
           const met = (g.metodoPago || '').toUpperCase();
           return new Date(g.fecha).getTime() >= fechaInicioTime && met !== 'TARJETA' && met !== 'TRANSFERENCIA';
         })
-        .reduce((acc, g) => acc + (g.monto || 0), 0);
+        .reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
 
       dineroEnCaja = baseCash + pagosEfecDesde - gastosEfecDesde;
     }
@@ -204,7 +233,11 @@ export class DashboardComponent {
       totalVentas,
       cantidadVentas,
       totalGastos,
+      totalGastosNegocio: totalGastos,
+      totalGastosSocios,
       totalGastosEfectivo,
+      totalGastosTarjeta,
+      totalGastosTransferencia,
       totalRetiros,
       pagosEfectivo: totalEfectivoRecibido,
       pagosTarjeta: pagosVentasTarjeta,

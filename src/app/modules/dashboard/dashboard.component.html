@@ -130,7 +130,14 @@
         <strong class="kpi-val">
           {{ mostrarValores() ? (resumenVentasCaja().totalGastos | currencyMxn) : '••••••' }}
         </strong>
-        <span class="kpi-sub">Total Gastos Operativos</span>
+        <span class="kpi-sub">
+          Gastos del Negocio
+          @if (resumenVentasCaja().totalGastosSocios > 0) {
+            <span style="display: block; font-size: 0.73rem; color: #64748b; font-weight: normal; margin-top: 2px;">
+              Excluye {{ mostrarValores() ? (resumenVentasCaja().totalGastosSocios | currencyMxn) : '••••••' }} pagados por socios
+            </span>
+          }
+        </span>
       </div>
     </div>
 

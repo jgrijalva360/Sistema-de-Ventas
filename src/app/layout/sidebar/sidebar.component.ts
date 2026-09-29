@@ -1,5 +1,5 @@
 import { Component, input, output, inject, signal, computed } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { SyncService } from '../../core/services/sync.service';
@@ -126,22 +126,40 @@ import { doc, setDoc } from 'firebase/firestore';
           }
 
           @if (authService.esAdmin()) {
-            <a routerLink="/socios" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-              <span class="nav-icon">🤝</span>
-              <span>Reparto Socios</span>
-            </a>
-            <!-- <a routerLink="/administracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-              <span class="nav-icon">👥</span>
-              <span>Colaboradores</span>
-            </a> -->
-            <a routerLink="/bitacora" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-              <span class="nav-icon">📜</span>
-              <span>Bitácora</span>
-            </a>
-            <a routerLink="/configuracion" routerLinkActive="active" (click)="closeNav()" class="nav-item">
-              <span class="nav-icon">⚙️</span>
-              <span>Configuración</span>
-            </a>
+            <div class="nav-dropdown-group">
+              <button
+                type="button"
+                class="nav-item nav-dropdown-btn"
+                [class.has-active]="esRutaAdminActiva()"
+                (click)="alternarMenuAdmin()"
+                title="Administración y Configuración del Sistema"
+              >
+                <span class="nav-icon">⚙️</span>
+                <span class="dropdown-label">Ajustes & Gestión</span>
+                <span class="dropdown-arrow" [class.rotated]="menuAdminDesplegado()">▼</span>
+              </button>
+
+              @if (menuAdminDesplegado()) {
+                <div class="nav-dropdown-menu">
+                  <a routerLink="/socios" routerLinkActive="active" (click)="closeNav()" class="nav-item nav-sub">
+                    <span class="nav-icon">🤝</span>
+                    <span>Socios</span>
+                  </a>
+                  <a routerLink="/administracion" routerLinkActive="active" (click)="closeNav()" class="nav-item nav-sub">
+                    <span class="nav-icon">👥</span>
+                    <span>Colaboradores</span>
+                  </a>
+                  <a routerLink="/bitacora" routerLinkActive="active" (click)="closeNav()" class="nav-item nav-sub">
+                    <span class="nav-icon">📜</span>
+                    <span>Bitácora</span>
+                  </a>
+                  <a routerLink="/configuracion" routerLinkActive="active" (click)="closeNav()" class="nav-item nav-sub">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Configuración</span>
+                  </a>
+                </div>
+              }
+            </div>
           }
         }
       </nav>
@@ -632,6 +650,68 @@ import { doc, setDoc } from 'firebase/firestore';
 
       .nav-icon {
         font-size: 1.15rem;
+      }
+    }
+
+    .nav-dropdown-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 2px;
+
+      .nav-dropdown-btn {
+        width: 100%;
+        background: transparent;
+        border: 1px solid transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        text-align: left;
+        font-family: inherit;
+
+        .dropdown-label {
+          flex: 1;
+        }
+
+        .dropdown-arrow {
+          font-size: 0.65rem;
+          color: #64748b;
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+          display: inline-block;
+
+          &.rotated {
+            transform: rotate(180deg);
+            color: #38bdf8;
+          }
+        }
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.06);
+          color: #f8fafc;
+        }
+
+        &.has-active {
+          color: #f8fafc;
+          background: rgba(2, 132, 199, 0.15);
+          border-color: rgba(2, 132, 199, 0.3);
+        }
+      }
+
+      .nav-dropdown-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding-left: 4px;
+        border-left: 2px solid rgba(56, 189, 248, 0.25);
+        margin-left: 18px;
+        margin-top: 2px;
+        margin-bottom: 4px;
+        animation: fadeIn 0.2s ease;
+
+        .nav-item.nav-sub {
+          padding: 8px 12px;
+          font-size: 0.84rem;
+        }
       }
     }
 
@@ -1551,6 +1631,30 @@ export class SidebarComponent {
   public suscripcionService = inject(SuscripcionService);
   public soporteService = inject(SoporteService);
   private fb = inject(FirebaseService);
+  private router = inject(Router);
+
+  // Menú Desplegable de Ajustes & Gestión
+  public menuAdminDesplegado = signal<boolean>(false);
+  public esRutaAdminActiva = computed(() => {
+    const url = this.router.url;
+    return (
+      url.startsWith('/socios') ||
+      url.startsWith('/administracion') ||
+      url.startsWith('/bitacora') ||
+      url.startsWith('/configuracion')
+    );
+  });
+
+  constructor() {
+    // Si la ruta actual al inicializar es una de las opciones de administración, abrir desplegable
+    if (this.esRutaAdminActiva()) {
+      this.menuAdminDesplegado.set(true);
+    }
+  }
+
+  alternarMenuAdmin(): void {
+    this.menuAdminDesplegado.update((v) => !v);
+  }
 
   // Estado del Modal de Soporte
   public modalSoporteAbierto = signal<boolean>(false);
