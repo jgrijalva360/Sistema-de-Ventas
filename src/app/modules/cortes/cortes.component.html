@@ -54,24 +54,50 @@
           <div><span>Apertura:</span> <strong>{{ cortesService.corteActivo()?.fechaApertura | fechaLocal }}</strong></div>
           <div><span>Caja Inicial:</span> <strong>{{ cortesService.corteActivo()?.cajaInicial | currencyMxn }}</strong></div>
         </div>
-        <button type="button" class="btn btn-warning btn-sm" (click)="abrirModalResguardo()"
-          style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
-          🛡️ Resguardar Efectivo en Turno
-        </button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-warning btn-sm" (click)="abrirModalResguardo('RETIRO')"
+            style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+            🛡️ Resguardar Efectivo
+          </button>
+          <button type="button" class="btn btn-sm" (click)="abrirModalResguardo('DEVOLUCION')"
+            style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; background: #059669; border-color: #059669; color: white;">
+            📥 Devolver Efectivo a Caja
+          </button>
+        </div>
       </div>
 
-      <!-- Chips de Resguardos Registrados en Turno -->
+      <!-- Chips de Movimientos con Socios Registrados en Turno -->
       @if ((cortesService.corteActivo()?.resguardos || []).length > 0) {
       <div style="margin: 14px 0 6px 0; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
           <strong style="color: #92400e; font-size: 0.88rem;">
-            🛡️ Dinero en Custodia / Resguardo de Socios en este turno (Total: {{ totalResguardosTurnoActivo() | currencyMxn }}):
+            🤝 Movimientos de Efectivo con Socios en este turno:
           </strong>
+          <div style="font-size: 0.82rem; font-weight: 700; display: flex; gap: 12px;">
+            @if (totalResguardosTurnoActivo() > 0) {
+              <span style="color: #b45309;">Retirado: -{{ totalResguardosTurnoActivo() | currencyMxn }}</span>
+            }
+            @if (totalDevolucionesTurnoActivo() > 0) {
+              <span style="color: #059669;">Devuelto a Caja: +{{ totalDevolucionesTurnoActivo() | currencyMxn }}</span>
+            }
+          </div>
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
           @for (r of cortesService.corteActivo()?.resguardos; track r.id) {
+          @if (r.tipo === 'DEVOLUCION') {
+          <span style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <span style="color: #047857; font-weight: 800;">+{{ r.monto | currencyMxn }}</span>
+            <span>devuelto a caja por <strong>{{ r.socioNombre }}</strong></span>
+            @if (r.concepto) {
+            <span style="color: #64748b; font-size: 0.78rem;">({{ r.concepto }})</span>
+            }
+            <button type="button" (click)="onEliminarResguardoTurno(r.id)"
+              style="border: none; background: transparent; cursor: pointer; color: #dc2626; font-size: 0.9rem; padding: 0 2px;"
+              title="Eliminar este ingreso">✕</button>
+          </span>
+          } @else {
           <span style="background: white; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            <span style="color: #b45309; font-weight: 800;">{{ r.monto | currencyMxn }}</span>
+            <span style="color: #b45309; font-weight: 800;">-{{ r.monto | currencyMxn }}</span>
             <span>en custodia de <strong>{{ r.socioNombre }}</strong></span>
             @if (r.concepto) {
             <span style="color: #64748b; font-size: 0.78rem;">({{ r.concepto }})</span>
@@ -80,6 +106,7 @@
               style="border: none; background: transparent; cursor: pointer; color: #dc2626; font-size: 0.9rem; padding: 0 2px;"
               title="Eliminar este resguardo">✕</button>
           </span>
+          }
           }
         </div>
       </div>
@@ -274,32 +301,57 @@
     </div>
   </div>
 
-  <!-- Modal para Resguardo de Efectivo en Turno Activo -->
+  <!-- Modal para Movimientos de Efectivo con Socios (Resguardo / Devolución) en Turno Activo -->
   @if (mostrarModalResguardo()) {
   <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;"
     (click)="cerrarModalResguardo()">
-    <div style="background: white; border-radius: 12px; max-width: 480px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); overflow: hidden;"
+    <div style="background: white; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); overflow: hidden;"
       (click)="$event.stopPropagation()">
-      <div style="padding: 16px 20px; background: #0f172a; color: white; display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">🛡️ Resguardar Efectivo de Caja</h3>
+      <div style="padding: 14px 20px; background: #0f172a; color: white; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+        <div style="display: flex; gap: 8px;">
+          <button type="button" (click)="tipoMovimientoResguardo.set('RETIRO')"
+            [style.background]="tipoMovimientoResguardo() === 'RETIRO' ? '#f59e0b' : 'transparent'"
+            [style.color]="tipoMovimientoResguardo() === 'RETIRO' ? '#0f172a' : '#cbd5e1'"
+            style="border: 1px solid #f59e0b; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
+            🛡️ Retiro / Resguardo
+          </button>
+          <button type="button" (click)="tipoMovimientoResguardo.set('DEVOLUCION')"
+            [style.background]="tipoMovimientoResguardo() === 'DEVOLUCION' ? '#10b981' : 'transparent'"
+            [style.color]="tipoMovimientoResguardo() === 'DEVOLUCION' ? '#ffffff' : '#cbd5e1'"
+            style="border: 1px solid #10b981; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
+            📥 Devolución a Caja
+          </button>
+        </div>
         <button type="button" (click)="cerrarModalResguardo()"
           style="background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;">✕</button>
       </div>
+
       <div style="padding: 20px;">
-        <p style="margin: 0 0 16px 0; font-size: 0.88rem; color: #64748b;">
-          Registra el retiro de efectivo de la gaveta hacia la custodia de un socio. Este dinero se descontará automáticamente de la caja física y se deducirá al socio en su próxima liquidación.
-        </p>
+        @if (tipoMovimientoResguardo() === 'DEVOLUCION') {
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;">
+          <p style="margin: 0; font-size: 0.85rem; color: #065f46; line-height: 1.4;">
+            📥 <strong>Reintegro de Efectivo:</strong> Registra dinero que el socio regresa físicamente a la gaveta de caja. Aumenta el efectivo en caja y disminuye el adeudo del socio en su liquidación.
+          </p>
+        </div>
+        } @else {
+        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;">
+          <p style="margin: 0; font-size: 0.85rem; color: #92400e; line-height: 1.4;">
+            🛡️ <strong>Retiro para Resguardo:</strong> Registra dinero que un socio retira de la gaveta para su custodia. Se descuenta de la caja física y se deducirá al socio en su liquidación.
+          </p>
+        </div>
+        }
+
         <div style="display: flex; flex-direction: column; gap: 14px;">
           <div>
             <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
-              Monto a Resguardar ($) *
+              {{ tipoMovimientoResguardo() === 'DEVOLUCION' ? 'Monto a Regresar a Caja ($) *' : 'Monto a Resguardar ($) *' }}
             </label>
             <input type="number" min="0.01" step="0.50" [ngModel]="montoResguardo()" (ngModelChange)="montoResguardo.set($event)"
               placeholder="0.00" style="width: 100%; padding: 10px; font-size: 1.1rem; font-weight: 800; border-radius: 6px; border: 1px solid #cbd5e1;" />
           </div>
           <div>
             <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">
-              ¿Qué socio toma en custodia el dinero? *
+              {{ tipoMovimientoResguardo() === 'DEVOLUCION' ? '¿Qué socio regresa / reintegra el dinero? *' : '¿Qué socio toma en custodia el dinero? *' }}
             </label>
             <select [ngModel]="socioResguardoId()" (ngModelChange)="socioResguardoId.set($event)"
               style="width: 100%; padding: 10px; font-size: 0.92rem; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
@@ -313,16 +365,26 @@
               Concepto / Motivo
             </label>
             <input type="text" [ngModel]="conceptoResguardo()" (ngModelChange)="conceptoResguardo.set($event)"
-              placeholder="Ej: Retiro parcial para resguardo" style="width: 100%; padding: 10px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1;" />
+              [placeholder]="tipoMovimientoResguardo() === 'DEVOLUCION' ? 'Ej: Reintegro de resguardo / abono a liquidación' : 'Ej: Retiro parcial para resguardo'"
+              style="width: 100%; padding: 10px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1;" />
           </div>
         </div>
       </div>
+
       <div style="padding: 14px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
         <button type="button" class="btn btn-secondary" (click)="cerrarModalResguardo()">Cancelar</button>
+        @if (tipoMovimientoResguardo() === 'DEVOLUCION') {
+        <button type="button" class="btn btn-sm" (click)="onGuardarResguardoTurno()"
+          [disabled]="!montoResguardo() || (montoResguardo() || 0) <= 0"
+          style="font-weight: 700; background: #059669; border-color: #059669; color: white; padding: 10px 18px;">
+          📥 Confirmar Devolución a Caja
+        </button>
+        } @else {
         <button type="button" class="btn btn-warning" (click)="onGuardarResguardoTurno()"
-          [disabled]="!montoResguardo() || (montoResguardo() || 0) <= 0" style="font-weight: 700;">
+          [disabled]="!montoResguardo() || (montoResguardo() || 0) <= 0" style="font-weight: 700; padding: 10px 18px;">
           🛡️ Confirmar Resguardo
         </button>
+        }
       </div>
     </div>
   </div>

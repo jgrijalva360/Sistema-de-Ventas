@@ -288,24 +288,27 @@ export class CortesService {
     return nuevoCorte;
   }
 
-  // ── Resguardo de Efectivo en Turno Activo ────────────────────
+  // ── Movimientos con Socios (Resguardo / Devolución) en Turno Activo ────────────────────
   async registrarResguardoTurnoActivo(
     monto: number,
     socioId: string,
     socioNombre: string,
-    concepto = 'Resguardo de efectivo de caja'
+    concepto = 'Resguardo de efectivo de caja',
+    tipo: 'RETIRO' | 'DEVOLUCION' = 'RETIRO'
   ): Promise<ResguardoCajaItem> {
     const activo = this.corteActivoSignal();
     if (!activo) throw new Error('No hay turno abierto.');
 
+    const prefijo = tipo === 'DEVOLUCION' ? 'DEV' : 'RESG';
     const nuevoItem: ResguardoCajaItem = {
-      id: `RESG-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `${prefijo}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       fecha: new Date().toISOString(),
       monto,
       socioId,
       socioNombre,
       concepto,
-      usuario: activo.usuario
+      usuario: activo.usuario,
+      tipo
     };
 
     const actualizados = [...(activo.resguardos || []), nuevoItem];
@@ -317,22 +320,26 @@ export class CortesService {
     this.corteActivoSignal.set(corteActualizado);
 
     try {
-      this.syncService.setStatus('saving', 'Registrando resguardo...');
+      this.syncService.setStatus('saving', tipo === 'DEVOLUCION' ? 'Registrando devolución a caja...' : 'Registrando resguardo...');
       const ref = this.firestoreService.getRefDocConfig('corteActivo');
       await setDoc(ref, corteActualizado);
       await this.syncService.incrementarRevision();
       this.syncService.setStatus('online', 'En Línea');
 
+      const accionDesc = tipo === 'DEVOLUCION'
+        ? `Devolución / Reintegro de efectivo por $${monto.toFixed(2)} ingresado a caja por socio ${socioNombre} en turno #${activo.id}`
+        : `Resguardo de efectivo por $${monto.toFixed(2)} entregado a socio ${socioNombre} en turno #${activo.id}`;
+
       await this.bitacoraService.registrarEvento({
         modulo: 'CORTES',
         accion: 'EDITAR',
-        descripcion: `Resguardo de efectivo por $${monto.toFixed(2)} entregado a socio ${socioNombre} en turno #${activo.id}`,
+        descripcion: accionDesc,
         detalles: nuevoItem,
         sucursalId: activo.sucursalId,
         sucursalNombre: activo.sucursalNombre
       });
     } catch (e) {
-      console.warn('Error al registrar resguardo en Firestore:', e);
+      console.warn('Error al registrar movimiento con socio en Firestore:', e);
     }
 
     return nuevoItem;

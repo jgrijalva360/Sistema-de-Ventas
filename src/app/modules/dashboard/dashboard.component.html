@@ -145,13 +145,34 @@
     <div class="kpi-card kpi-withdrawals">
       <div class="kpi-icon">📤</div>
       <div class="kpi-details">
-        <span class="kpi-title">Retiros</span>
+        <span class="kpi-title">Retiros de Caja</span>
         <strong class="kpi-val">
           {{ mostrarValores() ? (resumenVentasCaja().totalRetiros | currencyMxn) : '••••••' }}
         </strong>
-        <span class="kpi-sub">Retiros (Resguardo de Caja)</span>
+        <span class="kpi-sub">
+          Resguardo de Caja
+          @if (resumenVentasCaja().totalIngresosCaja > 0) {
+            <span style="display: block; font-size: 0.73rem; color: #047857; font-weight: 600; margin-top: 2px;">
+              Neto retirado: {{ mostrarValores() ? ((resumenVentasCaja().totalRetiros - resumenVentasCaja().totalIngresosCaja) | currencyMxn) : '••' }}
+            </span>
+          }
+        </span>
       </div>
     </div>
+
+    <!-- Ingresos a Caja (Devoluciones / Reintegros de Efectivo) -->
+    @if (resumenVentasCaja().totalIngresosCaja > 0) {
+    <div class="kpi-card kpi-inflow">
+      <div class="kpi-icon">📥</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Ingresos a Caja</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().totalIngresosCaja | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">Devoluciones / Reintegros</span>
+      </div>
+    </div>
+    }
 
     <!-- Efectivo Recibido -->
     <div class="kpi-card kpi-cash">
@@ -199,7 +220,13 @@
         <strong class="kpi-val">
           {{ mostrarValores() ? (resumenVentasCaja().cajaEsperada | currencyMxn) : '••••••' }}
         </strong>
-        <span class="kpi-sub">Efectivo – Gastos – Retiros</span>
+        <span class="kpi-sub">
+          @if (resumenVentasCaja().totalIngresosCaja > 0) {
+            Efectivo – Gastos – Retiros + Ingresos
+          } @else {
+            Efectivo – Gastos – Retiros
+          }
+        </span>
       </div>
     </div>
 

@@ -408,16 +408,25 @@
     <div class="panel-section" style="margin-top: 24px;">
       <div class="panel-header">
         <div>
-          <h4>🛡️ Dinero Resguardado de Caja del Periodo (Retiros en Custodia)</h4>
-          <p>El dinero en efectivo retirado de caja para su resguardo por un socio se deduce automáticamente de su
-            liquidación, ya que dicho dinero ya está en su poder.</p>
+          <h4>🛡️ Dinero de Caja Resguardado y Devoluciones</h4>
+          <p>Efectivo retirado de caja para resguardo (se deduce al socio) y efectivo que el socio ha devuelto/reintegrado a la caja física (abono a su favor).</p>
         </div>
-        <div class="gastos-summary-badge" style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a;">
-          Total Resguardado: <strong>{{ totalResguardosPeriodo() | currencyMxn }}</strong>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <div class="gastos-summary-badge" style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a;">
+            Retirado: <strong>{{ totalResguardosPeriodo() | currencyMxn }}</strong>
+          </div>
+          @if (totalDevolucionesPeriodo() > 0) {
+          <div class="gastos-summary-badge" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;">
+            Devuelto a Caja: <strong>+{{ totalDevolucionesPeriodo() | currencyMxn }}</strong>
+          </div>
+          <div class="gastos-summary-badge" style="background: #f8fafc; color: #334155; border: 1px solid #cbd5e1;">
+            Neto en Custodia: <strong>{{ (totalResguardosPeriodo() - totalDevolucionesPeriodo()) | currencyMxn }}</strong>
+          </div>
+          }
         </div>
       </div>
 
-      <!-- Tabla de Cortes con Retiro y su Asignación -->
+      <!-- Tabla de Cortes con Movimientos de Socios -->
       <div class="table-responsive">
         <table class="data-table">
           <thead>
@@ -425,36 +434,71 @@
               <th>Folio Corte</th>
               <th>Fecha Turno</th>
               <th>Sucursal / Cajero</th>
-              <th class="text-right">Monto Resguardado</th>
-              <th>¿Quién tiene en custodia este efectivo?</th>
+              <th>Tipo Movimiento</th>
+              <th class="text-right">Monto</th>
+              <th>Socio Involucrado</th>
             </tr>
           </thead>
           <tbody>
             @for (c of cortesConRetiros(); track c.id) {
-            <tr>
-              <td><strong>#{{ c.id }}</strong></td>
-              <td>{{ (c.fechaCierre || c.fechaApertura) | fechaLocal }}</td>
-              <td>
-                <span>🏢 {{ c.sucursalNombre }}</span>
-                <small class="text-muted" style="display: block;">Cajero: {{ c.usuario }}</small>
-              </td>
-              <td class="text-right font-bold" style="color: #b45309;">{{ (c.retiros || 0) | currencyMxn }}</td>
-              <td>
-                <select
-                  [ngModel]="obtenerSocioResguardo(c)"
-                  (ngModelChange)="onCambiarAsignacionResguardo(c.id, $event)" class="select-socio socio-selected"
-                  style="border-color: #f59e0b; background-color: #fffbeb; color: #92400e;">
-                  @for (s of sociosService.sociosActivos(); track s.id) {
-                  <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
-                  }
-                </select>
-              </td>
-            </tr>
+              @if ((c.resguardosDetalle || []).length > 0) {
+                @for (r of c.resguardosDetalle; track r.id) {
+                <tr>
+                  <td><strong>#{{ c.id }}</strong></td>
+                  <td>{{ (c.fechaCierre || c.fechaApertura) | fechaLocal }}</td>
+                  <td>
+                    <span>🏢 {{ c.sucursalNombre }}</span>
+                    <small class="text-muted" style="display: block;">Cajero: {{ r.usuario || c.usuario }}</small>
+                  </td>
+                  <td>
+                    @if (r.tipo === 'DEVOLUCION') {
+                      <span class="badge" style="background: #ecfdf5; color: #047857; font-weight: 700;">📥 Devolución a Caja</span>
+                    } @else {
+                      <span class="badge" style="background: #fffbeb; color: #b45309; font-weight: 700;">🛡️ Retiro / Resguardo</span>
+                    }
+                    @if (r.concepto) {
+                      <small class="text-muted" style="display: block;">{{ r.concepto }}</small>
+                    }
+                  </td>
+                  <td class="text-right font-bold" [style.color]="r.tipo === 'DEVOLUCION' ? '#059669' : '#b45309'">
+                    {{ r.tipo === 'DEVOLUCION' ? '+' : '-' }}{{ (r.monto || 0) | currencyMxn }}
+                  </td>
+                  <td>
+                    <span class="badge" style="background: #eff6ff; color: #1d4ed8; font-weight: 700;">
+                      👤 {{ r.socioNombre }}
+                    </span>
+                  </td>
+                </tr>
+                }
+              } @else {
+                <tr>
+                  <td><strong>#{{ c.id }}</strong></td>
+                  <td>{{ (c.fechaCierre || c.fechaApertura) | fechaLocal }}</td>
+                  <td>
+                    <span>🏢 {{ c.sucursalNombre }}</span>
+                    <small class="text-muted" style="display: block;">Cajero: {{ c.usuario }}</small>
+                  </td>
+                  <td>
+                    <span class="badge" style="background: #fffbeb; color: #b45309; font-weight: 700;">🛡️ Retiro / Resguardo</span>
+                  </td>
+                  <td class="text-right font-bold" style="color: #b45309;">-{{ (c.retiros || 0) | currencyMxn }}</td>
+                  <td>
+                    <select
+                      [ngModel]="obtenerSocioResguardo(c)"
+                      (ngModelChange)="onCambiarAsignacionResguardo(c.id, $event)" class="select-socio socio-selected"
+                      style="border-color: #f59e0b; background-color: #fffbeb; color: #92400e;">
+                      @for (s of sociosService.sociosActivos(); track s.id) {
+                      <option [value]="s.id">👤 {{ s.nombre }} ({{ s.porcentaje }}%)</option>
+                      }
+                    </select>
+                  </td>
+                </tr>
+              }
             }
             @empty {
             <tr>
-              <td colspan="5" class="text-center text-muted py-3">
-                No hay retiros ni dinero resguardado de caja en este periodo.
+              <td colspan="6" class="text-center text-muted py-3">
+                No hay movimientos de dinero resguardado ni devoluciones en este periodo.
               </td>
             </tr>
             }
@@ -576,6 +620,18 @@
       </div>
       }
 
+      <!-- Alerta cuando algún socio tiene saldo negativo (deudor) -->
+      @for (s of liquidacionCalculada(); track s.socioId) {
+        @if (s.montoNetoACobrar < 0) {
+        <div class="alert alert-warning" style="margin-bottom: 16px; border-left: 4px solid #f59e0b; background: #fffbeb; color: #92400e; padding: 12px 16px; border-radius: 8px;">
+          ⚠️ <strong>Saldo a Cargo / Deudor:</strong> El socio <strong>{{ s.nombre }}</strong> tiene un saldo pendiente de <strong>{{ s.montoNetoACobrar | currencyMxn }}</strong> (retiró más dinero en resguardos de caja o cobros con tarjeta de lo que le correspondía ganar).
+          <div style="font-size: 0.85rem; margin-top: 4px; color: #78350f;">
+            💡 <em>Para saldarlo: {{ s.nombre }} puede devolver este efectivo en <strong>Cortes de Caja</strong> mediante el botón «📥 Devolver Efectivo a Caja», y de este modo la gaveta física tendrá los fondos completos para liquidar a los socios con saldo a favor.</em>
+          </div>
+        </div>
+        }
+      }
+
       <!-- Tarjetas de Socios -->
       <div class="socios-cards-grid">
         @for (s of liquidacionCalculada(); track s.socioId) {
@@ -627,6 +683,13 @@
             </div>
             }
 
+            @if (s.devolucionesRealizadas && s.devolucionesRealizadas > 0) {
+            <div class="sb-row font-medium" style="color: #059669;">
+              <span>(+) Devolución / Reintegro a caja:</span>
+              <strong>+{{ s.devolucionesRealizadas | currencyMxn }}</strong>
+            </div>
+            }
+
             @if (s.ajusteDirecto && s.ajusteDirecto !== 0) {
             <div class="sb-row font-medium" [class.text-success]="s.ajusteDirecto > 0" [class.text-danger]="s.ajusteDirecto < 0">
               <span>{{ s.ajusteDirecto > 0 ? '(+) Préstamo / Ajuste a favor:' : '(-) Préstamo / Ajuste a cargo:' }}</span>
@@ -663,7 +726,7 @@
               <th class="text-right">Gastos Bolsillo (+)</th>
               <th class="text-right">Transf. Recibidas (-)</th>
               <th class="text-right">Tarjetas Recibidas (-)</th>
-              <th class="text-right">Dinero Resguardado (-)</th>
+              <th class="text-right">Resguardo Neto (-)</th>
               @if (hayAjustesEntreSocios()) {
               <th class="text-right">Ajuste Directo (±)</th>
               }
@@ -680,7 +743,15 @@
               <td class="text-right text-danger font-bold">-{{ (s.transferenciasRecibidas || 0) | currencyMxn }}</td>
               <td class="text-right font-bold" style="color: #9333ea;">-{{ (s.tarjetasRecibidas || 0) | currencyMxn }}
               </td>
-              <td class="text-right font-bold" style="color: #b45309;">-{{ (s.resguardosRecibidos || 0) | currencyMxn }}
+              <td class="text-right font-bold" style="color: #b45309;">
+                @if (s.devolucionesRealizadas && s.devolucionesRealizadas > 0) {
+                  <div>-{{ (s.resguardoNeto || 0) | currencyMxn }}</div>
+                  <small style="color: #059669; font-size: 0.72rem; display: block; font-weight: 500;">
+                    (-{{ (s.resguardosRecibidos || 0) | currencyMxn }} + {{ s.devolucionesRealizadas | currencyMxn }})
+                  </small>
+                } @else {
+                  -{{ (s.resguardosRecibidos || 0) | currencyMxn }}
+                }
               </td>
               @if (hayAjustesEntreSocios()) {
               <td class="text-right font-bold" [class.text-success]="(s.ajusteDirecto || 0) > 0" [class.text-danger]="(s.ajusteDirecto || 0) < 0">
@@ -699,8 +770,16 @@
               <td class="text-right text-danger"><strong>-{{ totalTransferenciasPeriodo() | currencyMxn }}</strong></td>
               <td class="text-right font-bold" style="color: #9333ea;"><strong>-{{ totalTarjetasPeriodo() | currencyMxn
                   }}</strong></td>
-              <td class="text-right font-bold" style="color: #b45309;"><strong>-{{ totalResguardosPeriodo() |
-                  currencyMxn }}</strong></td>
+              <td class="text-right font-bold" style="color: #b45309;">
+                @if (totalDevolucionesPeriodo() > 0) {
+                  <div><strong>-{{ (totalResguardosPeriodo() - totalDevolucionesPeriodo()) | currencyMxn }}</strong></div>
+                  <small style="color: #059669; font-size: 0.72rem; display: block; font-weight: 500;">
+                    (Devoluciones: +{{ totalDevolucionesPeriodo() | currencyMxn }})
+                  </small>
+                } @else {
+                  <strong>-{{ totalResguardosPeriodo() | currencyMxn }}</strong>
+                }
+              </td>
               @if (hayAjustesEntreSocios()) {
               <td class="text-right text-muted"><strong>$0.00</strong></td>
               }
@@ -1017,44 +1096,54 @@
         </div>
 
         <h4 class="mt-4 mb-2">Desglose de Pago por Socio</h4>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Socio</th>
-              <th class="text-center">%</th>
-              <th class="text-right">Ganancia</th>
-              <th class="text-right">Reembolso Gastos</th>
-              <th class="text-right">Transf. Recibidas (-)</th>
-              <th class="text-right">Tarjetas Recibidas (-)</th>
-              <th class="text-right">Resguardo Caja (-)</th>
-              @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
-              <th class="text-right">Ajuste Directo (±)</th>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Socio</th>
+                <th class="text-center">%</th>
+                <th class="text-right">Ganancia</th>
+                <th class="text-right">Reembolso Gastos</th>
+                <th class="text-right">Transf. Recibidas (-)</th>
+                <th class="text-right">Tarjetas Recibidas (-)</th>
+                <th class="text-right">Resguardo Caja (-)</th>
+                @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+                <th class="text-right">Ajuste Directo (±)</th>
+                }
+                <th class="text-right">Monto Neto Pagado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of liq.socios; track s.socioId) {
+              <tr>
+                <td><strong>{{ s.nombre }}</strong></td>
+                <td class="text-center">{{ s.porcentaje }}%</td>
+                <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
+                <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
+                <td class="text-right text-danger">-{{ (s.transferenciasRecibidas || 0) | currencyMxn }}</td>
+                <td class="text-right" style="color: #9333ea; font-weight: 600;">-{{ (s.tarjetasRecibidas || 0) |
+                  currencyMxn }}</td>
+                <td class="text-right" style="color: #b45309; font-weight: 600;">
+                  @if (s.devolucionesRealizadas && s.devolucionesRealizadas > 0) {
+                    <div>-{{ (s.resguardoNeto !== undefined ? s.resguardoNeto : ((s.resguardosRecibidos || 0) - s.devolucionesRealizadas)) | currencyMxn }}</div>
+                    <small style="color: #059669; font-size: 0.72rem; display: block; font-weight: normal;">
+                      (-{{ (s.resguardosRecibidos || 0) | currencyMxn }} + {{ s.devolucionesRealizadas | currencyMxn }})
+                    </small>
+                  } @else {
+                    -{{ (s.resguardosRecibidos || 0) | currencyMxn }}
+                  }
+                </td>
+                @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+                <td class="text-right font-bold" [class.text-success]="(s.ajusteDirecto || 0) > 0" [class.text-danger]="(s.ajusteDirecto || 0) < 0">
+                  {{ (s.ajusteDirecto || 0) > 0 ? '+' : '' }}{{ (s.ajusteDirecto || 0) | currencyMxn }}
+                </td>
+                }
+                <td class="text-right font-bold text-emerald">{{ s.montoNetoACobrar | currencyMxn }}</td>
+              </tr>
               }
-              <th class="text-right">Monto Neto Pagado</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of liq.socios; track s.socioId) {
-            <tr>
-              <td><strong>{{ s.nombre }}</strong></td>
-              <td class="text-center">{{ s.porcentaje }}%</td>
-              <td class="text-right text-blue">{{ s.gananciaAsignada | currencyMxn }}</td>
-              <td class="text-right text-success">+{{ s.gastosBolsilloAportados | currencyMxn }}</td>
-              <td class="text-right text-danger">-{{ (s.transferenciasRecibidas || 0) | currencyMxn }}</td>
-              <td class="text-right" style="color: #9333ea; font-weight: 600;">-{{ (s.tarjetasRecibidas || 0) |
-                currencyMxn }}</td>
-              <td class="text-right" style="color: #b45309; font-weight: 600;">-{{ (s.resguardosRecibidos || 0) |
-                currencyMxn }}</td>
-              @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
-              <td class="text-right font-bold" [class.text-success]="(s.ajusteDirecto || 0) > 0" [class.text-danger]="(s.ajusteDirecto || 0) < 0">
-                {{ (s.ajusteDirecto || 0) > 0 ? '+' : '' }}{{ (s.ajusteDirecto || 0) | currencyMxn }}
-              </td>
-              }
-              <td class="text-right font-bold text-emerald">{{ s.montoNetoACobrar | currencyMxn }}</td>
-            </tr>
-            }
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
 
         @if (liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
         <h4 class="mt-4 mb-2">Préstamos o Compensaciones Directas entre Socios</h4>
@@ -1076,24 +1165,26 @@
 
         @if (liq.gastosBolsilloDetalle && liq.gastosBolsilloDetalle.length > 0) {
         <h4 class="mt-4 mb-2">Detalle de Gastos de Bolsillo Reembolsados</h4>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Concepto</th>
-              <th>Pagado por</th>
-              <th class="text-right">Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (g of liq.gastosBolsilloDetalle; track g.id) {
-            <tr>
-              <td>{{ g.concepto }}</td>
-              <td>👤 {{ g.socioNombre }}</td>
-              <td class="text-right font-bold">{{ g.monto | currencyMxn }}</td>
-            </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Pagado por</th>
+                <th class="text-right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (g of liq.gastosBolsilloDetalle; track g.id) {
+              <tr>
+                <td>{{ g.concepto }}</td>
+                <td>👤 {{ g.socioNombre }}</td>
+                <td class="text-right font-bold">{{ g.monto | currencyMxn }}</td>
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
         }
       </div>
 

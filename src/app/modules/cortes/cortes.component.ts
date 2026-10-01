@@ -34,15 +34,25 @@ export class CortesComponent implements OnInit, AfterViewInit {
   public cajaContada = signal<number | null>(null);
   public observacionesCierre = '';
 
-  // Resguardo en Turno Activo (Modal)
+  // Resguardo / Devolución en Turno Activo (Modal)
   public mostrarModalResguardo = signal<boolean>(false);
+  public tipoMovimientoResguardo = signal<'RETIRO' | 'DEVOLUCION'>('RETIRO');
   public montoResguardo = signal<number | null>(null);
   public socioResguardoId = signal<string>('');
   public conceptoResguardo = signal<string>('Resguardo de efectivo');
 
   public totalResguardosTurnoActivo = computed(() => {
     const activo = this.cortesService.corteActivo();
-    return (activo?.resguardos || []).reduce((sum, r) => sum + (r.monto || 0), 0);
+    return (activo?.resguardos || [])
+      .filter((r) => !r.tipo || r.tipo === 'RETIRO')
+      .reduce((sum, r) => sum + (r.monto || 0), 0);
+  });
+
+  public totalDevolucionesTurnoActivo = computed(() => {
+    const activo = this.cortesService.corteActivo();
+    return (activo?.resguardos || [])
+      .filter((r) => r.tipo === 'DEVOLUCION')
+      .reduce((sum, r) => sum + (r.monto || 0), 0);
   });
 
   public resumenEnVivo = computed(() => {
@@ -67,10 +77,14 @@ export class CortesComponent implements OnInit, AfterViewInit {
       this.socioRetiroId.set(defSocio.id);
       this.socioResguardoId.set(defSocio.id);
     }
-    // Si el turno activo ya tenía resguardos registrados, precargar en retiros
+    // Si el turno activo ya tenía resguardos o devoluciones registradas, precargar
     const resgAcumulados = this.totalResguardosTurnoActivo();
     if (resgAcumulados > 0 && this.retiros() === 0) {
       this.retiros.set(resgAcumulados);
+    }
+    const devAcumuladas = this.totalDevolucionesTurnoActivo();
+    if (devAcumuladas > 0 && this.ingresosCaja() === 0) {
+      this.ingresosCaja.set(devAcumuladas);
     }
   }
 
@@ -84,13 +98,14 @@ export class CortesComponent implements OnInit, AfterViewInit {
     }, 100);
   }
 
-  abrirModalResguardo(): void {
+  abrirModalResguardo(tipo: 'RETIRO' | 'DEVOLUCION' = 'RETIRO'): void {
+    this.tipoMovimientoResguardo.set(tipo);
     const defSocio = this.sociosService.socioResguardosDefault();
     if (defSocio && !this.socioResguardoId()) {
       this.socioResguardoId.set(defSocio.id);
     }
     this.montoResguardo.set(null);
-    this.conceptoResguardo.set('Resguardo parcial de efectivo');
+    this.conceptoResguardo.set(tipo === 'DEVOLUCION' ? 'Devolución de efectivo a caja' : 'Resguardo parcial de efectivo');
     this.mostrarModalResguardo.set(true);
   }
 
@@ -102,9 +117,10 @@ export class CortesComponent implements OnInit, AfterViewInit {
     const monto = Number(this.montoResguardo());
     const socioId = this.socioResguardoId();
     const socio = this.sociosService.sociosActivos().find((s) => s.id === socioId);
+    const tipo = this.tipoMovimientoResguardo();
 
     if (!monto || monto <= 0 || !socio) {
-      alert('Ingresa un monto válido y selecciona el socio que resguarda el dinero.');
+      alert('Ingresa un monto válido y selecciona el socio correspondiente.');
       return;
     }
 
@@ -112,13 +128,19 @@ export class CortesComponent implements OnInit, AfterViewInit {
       monto,
       socio.id,
       socio.nombre,
-      this.conceptoResguardo().trim() || 'Resguardo de efectivo'
+      this.conceptoResguardo().trim() || (tipo === 'DEVOLUCION' ? 'Devolución a caja' : 'Resguardo de efectivo'),
+      tipo
     );
 
-    // Sumar al campo retiros del formulario de cierre
-    this.retiros.update((v) => Math.round(((v || 0) + monto) * 100) / 100);
-    if (!this.socioRetiroId()) {
-      this.socioRetiroId.set(socio.id);
+    if (tipo === 'DEVOLUCION') {
+      // Sumar al campo ingresosCaja del formulario de cierre
+      this.ingresosCaja.update((v) => Math.round(((v || 0) + monto) * 100) / 100);
+    } else {
+      // Sumar al campo retiros del formulario de cierre
+      this.retiros.update((v) => Math.round(((v || 0) + monto) * 100) / 100);
+      if (!this.socioRetiroId()) {
+        this.socioRetiroId.set(socio.id);
+      }
     }
 
     this.mostrarModalResguardo.set(false);
@@ -128,10 +150,15 @@ export class CortesComponent implements OnInit, AfterViewInit {
     const activo = this.cortesService.corteActivo();
     const item = (activo?.resguardos || []).find((r) => r.id === id);
 
-    if (confirm(`¿Eliminar el registro de resguardo por $${item?.monto || 0}?`)) {
+    const texto = item?.tipo === 'DEVOLUCION' ? 'devolución' : 'resguardo';
+    if (confirm(`¿Eliminar el registro de ${texto} por $${item?.monto || 0}?`)) {
       await this.cortesService.eliminarResguardoTurnoActivo(id);
       if (item) {
-        this.retiros.update((v) => Math.max(0, Math.round(((v || 0) - item.monto) * 100) / 100));
+        if (item.tipo === 'DEVOLUCION') {
+          this.ingresosCaja.update((v) => Math.max(0, Math.round(((v || 0) - item.monto) * 100) / 100));
+        } else {
+          this.retiros.update((v) => Math.max(0, Math.round(((v || 0) - item.monto) * 100) / 100));
+        }
       }
     }
   }

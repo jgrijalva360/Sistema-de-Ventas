@@ -102,6 +102,7 @@ export interface ResguardoCajaItem {
   socioNombre: string;
   concepto?: string;
   usuario?: string;
+  tipo?: 'RETIRO' | 'DEVOLUCION';
 }
 
 export interface CorteActivo {
@@ -430,6 +431,8 @@ export interface DetalleLiquidacionSocio {
   transferenciasRecibidas?: number;
   tarjetasRecibidas?: number;
   resguardosRecibidos?: number;
+  devolucionesRealizadas?: number;
+  resguardoNeto?: number;
   ajusteDirecto?: number;
   montoNetoACobrar: number;
 }
@@ -459,6 +462,7 @@ export interface LiquidacionSocios {
   totalTransferencias?: number;
   totalTarjetas?: number;
   totalResguardos?: number;
+  totalDevoluciones?: number;
   utilidadBaseReparto: number;
   socios: DetalleLiquidacionSocio[];
   gastosBolsilloDetalle: GastoBolsilloItem[];

@@ -8,6 +8,7 @@ import { ReportesService } from '../../core/services/reportes.service';
 import { GastosService } from '../../core/services/gastos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { AuthService } from '../../core/services/auth.service';
+import { CortesService } from '../../core/services/cortes.service';
 import { SocioConfig, DetalleLiquidacionSocio, GastoBolsilloItem, LiquidacionSocios, AjusteEntreSocios, Gasto, Venta, Corte } from '../../core/models/models';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 
@@ -24,6 +25,7 @@ export class SociosComponent implements OnInit {
   private reportesService = inject(ReportesService);
   private gastosService = inject(GastosService);
   public sucursalesService = inject(SucursalesService);
+  public cortesService = inject(CortesService);
   private authService = inject(AuthService);
 
   constructor() {
@@ -385,30 +387,110 @@ export class SociosComponent implements OnInit {
   }
 
   // --- CORTES Y DINERO RESGUARDADO DEL PERIODO ---
-  public cortesFiltrados = computed(() => {
-    return this.reportesService.filtrarCortes(this.fechaDesde(), this.fechaHasta(), this.sucursalSeleccionada());
+  public cortesFiltrados = computed<Corte[]>(() => {
+    const list = [...this.reportesService.filtrarCortes(this.fechaDesde(), this.fechaHasta(), this.sucursalSeleccionada())];
+    const activo = this.cortesService.corteActivo();
+    if (activo && (activo.resguardos || []).length > 0) {
+      const t = new Date(activo.fechaApertura).getTime();
+      const desde = new Date(`${this.fechaDesde()}T00:00:00`).getTime();
+      const hasta = new Date(`${this.fechaHasta()}T23:59:59`).getTime();
+      const suc = this.sucursalSeleccionada();
+      if (!isNaN(t) && t >= desde && t <= hasta && (suc === 'TODAS' || !activo.sucursalId || activo.sucursalId === suc)) {
+        const retirosActivo = (activo.resguardos || []).filter((r) => !r.tipo || r.tipo === 'RETIRO').reduce((s, r) => s + (r.monto || 0), 0);
+        const devolucionesActivo = (activo.resguardos || []).filter((r) => r.tipo === 'DEVOLUCION').reduce((s, r) => s + (r.monto || 0), 0);
+        const pseudoCorte: Corte = {
+          id: `${activo.id} (En Turno)`,
+          periodicidad: 'DIARIO',
+          fechaApertura: activo.fechaApertura,
+          fechaCierre: '',
+          cajaInicial: activo.cajaInicial,
+          ventasCount: 0,
+          gastosCount: 0,
+          pagosEfectivo: 0,
+          pagosTarjeta: 0,
+          pagosTransferencia: 0,
+          totalVentasNetas: 0,
+          totalGastos: 0,
+          gastosEfectivo: 0,
+          gastosTarjeta: 0,
+          gastosTransferencia: 0,
+          gastosBancarios: 0,
+          retiros: retirosActivo,
+          ingresosCaja: devolucionesActivo,
+          resguardosDetalle: activo.resguardos || [],
+          cajaEsperada: 0,
+          cajaContada: 0,
+          diferencia: 0,
+          usuario: activo.usuario,
+          sucursalId: activo.sucursalId,
+          sucursalNombre: activo.sucursalNombre,
+          estado: 'ABIERTO' as any
+        };
+        list.push(pseudoCorte);
+      }
+    }
+    return list;
   });
 
   public cortesConRetiros = computed(() => {
-    return this.cortesFiltrados().filter((c) => (c.retiros || 0) > 0);
+    return this.cortesFiltrados().filter((c) => {
+      if ((c.resguardosDetalle || []).length > 0) return true;
+      return (c.retiros || 0) > 0 || (c.ingresosCaja || 0) > 0;
+    });
   });
 
-  public totalResguardosPeriodo = computed(() => {
-    return this.cortesConRetiros().reduce((sum, c) => sum + (c.retiros || 0), 0);
-  });
-
+  // Retiros brutos de caja por socio
   public resguardosPorSocio = computed<Record<string, number>>(() => {
     const res: Record<string, number> = {};
 
-    this.cortesConRetiros().forEach((c) => {
-      const monto = Number(c.retiros) || 0;
-      const socioId = this.obtenerSocioResguardo(c);
-      if (socioId) {
-        res[socioId] = Math.round(((res[socioId] || 0) + monto) * 100) / 100;
+    this.cortesFiltrados().forEach((c) => {
+      if (c.resguardosDetalle && c.resguardosDetalle.length > 0) {
+        c.resguardosDetalle.forEach((r) => {
+          if (!r.tipo || r.tipo === 'RETIRO') {
+            const socioId = r.socioId;
+            if (socioId) {
+              res[socioId] = Math.round(((res[socioId] || 0) + (Number(r.monto) || 0)) * 100) / 100;
+            }
+          }
+        });
+      } else if ((c.retiros || 0) > 0) {
+        const monto = Number(c.retiros) || 0;
+        const socioId = this.obtenerSocioResguardo(c);
+        if (socioId) {
+          res[socioId] = Math.round(((res[socioId] || 0) + monto) * 100) / 100;
+        }
       }
     });
 
     return res;
+  });
+
+  // Devoluciones / reintegros que los socios hicieron a la gaveta de caja
+  public devolucionesPorSocio = computed<Record<string, number>>(() => {
+    const res: Record<string, number> = {};
+
+    this.cortesFiltrados().forEach((c) => {
+      if (c.resguardosDetalle && c.resguardosDetalle.length > 0) {
+        c.resguardosDetalle.forEach((r) => {
+          if (r.tipo === 'DEVOLUCION') {
+            const socioId = r.socioId;
+            if (socioId) {
+              res[socioId] = Math.round(((res[socioId] || 0) + (Number(r.monto) || 0)) * 100) / 100;
+            }
+          }
+        });
+      }
+    });
+
+    return res;
+  });
+
+  public totalResguardosPeriodo = computed(() => {
+    return Object.values(this.resguardosPorSocio()).reduce((sum, v) => sum + v, 0);
+  });
+
+  public totalDevolucionesPeriodo = computed(() => {
+    return Object.values(this.devolucionesPorSocio()).reduce((sum, v) => sum + v, 0);
   });
 
   onCambiarAsignacionResguardo(corteId: string, nuevoSocioId: string): void {
@@ -519,6 +601,7 @@ export class SociosComponent implements OnInit {
     const transfPorSocio = this.transferenciasPorSocio();
     const tarjPorSocio = this.tarjetasPorSocio();
     const resgPorSocio = this.resguardosPorSocio();
+    const devPorSocio = this.devolucionesPorSocio();
     const ajustesMap = this.ajustesPorSocio();
 
     return socios.map((socio) => {
@@ -542,15 +625,29 @@ export class SociosComponent implements OnInit {
       // Pagos con tarjeta recibidos directamente en su cuenta/terminal
       const tarjetasRecibidas = Math.round((tarjPorSocio[socio.id] || 0) * 100) / 100;
 
-      // Dinero en efectivo retirado de caja y bajo su resguardo/custodia
+      // Dinero en efectivo retirado de caja bajo su resguardo/custodia
       const resguardosRecibidos = Math.round((resgPorSocio[socio.id] || 0) * 100) / 100;
+
+      // Dinero en efectivo regresado / reintegrado a caja por este socio
+      const devolucionesRealizadas = Math.round((devPorSocio[socio.id] || 0) * 100) / 100;
+
+      // Resguardo Neto en su poder
+      const resguardoNeto = Math.round((resguardosRecibidos - devolucionesRealizadas) * 100) / 100;
 
       // Ajuste directo entre socios (préstamos personales / suma cero)
       const ajusteDirecto = Math.round((ajustesMap[socio.id] || 0) * 100) / 100;
 
       // Monto Neto que se le debe entregar de caja:
-      // Ganancia Neta Asignada + Reembolso Íntegro de su gasto de bolsillo - Transferencias - Tarjetas - Dinero Resguardado + Ajuste Directo
-      const montoNetoACobrar = Math.round((gananciaAsignada + gastosBolsilloAportados - transferenciasRecibidas - tarjetasRecibidas - resguardosRecibidos + ajusteDirecto) * 100) / 100;
+      // Ganancia Neta Asignada + Reembolso Íntegro - Transferencias - Tarjetas - Resguardos + Devoluciones + Ajuste Directo
+      const montoNetoACobrar = Math.round((
+        gananciaAsignada +
+        gastosBolsilloAportados -
+        transferenciasRecibidas -
+        tarjetasRecibidas -
+        resguardosRecibidos +
+        devolucionesRealizadas +
+        ajusteDirecto
+      ) * 100) / 100;
 
       return {
         socioId: socio.id,
@@ -562,6 +659,8 @@ export class SociosComponent implements OnInit {
         transferenciasRecibidas,
         tarjetasRecibidas,
         resguardosRecibidos,
+        devolucionesRealizadas,
+        resguardoNeto,
         ajusteDirecto,
         montoNetoACobrar
       };
@@ -675,6 +774,7 @@ export class SociosComponent implements OnInit {
         totalTransferencias: this.totalTransferenciasPeriodo(),
         totalTarjetas: this.totalTarjetasPeriodo(),
         totalResguardos: this.totalResguardosPeriodo(),
+        totalDevoluciones: this.totalDevolucionesPeriodo(),
         utilidadBaseReparto: this.gananciaNetaBaseSeleccionada(),
         socios: this.liquidacionCalculada(),
         gastosBolsilloDetalle: this.listaGastosBolsillo(),
@@ -694,9 +794,9 @@ export class SociosComponent implements OnInit {
               monto: s.montoNetoACobrar,
               categoria: 'REPARTO_SOCIOS',
               metodoPago: metodo,
-              persona: s.nombre,
-              socioId: s.socioId,
-              observaciones: `Liquidación #${nuevaLiq.folio} (${nuevaLiq.fechaDesde} al ${nuevaLiq.fechaHasta}). Ganancia: $${s.gananciaAsignada.toFixed(2)} + Reembolso: $${s.gastosBolsilloAportados.toFixed(2)}${s.transferenciasRecibidas ? ` - Transf: $${s.transferenciasRecibidas.toFixed(2)}` : ''}${s.tarjetasRecibidas ? ` - Tarjeta: $${s.tarjetasRecibidas.toFixed(2)}` : ''}${s.resguardosRecibidos ? ` - Resguardo Caja: $${s.resguardosRecibidos.toFixed(2)}` : ''}${s.ajusteDirecto ? ` ${s.ajusteDirecto > 0 ? '+' : ''}$${s.ajusteDirecto.toFixed(2)} (Ajuste)` : ''}`
+              persona: 'Caja / Negocio',
+              socioId: 'EMPRESA',
+              observaciones: `Reparto entregado a socio ${s.nombre}. Liquidación #${nuevaLiq.folio} (${nuevaLiq.fechaDesde} al ${nuevaLiq.fechaHasta}). Ganancia: $${s.gananciaAsignada.toFixed(2)} + Reembolso: $${s.gastosBolsilloAportados.toFixed(2)}${s.transferenciasRecibidas ? ` - Transf: $${s.transferenciasRecibidas.toFixed(2)}` : ''}${s.tarjetasRecibidas ? ` - Tarjeta: $${s.tarjetasRecibidas.toFixed(2)}` : ''}${s.resguardosRecibidos ? ` - Resguardo Caja: $${s.resguardosRecibidos.toFixed(2)}` : ''}${s.devolucionesRealizadas ? ` + Reintegro Caja: $${s.devolucionesRealizadas.toFixed(2)}` : ''}${s.ajusteDirecto ? ` ${s.ajusteDirecto > 0 ? '+' : ''}$${s.ajusteDirecto.toFixed(2)} (Ajuste)` : ''}`
             });
           }
         }
@@ -763,6 +863,10 @@ export class SociosComponent implements OnInit {
       if (s.resguardosRecibidos && s.resguardosRecibidos > 0) {
         const resg = s.resguardosRecibidos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         txt += `   • Dinero de caja resguardado: -$${resg}\n`;
+      }
+      if (s.devolucionesRealizadas && s.devolucionesRealizadas > 0) {
+        const dev = s.devolucionesRealizadas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        txt += `   • Devolución / Reintegro a caja: +$${dev}\n`;
       }
       if (s.ajusteDirecto && s.ajusteDirecto !== 0) {
         const signo = s.ajusteDirecto > 0 ? '+' : '';

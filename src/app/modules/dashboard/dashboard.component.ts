@@ -162,12 +162,24 @@ export class DashboardComponent {
     });
 
     const totalGastos = totalGastosEfectivo + totalGastosTarjeta + totalGastosTransferencia;
-    const totalRetiros = cortes.reduce((acc, c) => acc + (c.retiros || 0), 0);
 
-    // 3. Detalle Caja Actual
+    // 3. Detalle Caja Actual y Movimientos de Socios
     const corteActivo = this.cortesService.corteActivo();
     let dineroEnCaja = 0;
     let cajaEstadoLabel = 'CERRADO (Sin cortes cerrados)';
+
+    // Movimientos del turno activo
+    const retirosActivo = (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS'))
+      ? (corteActivo.resguardos || [])
+          .filter((r) => !r.tipo || r.tipo === 'RETIRO')
+          .reduce((acc, r) => acc + (Number(r.monto) || 0), 0)
+      : 0;
+
+    const ingresosActivo = (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS'))
+      ? (corteActivo.resguardos || [])
+          .filter((r) => r.tipo === 'DEVOLUCION')
+          .reduce((acc, r) => acc + (Number(r.monto) || 0), 0)
+      : 0;
 
     if (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS')) {
       const fechaInicio = new Date(corteActivo.fechaApertura).getTime();
@@ -188,8 +200,20 @@ export class DashboardComponent {
         .reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
 
       const cajaInicial = corteActivo.cajaInicial || 0;
-      dineroEnCaja = cajaInicial + pagosEfecTurno - gastosEfecTurno;
-      cajaEstadoLabel = `ABIERTO (Caja inicial: $${cajaInicial.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+      dineroEnCaja = Math.round((cajaInicial + pagosEfecTurno - gastosEfecTurno - retirosActivo + ingresosActivo) * 100) / 100;
+
+      let labelExtra = '';
+      if (ingresosActivo > 0 && retirosActivo > 0) {
+        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | -$${retirosActivo.toFixed(2)} retiros | +$${ingresosActivo.toFixed(2)} ingresos)`;
+      } else if (ingresosActivo > 0) {
+        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | +$${ingresosActivo.toFixed(2)} ingresos caja)`;
+      } else if (retirosActivo > 0) {
+        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | -$${retirosActivo.toFixed(2)} retiros)`;
+      } else {
+        labelExtra = ` (Caja inicial: $${cajaInicial.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+      }
+
+      cajaEstadoLabel = `ABIERTO${labelExtra}`;
     } else {
       const cortesOrdenados = [...cortes]
         .filter((c) => c.estado === 'CERRADO' && c.fechaCierre)
@@ -224,8 +248,18 @@ export class DashboardComponent {
       dineroEnCaja = baseCash + pagosEfecDesde - gastosEfecDesde;
     }
 
-    const cajaEsperada = totalEfectivoRecibido - totalGastosEfectivo - totalRetiros;
-    const diferenciaCaja = dineroEnCaja - cajaEsperada;
+    // Totales del periodo (cortes cerrados + turno activo si está en rango)
+    const totalRetirosHistorial = cortes.reduce((acc, c) => acc + (Number(c.retiros) || 0), 0);
+    const totalIngresosHistorial = cortes.reduce((acc, c) => acc + (Number(c.ingresosCaja) || 0), 0);
+
+    const fechaAperturaActivo = corteActivo ? new Date(corteActivo.fechaApertura).getTime() : 0;
+    const activoEnPeriodo = corteActivo && !isNaN(fechaAperturaActivo) && fechaAperturaActivo >= desde && fechaAperturaActivo <= hasta;
+
+    const totalRetiros = Math.round((totalRetirosHistorial + (activoEnPeriodo ? retirosActivo : 0)) * 100) / 100;
+    const totalIngresosCaja = Math.round((totalIngresosHistorial + (activoEnPeriodo ? ingresosActivo : 0)) * 100) / 100;
+
+    const cajaEsperada = Math.round((totalEfectivoRecibido - totalGastosEfectivo - totalRetiros + totalIngresosCaja) * 100) / 100;
+    const diferenciaCaja = Math.round((dineroEnCaja - cajaEsperada) * 100) / 100;
     const totalPagosBancarios = pagosVentasTarjeta + pagosVentasTransferencia;
 
     return {
@@ -239,6 +273,7 @@ export class DashboardComponent {
       totalGastosTarjeta,
       totalGastosTransferencia,
       totalRetiros,
+      totalIngresosCaja,
       pagosEfectivo: totalEfectivoRecibido,
       pagosTarjeta: pagosVentasTarjeta,
       pagosTransferencia: pagosVentasTransferencia,

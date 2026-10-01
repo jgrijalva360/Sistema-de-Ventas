@@ -288,6 +288,16 @@
     }
   }
 
+  &.kpi-inflow {
+    .kpi-icon {
+      background: #ccfbf1;
+      color: #0f766e;
+    }
+    .kpi-val {
+      color: #0f766e;
+    }
+  }
+
   &.kpi-cash {
     .kpi-icon {
       background: #dcfce7;
