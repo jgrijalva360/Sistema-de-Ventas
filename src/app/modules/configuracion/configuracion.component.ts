@@ -10,7 +10,7 @@ import { SuscripcionService } from '../../core/services/suscripcion.service';
 import { MovimientosService } from '../../core/services/movimientos.service';
 import { VentasService } from '../../core/services/ventas.service';
 import { PedidosService, AnalisisConsolidacion } from '../../core/services/pedidos.service';
-import { Sucursal } from '../../core/models/models';
+import { Sucursal, ResumenArchivoBackup, ResultadoRestauracionBackup } from '../../core/models/models';
 import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 
 @Component({
@@ -67,24 +67,7 @@ export class ConfiguracionComponent implements AfterViewInit {
 
   // Modal Restauración Granular de Backup
   public modalRestaurarAbierto = signal<boolean>(false);
-  public resumenBackup = signal<{
-    fileName: string;
-    data: any;
-    fecha?: string;
-    appVersion?: string;
-    productosCount: number;
-    ventasCount: number;
-    movimientosCount: number;
-    gastosCount: number;
-    cortesCount: number;
-    pedidosCount: number;
-    sucursalesCount: number;
-    bitacoraCount: number;
-    usuariosCount: number;
-    sociosCount: number;
-    liquidacionesCount: number;
-    hasConfig: boolean;
-  } | null>(null);
+  public resumenBackup = signal<ResumenArchivoBackup | null>(null);
 
   public optProductos = signal<boolean>(true);
   public optVentas = signal<boolean>(true);
@@ -216,8 +199,8 @@ export class ConfiguracionComponent implements AfterViewInit {
         this.optSucursales.set(resumen.sucursalesCount > 0);
         this.optConfiguracion.set(resumen.hasConfig);
         this.optBitacora.set((resumen.bitacoraCount || 0) > 0);
-        this.optUsuarios.set((resumen.usuariosCount || 0) > 0);
-        this.optSocios.set((resumen.sociosCount || 0) > 0 || (resumen.liquidacionesCount || 0) > 0);
+        this.optUsuarios.set(false); // Desmarcado por defecto para no alterar cuentas inadvertidamente
+        this.optSocios.set((resumen.sociosCount || 0) > 0 || (resumen.liquidacionesCount || 0) > 0 || (resumen.prestamosCount || 0) > 0);
 
         this.modalRestaurarAbierto.set(true);
         input.value = '';
@@ -242,7 +225,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optConfiguracion.set(res.hasConfig);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
     this.optUsuarios.set((res.usuariosCount || 0) > 0);
-    this.optSocios.set((res.sociosCount || 0) > 0 || (res.liquidacionesCount || 0) > 0);
+    this.optSocios.set((res.sociosCount || 0) > 0 || (res.liquidacionesCount || 0) > 0 || (res.prestamosCount || 0) > 0);
   }
 
   deseleccionarTodoBackup(): void {
@@ -274,7 +257,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optPedidos.set(res.pedidosCount > 0);
     this.optMovimientos.set(res.movimientosCount > 0);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
-    this.optSocios.set((res.liquidacionesCount || 0) > 0);
+    this.optSocios.set((res.liquidacionesCount || 0) > 0 || (res.prestamosCount || 0) > 0);
   }
 
   hayModulosSeleccionados(): boolean {
@@ -325,7 +308,7 @@ export class ConfiguracionComponent implements AfterViewInit {
       if (opciones.restaurarSucursales) mensaje += `• Sucursales: ${resultado.sucursalesCount}\n`;
       if (opciones.restaurarBitacora) mensaje += `• Bitácora: ${resultado.bitacoraCount}\n`;
       if (opciones.restaurarUsuarios) mensaje += `• Colaboradores / Cajas: ${resultado.usuariosCount}\n`;
-      if (opciones.restaurarSocios) mensaje += `• Socios y Liquidaciones: ${resultado.sociosCount} socios, ${resultado.liquidacionesCount} liquidaciones\n`;
+      if (opciones.restaurarSocios) mensaje += `• Socios y Repartos: ${resultado.sociosCount} socios, ${resultado.liquidacionesCount} liquidaciones, ${resultado.prestamosCount || 0} préstamos\n`;
       if (opciones.restaurarConfiguracion) mensaje += `• Configuración: Actualizada\n`;
 
       alert(mensaje);
@@ -340,21 +323,41 @@ export class ConfiguracionComponent implements AfterViewInit {
   }
 
   async resetPeriodico(tipo: 'simplificar_movimientos' | 'reset_operativo' | 'reset_total'): Promise<void> {
+    if (!this.authService.esAdmin()) {
+      alert('🚫 Operación restringida: Solo un usuario con rol Administrador de la empresa puede ejecutar esta acción.');
+      return;
+    }
+
+    const tenantId = this.authService.getTenantId();
+    const negocio = this.configuracionService.config().businessName || 'Mi Negocio';
+
     let msg = 'Se descargará un respaldo automático y se ejecutará la acción. ¿Desea continuar?';
     if (tipo === 'reset_total') {
-      msg = '⚠️ ATENCIÓN: Se descargará un respaldo de seguridad previo y se ELIMINARÁN PERMANENTEMENTE todos los datos de Firestore asociados a este usuario (Productos, Ventas, Gastos, Movimientos, Cortes y Pedidos).\n\n¿Estás seguro de realizar el Reset Total de Fábrica?';
+      msg = `⚠️ RESTABLECIMIENTO TOTAL DE FÁBRICA:\n\n` +
+        `Empresa objetivo: "${negocio}" (ID: ${tenantId})\n\n` +
+        `Se descargará un respaldo de seguridad previo y se ELIMINARÁN PERMANENTEMENTE todos los datos de Firestore de ESTA EMPRESA (Productos, Ventas, Gastos, Movimientos, Cortes, Pedidos, Liquidaciones y Préstamos).\n\n` +
+        `• Esta acción afectará ÚNICAMENTE a la empresa "${negocio}". NO alterará datos de ninguna otra empresa ni de otros negocios registrados en la plataforma.\n\n` +
+        `¿Estás seguro de realizar el Reset Total de Fábrica para "${negocio}"?`;
     } else if (tipo === 'reset_operativo') {
-      msg = '⚠️ RESET OPERATIVO:\n\n' +
-        'Se descargará un respaldo automático y se realizarán los siguientes ajustes:\n\n' +
-        '• Se ELIMINARÁN todas las ventas (historial y en espera), gastos y cortes de caja.\n' +
-        '• Se CONSERVARÁN únicamente los Pedidos que se encuentren PENDIENTES o en proceso.\n' +
-        '• Se limpiará el historial de movimientos de inventario sin afectar el stock actual.\n' +
-        '• Tu catálogo de productos, existencias y precios se mantendrán intactos.\n\n' +
-        '¿Estás seguro de continuar con el Reset Operativo?';
+      msg = `⚠️ RESET OPERATIVO (Cierre de Periodo):\n\n` +
+        `Empresa objetivo: "${negocio}" (ID: ${tenantId})\n\n` +
+        `Se descargará un respaldo automático y se realizarán los siguientes ajustes en esta empresa:\n\n` +
+        `• Se ELIMINARÁN todas las ventas (historial y carritos en espera), gastos y cortes de todas las cajas de "${negocio}".\n` +
+        `• Se ELIMINARÁ el historial de liquidaciones de reparto de utilidades a socios.\n` +
+        `• Se CONSERVARÁN únicamente los Pedidos que se encuentren PENDIENTES o con saldo restante.\n` +
+        `• Se CONSERVARÁN los préstamos entre socios pendientes de saldar.\n` +
+        `• Se limpiará el historial de movimientos de inventario sin afectar el stock actual.\n` +
+        `• El catálogo de productos, existencias, precios, sucursales y colaboradores de "${negocio}" se mantendrán intactos.\n\n` +
+        `Esta acción NO afecta a ninguna otra empresa registrada.\n\n` +
+        `¿Estás seguro de continuar con el Reset Operativo para "${negocio}"?`;
     }
 
     if (confirm(msg)) {
-      await this.configuracionService.realizarResetPeriodico(tipo);
+      try {
+        await this.configuracionService.realizarResetPeriodico(tipo);
+      } catch (err: any) {
+        alert('❌ Error al realizar el reset: ' + (err.message || err));
+      }
     }
   }
 

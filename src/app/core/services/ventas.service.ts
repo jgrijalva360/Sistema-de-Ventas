@@ -513,6 +513,22 @@ export class VentasService {
     return limpios;
   }
 
+  limpiarEstado(): void {
+    if (this.subLiveVentas) {
+      this.subLiveVentas.unsubscribe();
+      this.subLiveVentas = undefined;
+    }
+    if (this.subLiveCarritos) {
+      this.subLiveCarritos.unsubscribe();
+      this.subLiveCarritos = undefined;
+    }
+    this.ventasSignal.set([]);
+    this.carritosPendientesSignal.set([]);
+    this.carrito.set([]);
+    this.pagos.set({ efectivo: 0, tarjeta: 0, transferencia: 0 });
+    this.procesandoCobro.set(false);
+  }
+
   iniciarEscuchadorLiveVentas(): void {
     if (this.subLiveVentas) this.subLiveVentas.unsubscribe();
     if (this.subLiveCarritos) this.subLiveCarritos.unsubscribe();
@@ -520,28 +536,29 @@ export class VentasService {
     const chunksCollRef = this.firestoreService.getRefColeccion('chunks_ventas');
     this.subLiveVentas = collectionStream$(chunksCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.ventasSignal.set([]);
+          return;
+        }
 
-          const actualizados: Venta[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            const limpios = this.validarYLimpiarDuplicados(actualizados);
-            this.ventasSignal.set(limpios);
+        const actualizados: Venta[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        const limpios = this.validarYLimpiarDuplicados(actualizados);
+        this.ventasSignal.set(limpios);
       },
       error: (err) => console.error('Error en stream de ventas:', err)
     });
@@ -552,6 +569,8 @@ export class VentasService {
       next: (docSnap) => {
         if (docSnap.exists() && Array.isArray(docSnap.data()['items'])) {
           this.carritosPendientesSignal.set(docSnap.data()['items']);
+        } else {
+          this.carritosPendientesSignal.set([]);
         }
       },
       error: (err) => console.error('Error en stream de carritos:', err)

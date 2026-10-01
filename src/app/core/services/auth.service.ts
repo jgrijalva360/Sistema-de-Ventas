@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject, Injector } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   signInWithEmailAndPassword,
@@ -19,6 +19,7 @@ import { SuscripcionService } from './suscripcion.service';
 import { docStream$, collectionStream$ } from '../utils/realtime.util';
 import { Subscription, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { DataCleanupService } from './data-cleanup.service';
 
 @Injectable({
   providedIn: 'root'
@@ -26,6 +27,11 @@ import { map } from 'rxjs/operators';
 export class AuthService {
   private currentUserSignal = signal<User | null>(null);
   private perfilUsuarioSignal = signal<UsuarioSistema | null>(null);
+  private injector = inject(Injector);
+
+  private getDataCleanupService(): DataCleanupService | null {
+    return this.injector.get(DataCleanupService, null, { optional: true });
+  }
 
   public currentUser = this.currentUserSignal.asReadonly();
   public perfilUsuario = this.perfilUsuarioSignal.asReadonly();
@@ -56,6 +62,8 @@ export class AuthService {
     }
     return this.perfilUsuarioSignal()?.rol || 'CAJERO';
   });
+
+  public rolUsuario = computed<RolUsuario>(() => this.rol());
 
   public esSuperAdmin = computed(() => {
     if (this.cajeroActivo() && this.cajeroActivo()?.rol !== 'SUPERADMIN') {
@@ -142,6 +150,7 @@ export class AuthService {
         } else {
           this.detenerEscuchadorPerfilLive();
           this.perfilUsuarioSignal.set(null);
+          this.getDataCleanupService()?.limpiarTodoElEstadoLocal();
         }
         resolve(user);
       });
@@ -203,8 +212,11 @@ export class AuthService {
         if (snap.exists()) {
           const nuevoPerfil = snap.data() as UsuarioSistema;
           this.perfilUsuarioSignal.set(nuevoPerfil);
-          localStorage.setItem('pos_tenant_id', nuevoPerfil.empresaId);
-          localStorage.setItem('pos_user_role', nuevoPerfil.rol);
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`pos_tenant_id_${nuevoPerfil.uid}`, nuevoPerfil.empresaId);
+            localStorage.setItem('pos_tenant_id', nuevoPerfil.empresaId);
+            localStorage.setItem('pos_user_role', nuevoPerfil.rol);
+          }
 
           // Si el usuario fue desactivado por el Administrador, expulsarlo y cerrar sesión de inmediato
           if (nuevoPerfil.activo === false) {
@@ -336,8 +348,11 @@ export class AuthService {
     }
 
     this.perfilUsuarioSignal.set(perfil);
-    localStorage.setItem('pos_tenant_id', perfil.empresaId);
-    localStorage.setItem('pos_user_role', perfil.rol);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`pos_tenant_id_${perfil.uid}`, perfil.empresaId);
+      localStorage.setItem('pos_tenant_id', perfil.empresaId);
+      localStorage.setItem('pos_user_role', perfil.rol);
+    }
 
     // Inicializar y escuchar suscripción de la empresa
     await this.suscripcionService.inicializarSuscripcion(perfil.empresaId, perfil.email, perfil.nombre);
@@ -347,6 +362,7 @@ export class AuthService {
   }
 
   async login(email: string, pass: string): Promise<User> {
+    this.getDataCleanupService()?.limpiarTodoElEstadoLocal();
     const cred = await signInWithEmailAndPassword(this.fb.auth, email, pass);
 
     const userDocRef = doc(this.fb.firestore, 'usuarios', cred.user.uid);
@@ -402,6 +418,7 @@ export class AuthService {
   }
 
   async register(email: string, pass: string, nombreNegocio = 'Mi Negocio'): Promise<User> {
+    this.getDataCleanupService()?.limpiarTodoElEstadoLocal();
     const tokenSesion = this.generarTokenSesion();
     localStorage.setItem(this.STORAGE_SESSION_TOKEN, tokenSesion);
 
@@ -425,8 +442,11 @@ export class AuthService {
     const userDocRef = doc(this.fb.firestore, 'usuarios', cred.user.uid);
     await setDoc(userDocRef, perfil);
     this.perfilUsuarioSignal.set(perfil);
-    localStorage.setItem('pos_tenant_id', perfil.empresaId);
-    localStorage.setItem('pos_user_role', perfil.rol);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`pos_tenant_id_${perfil.uid}`, perfil.empresaId);
+      localStorage.setItem('pos_tenant_id', perfil.empresaId);
+      localStorage.setItem('pos_user_role', perfil.rol);
+    }
 
     await this.suscripcionService.inicializarSuscripcion(perfil.empresaId, email, nombreNegocio);
     this.suscripcionService.iniciarEscuchadorLive(perfil.empresaId);
@@ -467,6 +487,7 @@ export class AuthService {
     const user = this.fb.auth.currentUser;
 
     this.detenerEscuchadorPerfilLive();
+    this.getDataCleanupService()?.limpiarTodoElEstadoLocal();
 
     // Solo si esta máquina es la dueña de la sesión actual en Firestore, la marcamos como cerrada
     if (limpiarRemoto && user && perfil && perfil.sesionActivaId && tokenLocal && perfil.sesionActivaId === tokenLocal) {
@@ -480,6 +501,9 @@ export class AuthService {
       }
     }
 
+    if (user && user.uid) {
+      localStorage.removeItem(`pos_tenant_id_${user.uid}`);
+    }
     localStorage.removeItem(this.STORAGE_SESSION_TOKEN);
     localStorage.removeItem('pos_tenant_id');
     localStorage.removeItem('pos_user_role');
@@ -546,20 +570,45 @@ export class AuthService {
   }
 
   getTenantId(): string {
-    const imp = this.impersonatedEmpresaIdSignal();
-    if (imp) return imp;
-    if (typeof localStorage !== 'undefined') {
-      const cachedImp = localStorage.getItem('pos_impersonated_tenant_id');
-      if (cachedImp) return cachedImp;
+    // 1. Modo Soporte: estrictamente condicionado a que el usuario sea SuperAdmin activo
+    if (this.esSuperAdmin()) {
+      const imp = this.impersonatedEmpresaIdSignal();
+      if (imp && imp.trim()) return imp.trim();
+      if (typeof localStorage !== 'undefined') {
+        const cachedImp = localStorage.getItem('pos_impersonated_tenant_id');
+        if (cachedImp && cachedImp.trim()) return cachedImp.trim();
+      }
+    } else {
+      // Si el usuario actual NO es SuperAdmin, purgar cualquier residuo de soporte
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('pos_impersonated_tenant_id');
+        localStorage.removeItem('pos_impersonated_tenant_nombre');
+      }
+      if (this.impersonatedEmpresaIdSignal()) {
+        this.impersonatedEmpresaIdSignal.set(null);
+        this.impersonatedEmpresaNombreSignal.set(null);
+      }
     }
 
+    // 2. Perfil cargado en memoria desde Firestore
     const perfil = this.perfilUsuarioSignal();
-    if (perfil && perfil.empresaId) return perfil.empresaId;
-    const user = this.fb.auth.currentUser;
-    if (user && user.uid) return user.uid;
-    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem('pos_tenant_id') : null;
-    if (cached) return cached;
-    return 'main';
+    if (perfil && perfil.empresaId && perfil.empresaId.trim()) {
+      return perfil.empresaId.trim();
+    }
+
+    // 3. Usuario autenticado en Firebase Auth
+    const user = this.currentUserSignal() || this.fb.auth.currentUser;
+    if (user && user.uid) {
+      if (typeof localStorage !== 'undefined') {
+        const userScopedTenant = localStorage.getItem(`pos_tenant_id_${user.uid}`);
+        if (userScopedTenant && userScopedTenant.trim()) {
+          return userScopedTenant.trim();
+        }
+      }
+      return user.uid;
+    }
+
+    return '';
   }
 
   // ── Gestión de Colaboradores (Centro de Administración) ───────
@@ -822,8 +871,15 @@ export class AuthService {
   }
 
   async eliminarUsuarioEmpresa(uid: string): Promise<void> {
-    const { deleteDoc } = await import('firebase/firestore');
+    const { getDoc, deleteDoc } = await import('firebase/firestore');
     const userDocRef = doc(this.fb.firestore, 'usuarios', uid);
+    const snap = await getDoc(userDocRef);
+    if (!snap.exists()) return;
+    const userData = snap.data() as UsuarioSistema;
+    const currentTenant = this.getTenantId();
+    if (userData.empresaId !== currentTenant && !this.esSuperAdmin()) {
+      throw new Error('No tienes permisos para eliminar a este usuario: Pertenece a otra empresa.');
+    }
     await deleteDoc(userDocRef);
   }
 }

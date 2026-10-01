@@ -61,6 +61,18 @@ export class SociosService {
     return def || (list.length > 0 ? list[0] : null);
   });
 
+  setSocios(list: SocioConfig[]): void {
+    this.sociosSignal.set(Array.isArray(list) ? list : []);
+  }
+
+  setLiquidaciones(list: LiquidacionSocios[]): void {
+    this.liquidacionesSignal.set(Array.isArray(list) ? list : []);
+  }
+
+  setPrestamos(list: AjusteEntreSocios[]): void {
+    this.prestamosSignal.set(Array.isArray(list) ? list : []);
+  }
+
   async cargarDatos(): Promise<void> {
     this.cargando.set(true);
     try {
@@ -72,6 +84,13 @@ export class SociosService {
     } finally {
       this.cargando.set(false);
     }
+  }
+
+  limpiarEstado(): void {
+    this.sociosSignal.set([{ id: 'socio-1', nombre: 'Socio 1', porcentaje: 100, activo: true }]);
+    this.liquidacionesSignal.set([]);
+    this.prestamosSignal.set([]);
+    this.cargando.set(false);
   }
 
   async cargarSociosConfig(): Promise<SocioConfig[]> {

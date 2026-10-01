@@ -13,6 +13,9 @@
       <p>Cálculo de utilidades proporcionales, reembolso exacto de gastos de bolsillo e historial contable.</p>
     </div>
     <div class="header-actions">
+      <a [routerLink]="['/reportes']" [queryParams]="{tab: 'ESTADO_CUENTA'}" class="btn btn-secondary" style="text-decoration: none;">
+        <span>🏦</span> Estado de Cuenta
+      </a>
       @if (tabActiva() === 'CALCULADORA') {
       <button class="btn btn-secondary btn-whatsapp" (click)="copiarParaWhatsApp()">
         <span>📱</span> Copiar para WhatsApp

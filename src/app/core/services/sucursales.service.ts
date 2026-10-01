@@ -50,6 +50,17 @@ export class SucursalesService {
     return this.sucursalesSignal();
   }
 
+  limpiarEstado(): void {
+    if (this.subLive) {
+      this.subLive.unsubscribe();
+      this.subLive = undefined;
+    }
+    this.sucursalesSignal.set([
+      { id: 'SUC-MAIN', nombre: 'Matriz Principal', direccion: '', telefono: '', esMatriz: true }
+    ]);
+    this.activaIdSignal.set('SUC-MAIN');
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLive) this.subLive.unsubscribe();
 

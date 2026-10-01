@@ -481,6 +481,19 @@ export class CortesService {
     }
   }
 
+  limpiarEstado(): void {
+    if (this.subCorteActivo) {
+      this.subCorteActivo.unsubscribe();
+      this.subCorteActivo = undefined;
+    }
+    if (this.subCortesLive) {
+      this.subCortesLive.unsubscribe();
+      this.subCortesLive = undefined;
+    }
+    this.cortesHistorialSignal.set([]);
+    this.corteActivoSignal.set(null);
+  }
+
   iniciarEscuchadoresLive(): void {
     if (this.subCorteActivo) this.subCorteActivo.unsubscribe();
     if (this.subCortesLive) this.subCortesLive.unsubscribe();
@@ -502,27 +515,28 @@ export class CortesService {
     const cortesCollRef = this.firestoreService.getRefColeccion('chunks_cortes');
     this.subCortesLive = collectionStream$(cortesCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.cortesHistorialSignal.set([]);
+          return;
+        }
 
-          const actualizados: Corte[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            this.cortesHistorialSignal.set(this.ordenarCortes(actualizados));
+        const actualizados: Corte[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        this.cortesHistorialSignal.set(this.ordenarCortes(actualizados));
       },
       error: (err) => console.error('Error en stream de cortes:', err)
     });

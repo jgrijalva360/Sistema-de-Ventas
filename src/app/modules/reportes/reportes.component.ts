@@ -1,10 +1,14 @@
-import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, signal, inject, computed, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
 import { FechaLocalPipe } from '../../shared/pipes/fecha-local.pipe';
 import { ReportesService } from '../../core/services/reportes.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
+import { EstadoCuentaService } from '../../core/services/estado-cuenta.service';
+import { SociosService } from '../../core/services/socios.service';
+import { ModuloFinanciero, ResumenEstadoCuenta } from '../../core/models/models';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 
 @Component({
@@ -14,19 +18,62 @@ import { getFechaLocalString } from '../../shared/utils/date.util';
   templateUrl: './reportes.component.html',
   styleUrl: './reportes.component.scss'
 })
-export class ReportesComponent implements AfterViewInit {
+export class ReportesComponent implements OnInit, AfterViewInit {
   @ViewChild('repTipoRef') repTipoRef?: ElementRef<HTMLSelectElement>;
 
-  public tipoReporte = signal<string>('GLOBAL');
+  public tipoReporte = signal<string>('ESTADO_CUENTA');
   public fechaDesde = signal<string>(getFechaLocalString(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   public fechaHasta = signal<string>(getFechaLocalString());
   public sucursalSeleccionada = signal<string>('TODAS');
 
+  // Filtros específicos del Estado de Cuenta Bancario
+  public cuentaSeleccionada = signal<string>('TODAS');
+  public tipoMovimientoFiltro = signal<'TODOS' | 'INGRESO' | 'EGRESO'>('TODOS');
+  public metodoFiltro = signal<'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA'>('TODOS');
+  public moduloFiltro = signal<'TODOS' | ModuloFinanciero>('TODOS');
+  public busquedaMovimientos = signal<string>('');
+
   private reportesService = inject(ReportesService);
   public sucursalesService = inject(SucursalesService);
+  public estadoCuentaService = inject(EstadoCuentaService);
+  public sociosService = inject(SociosService);
+  private route = inject(ActivatedRoute);
+
+  ngOnInit(): void {
+    this.sociosService.cargarDatos();
+
+    // Leer parámetros de URL si viene desde un enlace rápido
+    const tabParam = this.route.snapshot.queryParamMap.get('tab');
+    const cuentaParam = this.route.snapshot.queryParamMap.get('cuenta');
+
+    if (tabParam) {
+      this.tipoReporte.set(tabParam.toUpperCase());
+    }
+    if (cuentaParam) {
+      this.cuentaSeleccionada.set(cuentaParam);
+    }
+  }
 
   ngAfterViewInit(): void {
     setTimeout(() => this.repTipoRef?.nativeElement.focus(), 100);
+  }
+
+  // 0. Estado de Cuenta Bancario Centralizado
+  public resumenEstadoCuenta = computed<ResumenEstadoCuenta>(() => {
+    return this.estadoCuentaService.generarEstadoCuenta({
+      fechaDesde: this.fechaDesde(),
+      fechaHasta: this.fechaHasta(),
+      sucursalId: this.sucursalSeleccionada(),
+      cuenta: this.cuentaSeleccionada(),
+      tipo: this.tipoMovimientoFiltro(),
+      metodoPago: this.metodoFiltro(),
+      moduloOrigen: this.moduloFiltro(),
+      terminoBusqueda: this.busquedaMovimientos()
+    });
+  });
+
+  public setTipoReporte(tipo: string): void {
+    this.tipoReporte.set(tipo);
   }
 
   // 1. Filtrados principales
@@ -248,7 +295,35 @@ export class ReportesComponent implements AfterViewInit {
   exportarCSV(): void {
     const sufijoArchivo = `${this.fechaDesde()}_${this.fechaHasta()}`;
 
-    if (this.tipoReporte() === 'GLOBAL') {
+    if (this.tipoReporte() === 'ESTADO_CUENTA') {
+      const headers = [
+        'Fecha y Hora',
+        'Módulo',
+        'Folio / Ref',
+        'Concepto',
+        'Cuenta / Origen',
+        'Titular',
+        'Contraparte',
+        'Método Pago',
+        'Ingreso (+)',
+        'Egreso (-)',
+        'Saldo Acumulado'
+      ];
+      const rows = this.resumenEstadoCuenta().movimientos.map((m) => [
+        this.formatearFechaLocal(m.fecha),
+        m.moduloOrigen,
+        m.referenciaId,
+        m.concepto,
+        m.cuenta,
+        m.titularSocioNombre || '-',
+        m.contraparteNombre || '-',
+        m.metodoPago,
+        m.tipo === 'INGRESO' ? m.importe.toFixed(2) : '0.00',
+        m.tipo === 'EGRESO' ? m.importe.toFixed(2) : '0.00',
+        (m.saldoAcumulado || 0).toFixed(2)
+      ]);
+      this.reportesService.exportarCSV(`Estado_De_Cuenta_${this.cuentaSeleccionada()}_${sufijoArchivo}`, headers, rows);
+    } else if (this.tipoReporte() === 'GLOBAL') {
       const headers = ['Tipo', 'Folio / Ref', 'Fecha y Hora (Local)', 'Descripción / Productos', 'Cliente / Contacto', 'Sucursal', 'Método Pago', 'Ingreso (+)', 'Egreso (-)'];
       const rows = this.movimientosGlobales().map((m) => [
         m.tipo,

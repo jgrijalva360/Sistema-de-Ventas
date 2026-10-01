@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject, Injector } from '@angular/core';
 import {
   collection,
   doc,
@@ -17,10 +17,39 @@ import { AuthService } from './auth.service';
   providedIn: 'root'
 })
 export class FirestoreChunksService {
-  constructor(private fb: FirebaseService, private auth: AuthService) {}
+  private fb = inject(FirebaseService);
+  private injector = inject(Injector);
+
+  private getAuth(): AuthService {
+    return this.injector.get(AuthService);
+  }
 
   getDocIdEmpresa(): string {
-    return this.auth.getTenantId();
+    const auth = this.getAuth();
+    const tenantId = auth.getTenantId();
+    if (tenantId && tenantId.trim() && tenantId !== 'main') {
+      return tenantId.trim();
+    }
+    const user = auth.currentUser();
+    if (user && user.uid) {
+      return user.uid;
+    }
+    throw new Error('Tenant ID no identificado o inválido. No se puede acceder a la base de datos sin un negocio válido.');
+  }
+
+  async vaciarColeccion(nombreColeccion: string): Promise<void> {
+    const tenantId = this.getDocIdEmpresa();
+    try {
+      const collRef = collection(this.fb.firestore, 'sistema', tenantId, nombreColeccion);
+      const snap = await getDocs(collRef);
+      if (!snap.empty) {
+        const batch = writeBatch(this.fb.firestore);
+        snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+        await batch.commit();
+      }
+    } catch (e) {
+      console.warn(`Aviso al vaciar colección ${nombreColeccion}:`, e);
+    }
   }
 
   getRefColeccion(nombreColeccion: string): CollectionReference {
@@ -125,6 +154,10 @@ export class FirestoreChunksService {
 
   async borrarTodaBaseDeDatosEmpresa(): Promise<void> {
     const tenantId = this.getDocIdEmpresa();
+    if (!tenantId || tenantId === 'main') {
+      throw new Error('No se puede ejecutar un borrado total: El identificador de empresa es inválido.');
+    }
+
     const coleccionesAEliminar = [
       'chunks_productos',
       'chunks_ventas',
@@ -132,13 +165,22 @@ export class FirestoreChunksService {
       'chunks_gastos',
       'chunks_cortes',
       'chunks_pedidos',
+      'chunks_bitacora',
+      'chunks_liquidaciones_socios',
+      'chunks_prestamos_socios',
+      'chunks_sucursales',
+      'chunks_estado_cuenta',
       'config',
       'productos',
       'ventas',
       'movimientos',
       'gastos',
       'cortes',
-      'pedidos'
+      'pedidos',
+      'bitacora',
+      'liquidaciones_socios',
+      'prestamos_socios',
+      'estado_cuenta'
     ];
 
     for (const nomCol of coleccionesAEliminar) {
@@ -190,6 +232,15 @@ export class FirestoreChunksService {
 
       const pedidosRef = this.getRefDocConfig('pedidosPersonalizados');
       await setDoc(pedidosRef, { items: [], actualizadoEn: new Date().toISOString() });
+
+      const sociosRef = this.getRefDocConfig('sociosConfig');
+      await setDoc(sociosRef, {
+        socios: [{ id: 'socio-1', nombre: 'Socio 1', porcentaje: 100, activo: true }],
+        actualizadoEn: new Date().toISOString()
+      });
+
+      const bitacoraRef = this.getRefDocConfig('bitacoraReciente');
+      await setDoc(bitacoraRef, { items: [], total: 0, actualizadoEn: new Date().toISOString() });
     } catch (e) {
       console.warn('Aviso al inicializar configs limpias:', e);
     }

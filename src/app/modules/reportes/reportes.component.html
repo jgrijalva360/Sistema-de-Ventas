@@ -6,6 +6,58 @@
     </div>
   </div>
 
+  <!-- Barra de Pestañas de Reportes No Intrusiva -->
+  <div class="reportes-tabs-bar">
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'ESTADO_CUENTA'"
+      (click)="setTipoReporte('ESTADO_CUENTA')"
+    >
+      🏦 Estado de Cuenta (Caja vs. Socios)
+    </button>
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'GLOBAL'"
+      (click)="setTipoReporte('GLOBAL')"
+    >
+      🌐 Consolidado Global
+    </button>
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'VENTAS'"
+      (click)="setTipoReporte('VENTAS')"
+    >
+      💵 Ventas
+    </button>
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'PEDIDOS'"
+      (click)="setTipoReporte('PEDIDOS')"
+    >
+      📦 Pedidos
+    </button>
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'GASTOS'"
+      (click)="setTipoReporte('GASTOS')"
+    >
+      🧾 Gastos
+    </button>
+    <button
+      type="button"
+      class="tab-pill"
+      [class.active]="tipoReporte() === 'CORTES'"
+      (click)="setTipoReporte('CORTES')"
+    >
+      🔒 Cortes de Caja
+    </button>
+  </div>
+
   <!-- Filtros de Consulta -->
   <div class="card">
     <div class="card-header">
@@ -16,6 +68,7 @@
         <div class="form-group">
           <label for="repTipo">Tipo de Reporte *</label>
           <select #repTipoRef id="repTipo" [ngModel]="tipoReporte()" (ngModelChange)="tipoReporte.set($event)">
+            <option value="ESTADO_CUENTA">🏦 Estado de Cuenta Bancario (Flujo de Dinero: Caja vs Socios)</option>
             <option value="GLOBAL">🌐 Reporte Global Consolidado (Ventas + Pedidos vs Gastos)</option>
             <option value="VENTAS">💵 Reporte Detallado de Ventas (Mostrador)</option>
             <option value="PEDIDOS">📦 Reporte Detallado de Pedidos Personalizados</option>
@@ -44,6 +97,64 @@
           </select>
         </div>
 
+        @if (tipoReporte() === 'ESTADO_CUENTA') {
+          <div class="form-group">
+            <label for="repCuenta">Cuenta / Origen del Dinero</label>
+            <select id="repCuenta" [ngModel]="cuentaSeleccionada()" (ngModelChange)="cuentaSeleccionada.set($event)">
+              <option value="TODAS">🏦 Todas las Cuentas (Consolidado General)</option>
+              <option value="CAJA">🟢 Caja Mostrador (Efectivo en Gaveta)</option>
+              <optgroup label="Cuentas de Socios">
+                @for (s of sociosService.sociosActivos(); track s.id) {
+                  <option [value]="s.id">👤 Socio: {{ s.nombre }}</option>
+                }
+              </optgroup>
+              <option value="EMPRESA">🏢 Empresa (Cuentas Negocio)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="repTipoMov">Tipo de Movimiento</label>
+            <select id="repTipoMov" [ngModel]="tipoMovimientoFiltro()" (ngModelChange)="tipoMovimientoFiltro.set($event)">
+              <option value="TODOS">Todos los Movimientos</option>
+              <option value="INGRESO">📥 Solo Ingresos (+)</option>
+              <option value="EGRESO">📤 Solo Egresos (-)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="repMetodo">Método de Pago</label>
+            <select id="repMetodo" [ngModel]="metodoFiltro()" (ngModelChange)="metodoFiltro.set($event)">
+              <option value="TODOS">Todos los Métodos</option>
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+              <option value="TARJETA">Tarjeta</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="repModulo">Módulo Origen</label>
+            <select id="repModulo" [ngModel]="moduloFiltro()" (ngModelChange)="moduloFiltro.set($event)">
+              <option value="TODOS">Todos los Módulos</option>
+              <option value="VENTAS">💵 Ventas Mostrador</option>
+              <option value="PEDIDOS">📦 Pedidos</option>
+              <option value="GASTOS">🧾 Gastos</option>
+              <option value="CORTES">🔒 Cortes / Resguardos</option>
+              <option value="SOCIOS">👥 Pago a Socios / Repartos</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="repBusqueda">Buscar en Movimientos</label>
+            <input
+              id="repBusqueda"
+              type="text"
+              placeholder="Buscar por concepto, folio de ticket, cliente o destinatario..."
+              [ngModel]="busquedaMovimientos()"
+              (ngModelChange)="busquedaMovimientos.set($event)"
+            />
+          </div>
+        }
+
         <div class="form-actions" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button type="button" class="btn btn-sm btn-secondary" (click)="setRangoRapido('HOY')">Hoy</button>
@@ -58,6 +169,163 @@
       </div>
     </div>
   </div>
+
+  <!-- 0. VISTA DE ESTADO DE CUENTA BANCARIO UNIFICADO -->
+  @if (tipoReporte() === 'ESTADO_CUENTA') {
+    <!-- KPIs del Estado de Cuenta -->
+    <div class="corte-kpis" style="margin-bottom: 20px;">
+      <div class="corte-kpi">
+        <span>🏁 Saldo Inicial Previo</span>
+        <strong>{{ resumenEstadoCuenta().saldoInicial | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Acumulado antes de {{ fechaDesde() }}
+        </small>
+      </div>
+
+      <div class="corte-kpi corte-kpi--up">
+        <span>📥 Total Ingresos (+)</span>
+        <strong style="color: #15803d;">{{ resumenEstadoCuenta().totalIngresos | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Entradas en el periodo
+        </small>
+      </div>
+
+      <div class="corte-kpi corte-kpi--down">
+        <span>📤 Total Egresos (-)</span>
+        <strong style="color: #dc2626;">{{ resumenEstadoCuenta().totalEgresos | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Salidas en el periodo
+        </small>
+      </div>
+
+      <div class="corte-kpi" [class.corte-kpi--up]="resumenEstadoCuenta().flujoNeto >= 0" [class.corte-kpi--down]="resumenEstadoCuenta().flujoNeto < 0">
+        <span>⚖️ Flujo Neto</span>
+        <strong>{{ resumenEstadoCuenta().flujoNeto | currencyMxn }}</strong>
+        <small style="color: #64748b; font-size: 0.72rem; margin-top: 2px;">
+          Diferencia periodo
+        </small>
+      </div>
+
+      <div class="corte-kpi" [class.corte-kpi--up]="resumenEstadoCuenta().saldoFinal >= 0" [class.corte-kpi--down]="resumenEstadoCuenta().saldoFinal < 0" style="border: 2px solid #0284c7; background: #f0f9ff;">
+        <span style="color: #0369a1; font-weight: 700;">💰 Saldo Final Disponible (=)</span>
+        <strong style="color: #0284c7; font-size: 1.4rem;">{{ resumenEstadoCuenta().saldoFinal | currencyMxn }}</strong>
+        <small style="color: #0369a1; font-size: 0.72rem; margin-top: 2px;">
+          Saldo cuenta al {{ fechaHasta() }}
+        </small>
+      </div>
+    </div>
+
+    <!-- Tabla Detallada tipo Cartola / Extracto Bancario -->
+    <div class="card">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <span>🏦 Extracto de Movimientos de Dinero (Libro Diario)</span>
+          <small style="color: #64748b; margin-left: 8px;">
+            {{ resumenEstadoCuenta().movimientos.length }} movimiento(s)
+          </small>
+        </div>
+        <div style="font-size: 0.82rem; color: #475569;">
+          Cuenta: <strong>{{ cuentaSeleccionada() === 'TODAS' ? 'Todas las Cuentas' : (cuentaSeleccionada() === 'CAJA' ? 'Caja Mostrador' : 'Socio / Cuenta Personal') }}</strong>
+        </div>
+      </div>
+      <div class="card-body table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha y Hora</th>
+              <th>Módulo / Folio</th>
+              <th>Concepto / Movimiento</th>
+              <th>Cuenta / Origen</th>
+              <th>Método Pago</th>
+              <th style="text-align: right;">Ingreso (+)</th>
+              <th style="text-align: right;">Egreso (-)</th>
+              <th style="text-align: right;">Saldo Acumulado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of resumenEstadoCuenta().movimientos; track m.id) {
+              <tr>
+                <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">
+                  {{ m.fecha | fechaLocal }}
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="{
+                    'badge-success': m.moduloOrigen === 'VENTAS',
+                    'badge-info': m.moduloOrigen === 'PEDIDOS',
+                    'badge-danger': m.moduloOrigen === 'GASTOS',
+                    'badge-warning': m.moduloOrigen === 'CORTES',
+                    'badge-primary': m.moduloOrigen === 'SOCIOS'
+                  }">
+                    {{ m.moduloOrigen }}: #{{ m.referenciaId }}
+                  </span>
+                </td>
+                <td class="col-descripcion">
+                  <div class="desc-texto">
+                    <strong>{{ m.concepto }}</strong>
+                    @if (m.contraparteNombre) {
+                      <div style="font-size: 0.74rem; color: #64748b; margin-top: 1px;">
+                        Contacto / Destino: {{ m.contraparteNombre }}
+                      </div>
+                    }
+                  </div>
+                </td>
+                <td>
+                  @if (m.cuenta === 'CAJA') {
+                    <span class="badge" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac;">
+                      🟢 Caja Mostrador
+                    </span>
+                  } @else if (m.cuenta === 'SOCIO') {
+                    <span class="badge" style="background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;">
+                      👤 {{ m.titularSocioNombre || 'Socio' }}
+                    </span>
+                  } @else {
+                    <span class="badge" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;">
+                      🏢 {{ m.titularSocioNombre || 'Empresa' }}
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="{
+                    'badge-success': m.metodoPago === 'EFECTIVO',
+                    'badge-primary': m.metodoPago === 'TARJETA',
+                    'badge-warning': m.metodoPago === 'TRANSFERENCIA',
+                    'badge-secondary': m.metodoPago === 'BOLSILLO_SOCIO'
+                  }">
+                    {{ m.metodoPago }}
+                  </span>
+                </td>
+                <td style="text-align: right; color: #15803d;">
+                  @if (m.tipo === 'INGRESO') {
+                    <strong>+{{ m.importe | currencyMxn }}</strong>
+                  } @else {
+                    <span style="color: #cbd5e1;">-</span>
+                  }
+                </td>
+                <td style="text-align: right; color: #dc2626;">
+                  @if (m.tipo === 'EGRESO') {
+                    <strong>-{{ m.importe | currencyMxn }}</strong>
+                  } @else {
+                    <span style="color: #cbd5e1;">-</span>
+                  }
+                </td>
+                <td style="text-align: right; font-weight: 800;" [style.color]="(m.saldoAcumulado || 0) >= 0 ? '#0f172a' : '#b91c1c'">
+                  {{ (m.saldoAcumulado || 0) | currencyMxn }}
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="8" style="text-align: center; padding: 35px; color: #94a3b8;">
+                  <div style="font-size: 1.8rem; margin-bottom: 6px;">🏦</div>
+                  <strong>No hay movimientos registrados para los criterios seleccionados.</strong>
+                  <p style="margin: 4px 0 0; font-size: 0.82rem;">Prueba cambiando el rango de fechas o seleccionando "Todas las Cuentas".</p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
 
   <!-- 1. VISTA GLOBAL CONSOLIDADA (VENTAS VS GASTOS) -->
   @if (tipoReporte() === 'GLOBAL') {

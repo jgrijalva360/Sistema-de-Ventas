@@ -297,15 +297,15 @@ export interface UsuarioSistema {
   sucursalNombre?: string;
   activo: boolean;
   fechaCreacion: string;
-  ultimoAcceso?: string;
-  sesionActivaId?: string;
-  dispositivoActual?: string;
+  ultimoAcceso?: string | null;
+  sesionActivaId?: string | null;
+  dispositivoActual?: string | null;
   pin?: string;
   claveAcceso?: string;
   creadoPorAdmin?: boolean;
-  dispositivoAutorizadoId?: string;
-  dispositivoAutorizadoNombre?: string;
-  fechaVinculacionDispositivo?: string;
+  dispositivoAutorizadoId?: string | null;
+  dispositivoAutorizadoNombre?: string | null;
+  fechaVinculacionDispositivo?: string | null;
   permitirCualquierDispositivo?: boolean;
 }
 
@@ -481,6 +481,88 @@ export interface LiquidacionSocios {
   usuarioRegistro?: string;
   sucursalId?: string;
   sucursalNombre?: string;
+}
+
+// ── Modelos de Estado de Cuenta / Flujo Financiero ──────────────
+export type TipoFlujoFinanciero = 'INGRESO' | 'EGRESO';
+export type EntidadFinanciera = 'CAJA' | 'SOCIO' | 'EMPRESA';
+export type ModuloFinanciero = 'VENTAS' | 'PEDIDOS' | 'GASTOS' | 'CORTES' | 'SOCIOS';
+
+export interface MovimientoFinanciero {
+  id: string;
+  fecha: string;
+  concepto: string;
+  tipo: TipoFlujoFinanciero;
+  importe: number;
+  cuenta: EntidadFinanciera;
+  titularSocioId?: string;
+  titularSocioNombre?: string;
+  contraparteId?: string;
+  contraparteNombre?: string;
+  metodoPago: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'BOLSILLO_SOCIO' | string;
+  moduloOrigen: ModuloFinanciero;
+  referenciaId: string;
+  sucursalId?: string;
+  sucursalNombre?: string;
+  usuario?: string;
+  saldoAcumulado?: number;
+}
+
+export interface FiltrosEstadoCuenta {
+  periodo?: 'HOY' | 'AYER' | 'ESTA_SEMANA' | 'ESTE_MES' | 'MES_ANTERIOR' | 'PERSONALIZADO' | 'TODO';
+  fechaDesde: string;
+  fechaHasta: string;
+  cuenta: 'TODAS' | 'CAJA' | 'EMPRESA' | string; // 'TODAS' | 'CAJA' | socioId
+  tipo: 'TODOS' | 'INGRESO' | 'EGRESO';
+  metodoPago: 'TODOS' | 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
+  moduloOrigen: 'TODOS' | ModuloFinanciero;
+  sucursalId: string;
+  terminoBusqueda?: string;
+}
+
+export interface ResumenEstadoCuenta {
+  saldoInicial: number;
+  totalIngresos: number;
+  totalEgresos: number;
+  flujoNeto: number;
+  saldoFinal: number;
+  movimientos: MovimientoFinanciero[];
+}
+
+export interface ResumenArchivoBackup {
+  fileName: string;
+  data: any;
+  fecha?: string;
+  appVersion?: string;
+  productosCount: number;
+  ventasCount: number;
+  movimientosCount: number;
+  gastosCount: number;
+  cortesCount: number;
+  pedidosCount: number;
+  sucursalesCount: number;
+  bitacoraCount: number;
+  usuariosCount: number;
+  sociosCount: number;
+  liquidacionesCount: number;
+  prestamosCount: number;
+  hasConfig: boolean;
+}
+
+export interface ResultadoRestauracionBackup {
+  productosCount: number;
+  ventasCount: number;
+  gastosCount: number;
+  movimientosCount: number;
+  cortesCount: number;
+  pedidosCount: number;
+  sucursalesCount: number;
+  bitacoraCount: number;
+  usuariosCount: number;
+  sociosCount: number;
+  liquidacionesCount: number;
+  prestamosCount: number;
+  configRestaurada: boolean;
 }
 
 

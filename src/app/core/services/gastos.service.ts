@@ -139,33 +139,42 @@ export class GastosService {
     }
   }
 
+  limpiarEstado(): void {
+    if (this.subLive) {
+      this.subLive.unsubscribe();
+      this.subLive = undefined;
+    }
+    this.gastosSignal.set([]);
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLive) this.subLive.unsubscribe();
 
     const chunksCollRef = this.firestoreService.getRefColeccion('chunks_gastos');
     this.subLive = collectionStream$(chunksCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.gastosSignal.set([]);
+          return;
+        }
 
-          const actualizados: Gasto[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            this.gastosSignal.set(actualizados);
+        const actualizados: Gasto[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        this.gastosSignal.set(actualizados);
       },
       error: (err) => console.error('Error en stream de gastos:', err)
     });

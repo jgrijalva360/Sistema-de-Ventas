@@ -12,10 +12,12 @@ import { CortesService } from '../../core/services/cortes.service';
 import { SocioConfig, DetalleLiquidacionSocio, GastoBolsilloItem, LiquidacionSocios, AjusteEntreSocios, Gasto, Venta, Corte } from '../../core/models/models';
 import { getFechaLocalString } from '../../shared/utils/date.util';
 
+import { RouterLink } from '@angular/router';
+
 @Component({
   selector: 'app-socios',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyMxnPipe, FechaLocalPipe],
+  imports: [CommonModule, FormsModule, CurrencyMxnPipe, FechaLocalPipe, RouterLink],
   templateUrl: './socios.component.html',
   styleUrl: './socios.component.scss'
 })

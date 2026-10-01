@@ -47,6 +47,15 @@ export class SyncService {
     this.syncMessage.set(message);
   }
 
+  limpiarEstado(): void {
+    this.subs.forEach((s) => s.unsubscribe());
+    this.subs = [];
+    this.myRevisionLocal = 0;
+    this.newVersionAvailable.set(null);
+    this.syncStatus.set('online');
+    this.syncMessage.set('En Línea');
+  }
+
   iniciarEscuchadorVersion(): void {
     // 1. Escuchador de Versión Global en la raíz de Firestore (sistema_global/version)
     const globalVersionDocRef = this.firestoreService.getRefDocVersionGlobal();

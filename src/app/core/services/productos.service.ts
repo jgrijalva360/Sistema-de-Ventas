@@ -142,33 +142,42 @@ export class ProductosService {
     return [];
   }
 
+  limpiarEstado(): void {
+    if (this.subLiveDoc) {
+      this.subLiveDoc.unsubscribe();
+      this.subLiveDoc = undefined;
+    }
+    this.productosSignal.set([]);
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLiveDoc) this.subLiveDoc.unsubscribe();
 
     const chunksCollRef = this.firestoreService.getRefColeccion('chunks_productos');
     this.subLiveDoc = collectionStream$(chunksCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.productosSignal.set([]);
+          return;
+        }
 
-          const actualizados: Producto[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            this.productosSignal.set(actualizados.map((p) => this.normalizarProducto(p)));
+        const actualizados: Producto[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        this.productosSignal.set(actualizados.map((p) => this.normalizarProducto(p)));
       },
       error: (err) => console.error('Error en stream de productos:', err)
     });

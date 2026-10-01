@@ -38,6 +38,14 @@ export class BitacoraService {
     return rawList;
   }
 
+  limpiarEstado(): void {
+    if (this.subLiveDoc) {
+      this.subLiveDoc.unsubscribe();
+      this.subLiveDoc = undefined;
+    }
+    this.eventosSignal.set([]);
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLiveDoc) this.subLiveDoc.unsubscribe();
 
@@ -45,10 +53,9 @@ export class BitacoraService {
     this.subLiveDoc = docStream$(docRef).subscribe({
       next: (snap) => {
         if (snap.exists() && Array.isArray(snap.data()['items'])) {
-          const items = snap.data()['items'] as BitacoraEvento[];
-          if (items.length > 0) {
-            this.eventosSignal.set(items);
-          }
+          this.eventosSignal.set(snap.data()['items'] as BitacoraEvento[]);
+        } else {
+          this.eventosSignal.set([]);
         }
       },
       error: (err) => console.error('Error en stream de bitácora:', err)

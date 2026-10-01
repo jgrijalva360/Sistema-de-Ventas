@@ -218,34 +218,43 @@ export class MovimientosService {
     return limpios;
   }
 
+  limpiarEstado(): void {
+    if (this.subLiveMovimientos) {
+      this.subLiveMovimientos.unsubscribe();
+      this.subLiveMovimientos = undefined;
+    }
+    this.movimientosSignal.set([]);
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLiveMovimientos) this.subLiveMovimientos.unsubscribe();
 
     const chunksCollRef = this.firestoreService.getRefColeccion('chunks_movimientos');
     this.subLiveMovimientos = collectionStream$(chunksCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.movimientosSignal.set([]);
+          return;
+        }
 
-          const actualizados: MovimientoInventario[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            const limpios = this.validarYLimpiarDuplicados(actualizados);
-            this.movimientosSignal.set(limpios);
+        const actualizados: MovimientoInventario[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        const limpios = this.validarYLimpiarDuplicados(actualizados);
+        this.movimientosSignal.set(limpios);
       },
       error: (err) => console.error('Error en stream de movimientos:', err)
     });

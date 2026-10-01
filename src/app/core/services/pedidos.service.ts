@@ -668,34 +668,43 @@ export class PedidosService {
     };
   }
 
+  limpiarEstado(): void {
+    if (this.subLive) {
+      this.subLive.unsubscribe();
+      this.subLive = undefined;
+    }
+    this.pedidosSignal.set([]);
+  }
+
   iniciarEscuchadorLive(): void {
     if (this.subLive) this.subLive.unsubscribe();
 
     const chunksCollRef = this.firestoreService.getRefColeccion('chunks_pedidos');
     this.subLive = collectionStream$(chunksCollRef).subscribe({
       next: (snapshot) => {
-        if (!snapshot.empty) {
-          const chunkDocs = snapshot.docs
-            .filter((d) => d.id.startsWith('chunk_'))
-            .sort((a, b) => {
-              const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
-              const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
-              return idxA - idxB;
-            });
+        if (snapshot.empty) {
+          this.pedidosSignal.set([]);
+          return;
+        }
 
-          const actualizados: PedidoPersonalizado[] = [];
-          chunkDocs.forEach((d) => {
-            const data = d.data();
-            if (Array.isArray(data['items'])) {
-              actualizados.push(...data['items']);
-            }
+        const chunkDocs = snapshot.docs
+          .filter((d) => d.id.startsWith('chunk_'))
+          .sort((a, b) => {
+            const idxA = parseInt(a.id.replace('chunk_', ''), 10) || 0;
+            const idxB = parseInt(b.id.replace('chunk_', ''), 10) || 0;
+            return idxA - idxB;
           });
 
-          if (actualizados.length > 0) {
-            const limpios = this.validarYLimpiarDuplicados(actualizados);
-            this.pedidosSignal.set(limpios);
+        const actualizados: PedidoPersonalizado[] = [];
+        chunkDocs.forEach((d) => {
+          const data = d.data();
+          if (Array.isArray(data['items'])) {
+            actualizados.push(...data['items']);
           }
-        }
+        });
+
+        const limpios = this.validarYLimpiarDuplicados(actualizados);
+        this.pedidosSignal.set(limpios);
       },
       error: (err) => console.error('Error en stream de pedidos:', err)
     });

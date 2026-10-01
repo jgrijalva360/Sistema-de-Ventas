@@ -14,7 +14,10 @@ import {
   AbonoPedido,
   UsuarioSistema,
   SocioConfig,
-  LiquidacionSocios
+  LiquidacionSocios,
+  AjusteEntreSocios,
+  ResumenArchivoBackup,
+  ResultadoRestauracionBackup
 } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { ProductosService } from './productos.service';
@@ -74,7 +77,7 @@ export class ConfiguracionService {
     private suscripcionService: SuscripcionService,
     private fb: FirebaseService,
     private sociosService: SociosService
-  ) {}
+  ) { }
 
   async cargarConfiguracion(): Promise<void> {
     try {
@@ -85,7 +88,16 @@ export class ConfiguracionService {
         if (data['config']) this.configSignal.set({ ...DEFAULT_CONFIG, ...data['config'] });
         if (data['listas']) this.listasSignal.set(data['listas']);
       }
-    } catch (_) {}
+    } catch (_) { }
+  }
+
+  limpiarEstado(): void {
+    if (this.subLive) {
+      this.subLive.unsubscribe();
+      this.subLive = undefined;
+    }
+    this.configSignal.set(DEFAULT_CONFIG);
+    this.listasSignal.set(DEFAULT_LISTAS);
   }
 
   iniciarEscuchadorLive(): void {
@@ -127,12 +139,10 @@ export class ConfiguracionService {
       console.warn('Error al obtener lista de colaboradores para el backup:', e);
     }
 
-    if (this.sociosService.socios().length === 0 && this.sociosService.liquidaciones().length === 0) {
-      try {
-        await this.sociosService.cargarDatos();
-      } catch (e) {
-        console.warn('Error al cargar datos de socios para el backup:', e);
-      }
+    try {
+      await this.sociosService.cargarDatos();
+    } catch (e) {
+      console.warn('Error al cargar datos de socios para el backup:', e);
     }
 
     const tenantId = this.authService.getTenantId();
@@ -161,6 +171,7 @@ export class ConfiguracionService {
       pedidosPersonalizados: this.pedidosService.pedidos(),
       socios: this.sociosService.socios(),
       liquidacionesSocios: this.sociosService.liquidaciones(),
+      prestamosSocios: this.sociosService.prestamos(),
       bitacora: this.bitacoraService.eventos()
     };
 
@@ -174,24 +185,7 @@ export class ConfiguracionService {
     URL.revokeObjectURL(url);
   }
 
-  async analizarArchivoBackup(file: File): Promise<{
-    fileName: string;
-    data: any;
-    fecha?: string;
-    appVersion?: string;
-    productosCount: number;
-    ventasCount: number;
-    movimientosCount: number;
-    gastosCount: number;
-    cortesCount: number;
-    pedidosCount: number;
-    sucursalesCount: number;
-    bitacoraCount: number;
-    usuariosCount: number;
-    sociosCount: number;
-    liquidacionesCount: number;
-    hasConfig: boolean;
-  }> {
+  async analizarArchivoBackup(file: File): Promise<ResumenArchivoBackup> {
     const text = await file.text();
     const data = JSON.parse(text);
 
@@ -222,6 +216,7 @@ export class ConfiguracionService {
     const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
     const rawSocios = normalizar(data.socios, data.sociosConfig, data.partners);
     const rawLiquidaciones = normalizar(data.liquidacionesSocios, data.liquidaciones, data.repartosSocios, data.repartos);
+    const rawPrestamos = normalizar(data.prestamosSocios, data.prestamos, data.ajustesEntreSocios, data.loans);
     const hasConfig = Boolean(data.config || data.general || data.listas || data.nombreNegocio || data.businessName);
 
     return {
@@ -240,6 +235,7 @@ export class ConfiguracionService {
       usuariosCount: rawUsuarios.length,
       sociosCount: rawSocios.length,
       liquidacionesCount: rawLiquidaciones.length,
+      prestamosCount: rawPrestamos.length,
       hasConfig
     };
   }
@@ -259,20 +255,7 @@ export class ConfiguracionService {
       restaurarUsuarios?: boolean;
       restaurarSocios?: boolean;
     }
-  ): Promise<{
-    productosCount: number;
-    ventasCount: number;
-    gastosCount: number;
-    movimientosCount: number;
-    cortesCount: number;
-    pedidosCount: number;
-    sucursalesCount: number;
-    bitacoraCount: number;
-    usuariosCount: number;
-    sociosCount: number;
-    liquidacionesCount: number;
-    configRestaurada: boolean;
-  }> {
+  ): Promise<ResultadoRestauracionBackup> {
     this.syncService.setStatus('saving', 'Restaurando copia de seguridad...');
 
     // Función auxiliar para normalizar arrays desde distintos formatos posibles
@@ -303,6 +286,7 @@ export class ConfiguracionService {
     const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
     const rawSocios = normalizar(data.socios, data.sociosConfig, data.partners);
     const rawLiquidaciones = normalizar(data.liquidacionesSocios, data.liquidaciones, data.repartosSocios, data.repartos);
+    const rawPrestamos = normalizar(data.prestamosSocios, data.prestamos, data.ajustesEntreSocios, data.loans);
 
     let sucursalesRestauradas = 0;
     let productosRestaurados = 0;
@@ -315,6 +299,7 @@ export class ConfiguracionService {
     let usuariosRestaurados = 0;
     let sociosRestaurados = 0;
     let liquidacionesRestauradas = 0;
+    let prestamosRestaurados = 0;
     let configRestaurada = false;
 
     // 0. Sucursales
@@ -732,14 +717,64 @@ export class ConfiguracionService {
     // 9. Cuentas de Usuarios y Colaboradores
     if (opciones.restaurarUsuarios && rawUsuarios.length > 0) {
       const currentEmpresaId = this.authService.getTenantId();
+      const currentAdminUser = this.authService.currentUser();
+      const currentAdminUid = currentAdminUser?.uid;
+
       for (const u of rawUsuarios) {
-        if (!u.uid && !u.email) continue;
-        const uid = u.uid || `USR-${Math.random().toString(36).substring(2, 9)}`;
-        const userDocRef = doc(this.fb.firestore, 'usuarios', uid);
+        if (!u.uid && !u.email && !u.nombre) continue;
+
+        const esAdminEnBackup = u.rol === 'ADMIN' || u.uid === data.empresaId || u.uid === data.organizacion?.empresaId;
+
+        // CASO 1: Es el usuario Administrador del backup
+        if (esAdminEnBackup) {
+          // El Administrador de la empresa destino es SIEMPRE el usuario autenticado actual.
+          // NUNCA debemos escribir un documento con un UID ajeno del backup para no sobreescribir la cuenta de otro usuario.
+          if (currentAdminUid) {
+            const adminDocRef = doc(this.fb.firestore, 'usuarios', currentAdminUid);
+            const adminUpdatePayload: Partial<UsuarioSistema> = {
+              uid: currentAdminUid,
+              empresaId: currentEmpresaId,
+              rol: 'ADMIN',
+              activo: true
+            };
+            if (u.pin || u.claveAcceso) {
+              adminUpdatePayload.pin = u.pin || u.claveAcceso;
+              adminUpdatePayload.claveAcceso = u.claveAcceso || u.pin;
+            }
+            await setDoc(adminDocRef, this.firestoreService.sanitizarParaFirestore(adminUpdatePayload), { merge: true });
+            usuariosRestaurados++;
+          }
+          continue;
+        }
+
+        // CASO 2: Colaboradores / Cajas
+        // Si el UID coincide con el admin actual, saltarlo para no alterar su rol
+        if (currentAdminUid && u.uid === currentAdminUid) continue;
+
+        let targetUid = u.uid;
+
+        // Si targetUid existe y pertenece a otra empresa, NO lo sobreescribimos; le asignamos un nuevo UID para esta empresa
+        if (targetUid) {
+          try {
+            const existingSnap = await getDoc(doc(this.fb.firestore, 'usuarios', targetUid));
+            if (existingSnap.exists()) {
+              const existingData = existingSnap.data() as UsuarioSistema;
+              if (existingData.empresaId && existingData.empresaId !== currentEmpresaId) {
+                targetUid = `USR-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+              }
+            }
+          } catch (_) { }
+        }
+
+        if (!targetUid) {
+          targetUid = `USR-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+        }
+
+        const userDocRef = doc(this.fb.firestore, 'usuarios', targetUid);
         const userData: UsuarioSistema = {
-          uid,
+          uid: targetUid,
           nombre: u.nombre || 'Colaborador',
-          email: u.email || `${(u.nombre || 'usuario').toLowerCase().replace(/\s+/g, '')}@pos.com`,
+          email: u.email || `${(u.nombre || 'cajero').toLowerCase().replace(/\s+/g, '')}@pos.com`,
           claveAcceso: u.claveAcceso || u.pin || '',
           pin: u.pin || u.claveAcceso || '',
           empresaId: currentEmpresaId,
@@ -747,16 +782,17 @@ export class ConfiguracionService {
           sucursalId: u.sucursalId || 'SUC-MAIN',
           sucursalNombre: u.sucursalNombre || 'Matriz Principal',
           activo: u.activo !== false,
-          creadoPorAdmin: u.creadoPorAdmin !== false,
+          creadoPorAdmin: true,
           fechaCreacion: u.fechaCreacion || new Date().toISOString(),
           dispositivoAutorizadoId: u.dispositivoAutorizadoId || null,
           dispositivoAutorizadoNombre: u.dispositivoAutorizadoNombre || null,
           fechaVinculacionDispositivo: u.fechaVinculacionDispositivo || null,
           permitirCualquierDispositivo: Boolean(u.permitirCualquierDispositivo),
-          ultimoAcceso: u.ultimoAcceso || null,
-          sesionActivaId: u.sesionActivaId || null,
-          dispositivoActual: u.dispositivoActual || null
+          ultimoAcceso: null,
+          sesionActivaId: null,
+          dispositivoActual: null
         };
+
         await setDoc(userDocRef, this.firestoreService.sanitizarParaFirestore(userData), { merge: true });
         usuariosRestaurados++;
       }
@@ -803,6 +839,25 @@ export class ConfiguracionService {
         await this.sociosService.cargarLiquidaciones();
         liquidacionesRestauradas = liquidaciones.length;
       }
+
+      if (rawPrestamos.length > 0) {
+        const prestamos: AjusteEntreSocios[] = rawPrestamos.map((p: any, idx: number) => ({
+          ...p,
+          id: p.id || `AJU-${Date.now()}-${idx}`,
+          fecha: p.fecha || new Date().toISOString(),
+          socioAcreedorId: p.socioAcreedorId || '',
+          socioAcreedorNombre: p.socioAcreedorNombre || 'Socio',
+          socioDeudorId: p.socioDeudorId || '',
+          socioDeudorNombre: p.socioDeudorNombre || 'Socio',
+          monto: Number(p.monto) || 0,
+          concepto: p.concepto || '',
+          liquidado: Boolean(p.liquidado),
+          liquidacionFolio: p.liquidacionFolio || undefined
+        }));
+        await this.firestoreService.guardarColeccionChunked('prestamos_socios', prestamos);
+        this.sociosService.setPrestamos(prestamos);
+        prestamosRestaurados = prestamos.length;
+      }
     }
 
     await this.syncService.incrementarRevision();
@@ -820,24 +875,12 @@ export class ConfiguracionService {
       usuariosCount: usuariosRestaurados,
       sociosCount: sociosRestaurados,
       liquidacionesCount: liquidacionesRestauradas,
+      prestamosCount: prestamosRestaurados,
       configRestaurada
     };
   }
 
-  async restaurarBackupDesdeJSON(file: File): Promise<{
-    productosCount: number;
-    ventasCount: number;
-    gastosCount: number;
-    movimientosCount: number;
-    cortesCount: number;
-    pedidosCount?: number;
-    sucursalesCount?: number;
-    bitacoraCount?: number;
-    usuariosCount?: number;
-    sociosCount?: number;
-    liquidacionesCount?: number;
-    configRestaurada?: boolean;
-  }> {
+  async restaurarBackupDesdeJSON(file: File): Promise<ResultadoRestauracionBackup> {
     const text = await file.text();
     const data = JSON.parse(text);
     const resultado = await this.restaurarBackupSeleccionado(data, {
@@ -858,6 +901,15 @@ export class ConfiguracionService {
 
   // ── Mantenimiento y Resets Periódicos ───────────────────────
   async realizarResetPeriodico(tipo: 'simplificar_movimientos' | 'reset_operativo' | 'reset_total'): Promise<void> {
+    const tenantId = this.authService.getTenantId();
+    if (!tenantId || tenantId === 'main') {
+      throw new Error('No se puede ejecutar el reset: La empresa o negocio actual no está identificada válidamente.');
+    }
+
+    if (!this.authService.esAdmin()) {
+      throw new Error('Operación no autorizada: Solo el Administrador de la empresa puede ejecutar funciones de reset.');
+    }
+
     // 1. Descarga de respaldo de seguridad previa
     await this.descargarBackupJSON();
 
@@ -875,6 +927,7 @@ export class ConfiguracionService {
         sucursalId: 'SUC-MAIN'
       }));
       await this.firestoreService.guardarColeccionChunked('movimientos', movimientosIniciales);
+      await this.firestoreService.vaciarColeccion('movimientos');
       this.movimientosService.setMovimientos(movimientosIniciales as any);
     } else if (tipo === 'reset_operativo') {
       this.syncService.setStatus('saving', 'Ejecutando Reset Operativo...');
@@ -884,30 +937,61 @@ export class ConfiguracionService {
         (p) => p.estado === 'PENDIENTE' || p.estado === 'EN_PROCESO' || ((p.saldoRestante || 0) > 0 && p.estado !== 'CANCELADO')
       );
 
-      // 2. Guardar pedidos pendientes en Firestore (chunks de 30)
+      // 2. Guardar pedidos pendientes en Firestore (chunks de 30) y actualizar fallback legacy
       await this.firestoreService.guardarColeccionChunked('pedidos', pedidosPendientes, 30);
+      await this.firestoreService.vaciarColeccion('pedidos');
       this.pedidosService.setPedidos(pedidosPendientes);
+      try {
+        await setDoc(this.firestoreService.getRefDocConfig('pedidosPersonalizados'), {
+          items: pedidosPendientes,
+          actualizadoEn: new Date().toISOString()
+        });
+      } catch (_) { }
 
       // 3. Eliminar todas las ventas y carritos pendientes
       await this.firestoreService.guardarColeccionChunked('ventas', []);
+      await this.firestoreService.vaciarColeccion('ventas');
       this.ventasService.setVentas([]);
       await setDoc(this.firestoreService.getRefDocConfig('carritosPendientes'), {
         items: [],
         actualizadoEn: new Date().toISOString()
       });
 
-      // 4. Eliminar gastos
+      // 4. Eliminar gastos operativos
       await this.firestoreService.guardarColeccionChunked('gastos', []);
+      await this.firestoreService.vaciarColeccion('gastos');
       this.gastosService.setGastos([]);
 
       // 5. Eliminar cortes cerrados y limpiar corte activo
       await this.firestoreService.guardarColeccionChunked('cortes', []);
+      await this.firestoreService.vaciarColeccion('cortes');
       this.cortesService.setCortes([]);
+      this.cortesService.setCorteActivo(null);
       await setDoc(this.firestoreService.getRefDocConfig('corteActivo'), {});
 
       // 6. Vaciar historial de movimientos de inventario (el stock actual reside directamente en los productos)
       await this.firestoreService.guardarColeccionChunked('movimientos', []);
+      await this.firestoreService.vaciarColeccion('movimientos');
       this.movimientosService.setMovimientos([]);
+
+      // 7. Eliminar historial de liquidaciones de reparto de utilidades a socios
+      await this.firestoreService.guardarColeccionChunked('liquidaciones_socios', []);
+      await this.firestoreService.vaciarColeccion('liquidaciones_socios');
+      this.sociosService.setLiquidaciones([]);
+
+      // 8. Conservar préstamos entre socios activos pendientes de saldar (los liquidados de periodos pasados se depuran)
+      const prestamosPendientes = this.sociosService.prestamos().filter((p) => !p.liquidado);
+      await this.firestoreService.guardarColeccionChunked('prestamos_socios', prestamosPendientes);
+      await this.firestoreService.vaciarColeccion('prestamos_socios');
+      this.sociosService.setPrestamos(prestamosPendientes);
+
+      // 9. Registrar evento en bitácora de auditoría
+      await this.bitacoraService.registrarEvento({
+        modulo: 'CONFIGURACION',
+        accion: 'RESET',
+        descripcion: `Reset Operativo de cierre ejecutado para la empresa (ID: ${tenantId}). Se eliminaron ventas, gastos, cortes y liquidaciones de socios. Se conservaron ${pedidosPendientes.length} pedidos y ${prestamosPendientes.length} préstamos pendientes.`,
+        nivel: 'WARNING'
+      });
     } else if (tipo === 'reset_total') {
       this.syncService.setStatus('saving', 'Borrando toda la base de datos de fábrica...');
       await this.firestoreService.borrarTodaBaseDeDatosEmpresa();
@@ -915,8 +999,12 @@ export class ConfiguracionService {
       this.ventasService.setVentas([]);
       this.gastosService.setGastos([]);
       this.movimientosService.setMovimientos([]);
-      this.cortesService.setCortes([]);
+      this.cortesService.setCortes([], null);
       this.pedidosService.setPedidos([]);
+      this.bitacoraService.setEventos([]);
+      this.sociosService.setLiquidaciones([]);
+      this.sociosService.setPrestamos([]);
+      this.sociosService.setSocios([{ id: 'socio-1', nombre: 'Socio 1', porcentaje: 100, activo: true }]);
     }
 
     await this.syncService.incrementarRevision();

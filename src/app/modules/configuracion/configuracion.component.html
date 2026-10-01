@@ -312,9 +312,9 @@
             <div class="card-top">
               <div class="action-icon">🧹</div>
               <div class="action-texts">
-                <strong>Limpieza Operativa (Cierre de Periodo / Año)</strong>
+                <strong>Limpieza Operativa de la Empresa (Cierre de Periodo)</strong>
                 <p>
-                  Elimina todas las ventas, carritos en espera, gastos, cortes y movimientos. <strong>Conserva catálogo, existencias y pedidos pendientes.</strong>
+                  Elimina todas las ventas, carritos en espera, gastos, cortes, liquidaciones de socios y movimientos de esta empresa. <strong>Conserva catálogo, existencias, pedidos pendientes, préstamos y colaboradores. No afecta a otras empresas.</strong>
                 </p>
               </div>
             </div>
@@ -328,9 +328,9 @@
             <div class="card-top">
               <div class="action-icon">💣</div>
               <div class="action-texts">
-                <strong>Restablecimiento Total de Fábrica</strong>
+                <strong>Restablecimiento Total de Fábrica de la Empresa</strong>
                 <p>
-                  Borra por completo todos los datos de Firestore (Productos, Ventas, Pedidos, Gastos). <strong>Acción irreversible.</strong>
+                  Borra por completo todos los datos de Firestore de esta empresa (Productos, Ventas, Pedidos, Gastos). <strong>Acción irreversible. Exclusivo para esta empresa, no afecta a otros negocios.</strong>
                 </p>
               </div>
             </div>
@@ -499,7 +499,7 @@
             <div class="module-icon">👥</div>
             <div class="module-info">
               <strong>Cuentas de Cajas y Colaboradores</strong>
-              <small>{{ resumenBackup()?.usuariosCount || 0 }} colaboradores y dispositivos</small>
+              <small>{{ resumenBackup()?.usuariosCount || 0 }} cuentas (no altera tu cuenta ni tu ID de Administrador)</small>
             </div>
           </label>
 
@@ -509,7 +509,9 @@
             <div class="module-icon">🤝</div>
             <div class="module-info">
               <strong>Socios y Repartos</strong>
-              <small>{{ resumenBackup()?.sociosCount || 0 }} socios, {{ resumenBackup()?.liquidacionesCount || 0 }} liquidaciones</small>
+              <small>
+                {{ resumenBackup()?.sociosCount || 0 }} socios, {{ resumenBackup()?.liquidacionesCount || 0 }} liquidaciones@if ((resumenBackup()?.prestamosCount || 0) > 0) {, {{ resumenBackup()?.prestamosCount }} préstamos}
+              </small>
             </div>
           </label>
         </div>
