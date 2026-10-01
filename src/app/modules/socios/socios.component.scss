@@ -26,6 +26,7 @@
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -47,6 +48,7 @@
       font-weight: 800;
       color: #0f172a;
     }
+
     p {
       margin: 0.3rem 0 0;
       color: #64748b;
@@ -144,7 +146,8 @@
       color: #475569;
     }
 
-    input, select {
+    input,
+    select {
       padding: 0.45rem 0.75rem;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
@@ -275,9 +278,11 @@
       &.text-danger {
         color: #dc2626;
       }
+
       &.text-amber {
         color: #d97706;
       }
+
       &.text-muted {
         color: #64748b;
         font-size: 0.8rem;
@@ -372,7 +377,8 @@
   }
 }
 
-.gastos-summary-badge, .total-reparto-badge {
+.gastos-summary-badge,
+.total-reparto-badge {
   background: #f1f5f9;
   padding: 0.5rem 0.9rem;
   border-radius: 8px;
@@ -514,7 +520,8 @@
     gap: 0.6rem;
     flex-wrap: wrap;
 
-    input, select {
+    input,
+    select {
       padding: 0.4rem 0.65rem;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
@@ -850,7 +857,8 @@
         margin-bottom: 0;
         width: 100%;
 
-        th, td {
+        th,
+        td {
           white-space: nowrap;
           padding: 0.75rem 0.9rem;
           font-size: 0.88rem;
@@ -910,6 +918,7 @@
       span {
         color: #15803d;
       }
+
       strong {
         color: #15803d;
         font-size: 1.25rem;
@@ -919,23 +928,73 @@
 }
 
 /* Utilities */
-.text-blue { color: #0284c7; }
-.text-emerald { color: #16a34a; }
-.text-danger { color: #dc2626; }
-.text-amber { color: #d97706; }
-.text-success { color: #16a34a; }
-.text-muted { color: #64748b; }
-.bg-emerald { background: #16a34a; }
-.bg-danger { background: #dc2626; }
-.font-bold { font-weight: 700; }
-.font-extrabold { font-weight: 800; }
-.font-lg { font-size: 1.1rem; }
-.font-xl { font-size: 1.25rem; }
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-.text-xs { font-size: 0.75rem; }
-.mt-4 { margin-top: 1rem; }
-.mb-2 { margin-bottom: 0.5rem; }
+.text-blue {
+  color: #0284c7;
+}
+
+.text-emerald {
+  color: #16a34a;
+}
+
+.text-danger {
+  color: #dc2626;
+}
+
+.text-amber {
+  color: #d97706;
+}
+
+.text-success {
+  color: #16a34a;
+}
+
+.text-muted {
+  color: #64748b;
+}
+
+.bg-emerald {
+  background: #16a34a;
+}
+
+.bg-danger {
+  background: #dc2626;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-extrabold {
+  font-weight: 800;
+}
+
+.font-lg {
+  font-size: 1.1rem;
+}
+
+.font-xl {
+  font-size: 1.25rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
 
 /* Sección Sutil de Ajustes / Préstamos entre Socios */
 .section-ajustes-subtle {
@@ -1048,7 +1107,8 @@
           color: #475569;
         }
 
-        select, input {
+        select,
+        input {
           padding: 0.4rem 0.6rem;
           font-size: 0.85rem;
           border: 1px solid #cbd5e1;
@@ -1141,4 +1201,3 @@
     }
   }
 }
-

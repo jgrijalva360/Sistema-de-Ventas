@@ -35,11 +35,6 @@ export class SociosComponent implements OnInit {
         this.sincronizarSociosEditables();
       }
     });
-
-    effect(() => {
-      const prestamos = this.sociosService.prestamosPendientes();
-      this.ajustesEntreSocios.set([...prestamos]);
-    }, { allowSignalWrites: true });
   }
 
   // Pestañas
@@ -50,12 +45,42 @@ export class SociosComponent implements OnInit {
   public fechaHasta = signal<string>(getFechaLocalString());
   public sucursalSeleccionada = signal<string>('TODAS');
 
-  // Descontar automáticamente de caja al liquidar
-  public descontarDeCajaAutomatico = signal<boolean>(true);
-  public metodoPagoSalida = signal<'EFECTIVO' | 'TRANSFERENCIA'>('EFECTIVO');
-
   // Base de Cálculo: Flujo Operativo vs Utilidad FIFO
   public baseCalculo = signal<'FLUJO_EFECTIVO' | 'UTILIDAD_FIFO'>('FLUJO_EFECTIVO');
+
+  // Configuración de la salida de dinero para cada socio que cobra en esta liquidación
+  // socioId -> { metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA', socioOrigenId?: string }
+  public formasPagoSalidaSocios = signal<Record<string, { metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA'; socioOrigenId?: string }>>({});
+
+  obtenerMetodoSalidaSocio(socioId: string): 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' {
+    return this.formasPagoSalidaSocios()[socioId]?.metodoPago || 'EFECTIVO';
+  }
+
+  cambiarMetodoSalidaSocio(socioId: string, metodo: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA'): void {
+    const current = { ...this.formasPagoSalidaSocios() };
+    const defSocio = this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id || '';
+    current[socioId] = {
+      metodoPago: metodo,
+      socioOrigenId: current[socioId]?.socioOrigenId || defSocio
+    };
+    this.formasPagoSalidaSocios.set(current);
+  }
+
+  obtenerSocioOrigenSalida(socioId: string): string {
+    const conf = this.formasPagoSalidaSocios()[socioId];
+    if (conf?.socioOrigenId) return conf.socioOrigenId;
+    return this.sociosService.socioTransferenciasDefault()?.id || this.sociosService.sociosActivos()[0]?.id || '';
+  }
+
+  cambiarSocioOrigenSalida(socioId: string, socioOrigenId: string): void {
+    const current = { ...this.formasPagoSalidaSocios() };
+    const met = current[socioId]?.metodoPago || 'TRANSFERENCIA';
+    current[socioId] = {
+      metodoPago: met,
+      socioOrigenId
+    };
+    this.formasPagoSalidaSocios.set(current);
+  }
 
   // Mapeo local de gastos asignados a socios (idGasto -> idSocio)
   // 'EMPRESA' significa que lo pagó el negocio/caja
@@ -78,8 +103,7 @@ export class SociosComponent implements OnInit {
   public nuevoGastoMonto = signal<number | null>(null);
   public nuevoGastoSocioId = signal<string>('');
 
-  // Préstamos y ajustes directos entre socios (suma cero)
-  public ajustesEntreSocios = signal<AjusteEntreSocios[]>([]);
+  // Préstamos y ajustes directos entre socios (suma cero) - Formulario
   public mostrarFormAjuste = signal<boolean>(false);
   public nuevoAjusteDeudorId = signal<string>('');
   public nuevoAjusteAcreedorId = signal<string>('');
@@ -201,10 +225,10 @@ export class SociosComponent implements OnInit {
   }
 
   // Métodos retrocompatibles
-  autoAsignarGastosPorNombre(): void {}
-  autoAsignarTransferencias(): void {}
-  autoAsignarTarjetas(): void {}
-  autoAsignarResguardos(): void {}
+  autoAsignarGastosPorNombre(): void { }
+  autoAsignarTransferencias(): void { }
+  autoAsignarTarjetas(): void { }
+  autoAsignarResguardos(): void { }
 
   // --- FILTRADOS DEL PERIODO ---
   public ventasFiltradas = computed(() => {
@@ -525,7 +549,47 @@ export class SociosComponent implements OnInit {
     return this.baseCalculo() === 'FLUJO_EFECTIVO' ? this.gananciaNetaFlujo() : this.gananciaNetaFifo();
   });
 
+  // Liquidación guardada que coincide con el periodo actualmente seleccionado
+  public liquidacionGuardadaPeriodo = computed<LiquidacionSocios | null>(() => {
+    const desde = this.fechaDesde();
+    const hasta = this.fechaHasta();
+    const sucursal = this.sucursalSeleccionada();
+
+    const liquidaciones = this.sociosService.liquidaciones();
+    if (!liquidaciones || liquidaciones.length === 0) return null;
+
+    // 1. Coincidencia exacta de fechas
+    const exacta = liquidaciones.find((l) => {
+      const sucursalOk = sucursal === 'TODAS' || !l.sucursalId || l.sucursalId === sucursal;
+      return sucursalOk && l.fechaDesde === desde && l.fechaHasta === hasta;
+    });
+    if (exacta) return exacta;
+
+    // 2. Coincidencia si el periodo seleccionado está contenido dentro de una liquidación guardada
+    const contenida = liquidaciones.find((l) => {
+      const sucursalOk = sucursal === 'TODAS' || !l.sucursalId || l.sucursalId === sucursal;
+      return sucursalOk && l.fechaDesde <= desde && l.fechaHasta >= hasta;
+    });
+    if (contenida) return contenida;
+
+    return null;
+  });
+
+  public periodoYaLiquidado = computed<boolean>(() => {
+    return !!this.liquidacionGuardadaPeriodo();
+  });
+
   // --- AJUSTES Y PRÉSTAMOS ENTRE SOCIOS ---
+  // Si el periodo ya fue cerrado/liquidado, recupera los préstamos exactos que quedaron archivados en él
+  // Si el periodo está en cálculo, toma los préstamos pendientes de cobro
+  public ajustesEntreSocios = computed<AjusteEntreSocios[]>(() => {
+    const liq = this.liquidacionGuardadaPeriodo();
+    if (liq && liq.ajustesEntreSocios && liq.ajustesEntreSocios.length > 0) {
+      return liq.ajustesEntreSocios;
+    }
+    return this.sociosService.prestamosPendientes();
+  });
+
   public ajustesPorSocio = computed<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     this.ajustesEntreSocios().forEach((aj) => {
@@ -542,6 +606,11 @@ export class SociosComponent implements OnInit {
   });
 
   async agregarAjusteEntreSocios(): Promise<void> {
+    if (this.periodoYaLiquidado()) {
+      alert('Este periodo ya se encuentra liquidado. No puedes agregar préstamos a un periodo cerrado.');
+      return;
+    }
+
     const deudorId = this.nuevoAjusteDeudorId();
     const acreedorId = this.nuevoAjusteAcreedorId();
     const monto = Number(this.nuevoAjusteMonto());
@@ -580,6 +649,17 @@ export class SociosComponent implements OnInit {
   }
 
   async eliminarAjusteEntreSocios(id: string): Promise<void> {
+    if (this.periodoYaLiquidado()) {
+      alert('Este préstamo ya fue liquidado en este cierre. Para anularlo debes eliminar la liquidación.');
+      return;
+    }
+
+    const prestamo = this.sociosService.prestamos().find((p) => p.id === id);
+    if (prestamo?.liquidado) {
+      alert(`Este préstamo ya fue liquidado en el cierre #${prestamo.liquidacionFolio || ''} y no se puede eliminar individualmente.`);
+      return;
+    }
+
     if (!confirm('¿Deseas eliminar este préstamo de Firestore?')) {
       return;
     }
@@ -604,50 +684,85 @@ export class SociosComponent implements OnInit {
     const devPorSocio = this.devolucionesPorSocio();
     const ajustesMap = this.ajustesPorSocio();
 
+    const liqGuardada = this.liquidacionGuardadaPeriodo();
+    const estaLiquidado = !!liqGuardada;
+
     return socios.map((socio) => {
-      const porc = Number(socio.porcentaje) || 0;
+      const socioGuardado = liqGuardada?.socios?.find((x) => x.socioId === socio.id);
+      const porc = estaLiquidado && socioGuardado ? socioGuardado.porcentaje : (Number(socio.porcentaje) || 0);
       const factor = porc / 100;
 
       // Ganancia neta proporcional asignada
-      const gananciaAsignada = Math.round((gananciaNeta * factor) * 100) / 100;
+      const gananciaAsignada = estaLiquidado && socioGuardado
+        ? socioGuardado.gananciaAsignada
+        : Math.round((gananciaNeta * factor) * 100) / 100;
 
       // Gastos que este socio puso de su bolsa
-      const gastosBolsilloAportados = gastosSocios
-        .filter((g) => g.socioId === socio.id)
-        .reduce((sum, g) => sum + g.monto, 0);
+      const gastosBolsilloAportados = estaLiquidado && socioGuardado
+        ? socioGuardado.gastosBolsilloAportados
+        : gastosSocios
+            .filter((g) => g.socioId === socio.id)
+            .reduce((sum, g) => sum + g.monto, 0);
 
       // Cuota de gastos de bolsillo que le correspondía absorber
-      const cuotaGastosBolsillo = Math.round((totalGastosBolsillo * factor) * 100) / 100;
+      const cuotaGastosBolsillo = estaLiquidado && socioGuardado
+        ? (socioGuardado.cuotaGastosBolsillo !== undefined ? socioGuardado.cuotaGastosBolsillo : Math.round((totalGastosBolsillo * factor) * 100) / 100)
+        : Math.round((totalGastosBolsillo * factor) * 100) / 100;
 
       // Transferencias bancarias recibidas directamente en su cuenta
-      const transferenciasRecibidas = Math.round((transfPorSocio[socio.id] || 0) * 100) / 100;
+      const transferenciasRecibidas = estaLiquidado && socioGuardado
+        ? (socioGuardado.transferenciasRecibidas || 0)
+        : Math.round((transfPorSocio[socio.id] || 0) * 100) / 100;
 
       // Pagos con tarjeta recibidos directamente en su cuenta/terminal
-      const tarjetasRecibidas = Math.round((tarjPorSocio[socio.id] || 0) * 100) / 100;
+      const tarjetasRecibidas = estaLiquidado && socioGuardado
+        ? (socioGuardado.tarjetasRecibidas || 0)
+        : Math.round((tarjPorSocio[socio.id] || 0) * 100) / 100;
 
       // Dinero en efectivo retirado de caja bajo su resguardo/custodia
-      const resguardosRecibidos = Math.round((resgPorSocio[socio.id] || 0) * 100) / 100;
+      const resguardosRecibidos = estaLiquidado && socioGuardado
+        ? (socioGuardado.resguardosRecibidos || 0)
+        : Math.round((resgPorSocio[socio.id] || 0) * 100) / 100;
 
       // Dinero en efectivo regresado / reintegrado a caja por este socio
-      const devolucionesRealizadas = Math.round((devPorSocio[socio.id] || 0) * 100) / 100;
+      const devolucionesRealizadas = estaLiquidado && socioGuardado
+        ? (socioGuardado.devolucionesRealizadas || 0)
+        : Math.round((devPorSocio[socio.id] || 0) * 100) / 100;
 
       // Resguardo Neto en su poder
-      const resguardoNeto = Math.round((resguardosRecibidos - devolucionesRealizadas) * 100) / 100;
+      const resguardoNeto = estaLiquidado && socioGuardado
+        ? (socioGuardado.resguardoNeto !== undefined ? socioGuardado.resguardoNeto : Math.round((resguardosRecibidos - devolucionesRealizadas) * 100) / 100)
+        : Math.round((resguardosRecibidos - devolucionesRealizadas) * 100) / 100;
 
       // Ajuste directo entre socios (préstamos personales / suma cero)
-      const ajusteDirecto = Math.round((ajustesMap[socio.id] || 0) * 100) / 100;
+      const ajusteDirecto = estaLiquidado && socioGuardado && socioGuardado.ajusteDirecto !== undefined
+        ? socioGuardado.ajusteDirecto
+        : Math.round((ajustesMap[socio.id] || 0) * 100) / 100;
 
       // Monto Neto que se le debe entregar de caja:
       // Ganancia Neta Asignada + Reembolso Íntegro - Transferencias - Tarjetas - Resguardos + Devoluciones + Ajuste Directo
-      const montoNetoACobrar = Math.round((
-        gananciaAsignada +
-        gastosBolsilloAportados -
-        transferenciasRecibidas -
-        tarjetasRecibidas -
-        resguardosRecibidos +
-        devolucionesRealizadas +
-        ajusteDirecto
-      ) * 100) / 100;
+      const montoNetoACobrar = estaLiquidado && socioGuardado
+        ? socioGuardado.montoNetoACobrar
+        : Math.round((
+            gananciaAsignada +
+            gastosBolsilloAportados -
+            transferenciasRecibidas -
+            tarjetasRecibidas -
+            resguardosRecibidos +
+            devolucionesRealizadas +
+            ajusteDirecto
+          ) * 100) / 100;
+
+      const montoPagado = estaLiquidado
+        ? (socioGuardado?.montoPagado !== undefined ? socioGuardado.montoPagado : (socioGuardado?.montoNetoACobrar || 0))
+        : 0;
+
+      const montoPendiente = estaLiquidado ? 0 : montoNetoACobrar;
+      const saldado = estaLiquidado;
+
+      const metodoSalidaActual = socioGuardado?.metodoPagoSalida || this.obtenerMetodoSalidaSocio(socio.id);
+      const origenIdActual = socioGuardado?.socioOrigenId || (metodoSalidaActual !== 'EFECTIVO' ? this.obtenerSocioOrigenSalida(socio.id) : undefined);
+      const origenNombreActual = socioGuardado?.socioOrigenNombre || (origenIdActual ? this.sociosService.socios().find((x) => x.id === origenIdActual)?.nombre : undefined);
 
       return {
         socioId: socio.id,
@@ -662,13 +777,39 @@ export class SociosComponent implements OnInit {
         devolucionesRealizadas,
         resguardoNeto,
         ajusteDirecto,
-        montoNetoACobrar
+        montoNetoACobrar,
+        montoPagado,
+        montoPendiente,
+        saldado,
+        metodoPagoSalida: metodoSalidaActual,
+        socioOrigenId: origenIdActual,
+        socioOrigenNombre: origenNombreActual
       };
     });
   });
 
   public totalNetoRepartido = computed(() => {
     return this.liquidacionCalculada().reduce((sum, s) => sum + s.montoNetoACobrar, 0);
+  });
+
+  public totalNetoPendiente = computed(() => {
+    return this.liquidacionCalculada().reduce((sum, s) => sum + (s.montoPendiente !== undefined ? s.montoPendiente : s.montoNetoACobrar), 0);
+  });
+
+  public sociosConSaldoACobrar = computed(() => {
+    return this.liquidacionCalculada().filter((s) => s.montoNetoACobrar > 0);
+  });
+
+  public totalSalidaEfectivoCaja = computed(() => {
+    return this.sociosConSaldoACobrar()
+      .filter((s) => this.obtenerMetodoSalidaSocio(s.socioId) === 'EFECTIVO')
+      .reduce((sum, s) => sum + s.montoNetoACobrar, 0);
+  });
+
+  public totalSalidaBancos = computed(() => {
+    return this.sociosConSaldoACobrar()
+      .filter((s) => this.obtenerMetodoSalidaSocio(s.socioId) !== 'EFECTIVO')
+      .reduce((sum, s) => sum + s.montoNetoACobrar, 0);
   });
 
   // --- ACCIONES DE GASTOS ---
@@ -752,17 +893,49 @@ export class SociosComponent implements OnInit {
     }
 
     const totalReparto = this.totalNetoRepartido();
-    const salidaTxt = this.descontarDeCajaAutomatico()
-      ? `\n\n💸 Se registrará un gasto por $${totalReparto.toFixed(2)} (${this.metodoPagoSalida() === 'EFECTIVO' ? 'Efectivo: saldará la caja' : 'Transferencia'})`
-      : '';
+    const salidaEfectivo = this.totalSalidaEfectivoCaja();
+    const salidaBancos = this.totalSalidaBancos();
 
-    if (!confirm(`¿Confirmas guardar el cierre de liquidación del periodo ${this.fechaDesde()} al ${this.fechaHasta()} en Firestore?${salidaTxt}`)) {
+    let resumenSalidas = '';
+    if (salidaEfectivo > 0) {
+      resumenSalidas += `\n• 💵 Efectivo (Caja de Turno): $${salidaEfectivo.toFixed(2)}`;
+    }
+    if (salidaBancos > 0) {
+      resumenSalidas += `\n• 📱 Transferencia / Tarjeta: $${salidaBancos.toFixed(2)}`;
+    }
+
+    if (!confirm(`¿Confirmas guardar el cierre de liquidación del periodo ${this.fechaDesde()} al ${this.fechaHasta()}?\n\n💸 Se registrarán las siguientes salidas de dinero individuales para saldar a los socios:${resumenSalidas}\n\nNota: No se registrarán gastos operativos compartidos; las cuentas de los socios quedarán saldadas.`)) {
       return;
     }
 
     this.guardandoLiquidacion.set(true);
     try {
       const sucursal = this.sucursalesService.sucursalActiva();
+
+      // Preparar el desglose de socios con los métodos y socios origen configurados
+      const sociosConSalida = this.liquidacionCalculada().map((s) => {
+        const metodo = this.obtenerMetodoSalidaSocio(s.socioId);
+        const socioOrigenId = metodo !== 'EFECTIVO' ? this.obtenerSocioOrigenSalida(s.socioId) : undefined;
+        const socioOrigenNombre = socioOrigenId
+          ? this.sociosService.socios().find((x) => x.id === socioOrigenId)?.nombre
+          : undefined;
+
+        const montoACobrar = s.montoNetoACobrar;
+        const montoPagado = montoACobrar > 0 ? montoACobrar : 0;
+        const montoPendiente = 0;
+        const saldado = true;
+
+        return {
+          ...s,
+          metodoPagoSalida: metodo,
+          socioOrigenId,
+          socioOrigenNombre,
+          montoPagado,
+          montoPendiente,
+          saldado
+        };
+      });
+
       const nuevaLiq = await this.sociosService.guardarLiquidacion({
         fechaDesde: this.fechaDesde(),
         fechaHasta: this.fechaHasta(),
@@ -776,7 +949,7 @@ export class SociosComponent implements OnInit {
         totalResguardos: this.totalResguardosPeriodo(),
         totalDevoluciones: this.totalDevolucionesPeriodo(),
         utilidadBaseReparto: this.gananciaNetaBaseSeleccionada(),
-        socios: this.liquidacionCalculada(),
+        socios: sociosConSalida,
         gastosBolsilloDetalle: this.listaGastosBolsillo(),
         ajustesEntreSocios: this.ajustesEntreSocios(),
         usuarioRegistro: this.authService.nombreOperadorActual(),
@@ -784,21 +957,23 @@ export class SociosComponent implements OnInit {
         sucursalNombre: sucursal.nombre
       });
 
-      // Si está habilitado el descuento automático de caja como gasto
-      if (this.descontarDeCajaAutomatico()) {
-        const metodo = this.metodoPagoSalida();
-        for (const s of nuevaLiq.socios) {
-          if (s.montoNetoACobrar > 0) {
-            await this.gastosService.registrarGasto({
-              concepto: `Liquidación #${nuevaLiq.folio} - Pago a ${s.nombre} (${s.porcentaje}%)`,
-              monto: s.montoNetoACobrar,
-              categoria: 'REPARTO_SOCIOS',
-              metodoPago: metodo,
-              persona: 'Caja / Negocio',
-              socioId: 'EMPRESA',
-              observaciones: `Reparto entregado a socio ${s.nombre}. Liquidación #${nuevaLiq.folio} (${nuevaLiq.fechaDesde} al ${nuevaLiq.fechaHasta}). Ganancia: $${s.gananciaAsignada.toFixed(2)} + Reembolso: $${s.gastosBolsilloAportados.toFixed(2)}${s.transferenciasRecibidas ? ` - Transf: $${s.transferenciasRecibidas.toFixed(2)}` : ''}${s.tarjetasRecibidas ? ` - Tarjeta: $${s.tarjetasRecibidas.toFixed(2)}` : ''}${s.resguardosRecibidos ? ` - Resguardo Caja: $${s.resguardosRecibidos.toFixed(2)}` : ''}${s.devolucionesRealizadas ? ` + Reintegro Caja: $${s.devolucionesRealizadas.toFixed(2)}` : ''}${s.ajusteDirecto ? ` ${s.ajusteDirecto > 0 ? '+' : ''}$${s.ajusteDirecto.toFixed(2)} (Ajuste)` : ''}`
-            });
-          }
+      // Registrar la salida de dinero individual para cada socio que cobra en el turno activo
+      for (const s of sociosConSalida) {
+        if (s.montoNetoACobrar > 0) {
+          const descMetodo = s.metodoPagoSalida === 'EFECTIVO'
+            ? 'Caja en Efectivo'
+            : `${s.metodoPagoSalida} provista por ${s.socioOrigenNombre || 'Socio'}`;
+
+          await this.cortesService.registrarSalidaRepartoTurnoActivo({
+            monto: s.montoNetoACobrar,
+            socioId: s.socioId,
+            socioNombre: s.nombre,
+            concepto: `Pago Liquidación #${nuevaLiq.folio} a ${s.nombre} (${descMetodo})`,
+            metodoPago: s.metodoPagoSalida || 'EFECTIVO',
+            socioOrigenId: s.socioOrigenId,
+            socioOrigenNombre: s.socioOrigenNombre,
+            liquidacionFolio: nuevaLiq.folio ? String(nuevaLiq.folio) : undefined
+          });
         }
       }
 
@@ -808,8 +983,7 @@ export class SociosComponent implements OnInit {
         await this.sociosService.liquidarAjustes(idsAjustes, nuevaLiq.folio || nuevaLiq.id);
       }
 
-      this.mostrarMensajeFeedback(`✅ Liquidación #${nuevaLiq.folio} guardada con éxito${this.descontarDeCajaAutomatico() ? ' y registrada en gastos para saldar la caja' : ''}.`);
-      this.tabActiva.set('HISTORIAL');
+      this.mostrarMensajeFeedback(`✅ Liquidación #${nuevaLiq.folio} guardada con éxito. Se registraron las salidas de dinero para cada socio y el reparto ha quedado saldado ($0.00 pendiente).`);
     } catch (err) {
       console.error('Error al guardar liquidación:', err);
       alert('Hubo un error al guardar la liquidación en Firestore.');
@@ -873,7 +1047,20 @@ export class SociosComponent implements OnInit {
         const ajTxt = s.ajusteDirecto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         txt += `   • Ajuste / Préstamo directo: ${signo}$${ajTxt}\n`;
       }
-      txt += `   👉 *TOTAL A ENTREGAR EN CAJA: $${neto}*\n\n`;
+
+      const metodo = s.metodoPagoSalida || this.obtenerMetodoSalidaSocio(s.socioId);
+      const socioOrigenId = s.socioOrigenId || (metodo !== 'EFECTIVO' ? this.obtenerSocioOrigenSalida(s.socioId) : undefined);
+      const socioOrigenNombre = s.socioOrigenNombre || (socioOrigenId ? this.sociosService.socios().find(x => x.id === socioOrigenId)?.nombre : undefined);
+      const detalleSalida = metodo === 'EFECTIVO' ? '💵 Efectivo (Caja)' : `${metodo === 'TARJETA' ? '💳 Tarjeta' : '📱 Transferencia'} (de ${socioOrigenNombre || 'Socio'})`;
+
+      if (s.saldado || this.periodoYaLiquidado()) {
+        txt += `   👉 *MONTO CORRESPONDIENTE: $${neto}*\n`;
+        txt += `   ✅ *SALDADO:* -$${(s.montoPagado || s.montoNetoACobrar).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vía ${detalleSalida}\n`;
+        txt += `   🎯 *PENDIENTE: $0.00*\n\n`;
+      } else {
+        txt += `   👉 *NETO A ENTREGAR: $${neto}*\n`;
+        txt += `   📌 *Salida asignada:* ${detalleSalida}\n\n`;
+      }
     });
 
     txt += `*Generado por Stockup POS*`;
@@ -977,7 +1164,7 @@ export class SociosComponent implements OnInit {
     }
 
     if (liqAEliminar?.folio) {
-      const folioBuscado = liqAEliminar.folio;
+      const folioBuscado = String(liqAEliminar.folio);
       const gastosAsociados = this.gastosService
         .gastos()
         .filter((g) => g.categoria === 'REPARTO_SOCIOS' && (g.concepto.includes(folioBuscado) || (g.observaciones || '').includes(folioBuscado)));
@@ -989,6 +1176,9 @@ export class SociosComponent implements OnInit {
           console.warn('Error al eliminar gasto asociado a liquidación:', e);
         }
       }
+
+      // Si hay salidas de reparto en el turno activo asociadas a esta liquidación, eliminarlas de caja
+      await this.cortesService.eliminarSalidasRepartoTurnoActivo(folioBuscado);
     }
 
     await this.sociosService.eliminarLiquidacion(id);
@@ -998,7 +1188,7 @@ export class SociosComponent implements OnInit {
     if (this.liquidacionSeleccionada()?.id === id) {
       this.liquidacionSeleccionada.set(null);
     }
-    this.mostrarMensajeFeedback('🗑️ Liquidación y sus gastos de salida eliminados.');
+    this.mostrarMensajeFeedback('🗑️ Liquidación y salidas de reparto eliminadas.');
   }
 
   copiarHistoricoWhatsApp(liq: LiquidacionSocios): void {
@@ -1027,7 +1217,10 @@ export class SociosComponent implements OnInit {
         const signo = s.ajusteDirecto > 0 ? '+' : '';
         deduccionesTxt += ` (Ajuste: ${signo}$${s.ajusteDirecto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
       }
-      txt += `👤 *${s.nombre}* (${s.porcentaje}%): 👉 *$${neto}*${deduccionesTxt}\n`;
+      const metodoTxt = s.metodoPagoSalida
+        ? ` [Salida: ${s.metodoPagoSalida === 'EFECTIVO' ? 'Efectivo Caja' : s.metodoPagoSalida + (s.socioOrigenNombre ? ' de ' + s.socioOrigenNombre : '')}]`
+        : '';
+      txt += `👤 *${s.nombre}* (${s.porcentaje}%): 👉 *$${neto}* (Saldado ✅)${metodoTxt}${deduccionesTxt}\n`;
     });
 
     navigator.clipboard.writeText(txt).then(() => {

@@ -141,6 +141,30 @@
       </div>
     </div>
 
+    <!-- Salida a Socios -->
+    <div class="kpi-card kpi-partners">
+      <div class="kpi-icon">👥</div>
+      <div class="kpi-details">
+        <span class="kpi-title">Salida a Socios</span>
+        <strong class="kpi-val">
+          {{ mostrarValores() ? (resumenVentasCaja().totalPagosSocios | currencyMxn) : '••••••' }}
+        </strong>
+        <span class="kpi-sub">
+          @if (resumenVentasCaja().totalPagosSocios > 0) {
+            @if (resumenVentasCaja().totalPagosSociosBancos > 0 && resumenVentasCaja().totalPagosSociosEfectivo > 0) {
+              Efec. ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }}) + Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
+            } @else if (resumenVentasCaja().totalPagosSociosBancos > 0) {
+              Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
+            } @else {
+              Efectivo de caja ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }})
+            }
+          } @else {
+            Pago de Utilidades
+          }
+        </span>
+      </div>
+    </div>
+
     <!-- Retiros -->
     <div class="kpi-card kpi-withdrawals">
       <div class="kpi-icon">📤</div>
@@ -221,7 +245,11 @@
           {{ mostrarValores() ? (resumenVentasCaja().cajaEsperada | currencyMxn) : '••••••' }}
         </strong>
         <span class="kpi-sub">
-          @if (resumenVentasCaja().totalIngresosCaja > 0) {
+          @if (resumenVentasCaja().totalPagosSociosEfectivo > 0 && resumenVentasCaja().totalIngresosCaja > 0) {
+            Efectivo – Gastos – Retiros – Socios + Ingresos
+          } @else if (resumenVentasCaja().totalPagosSociosEfectivo > 0) {
+            Efectivo – Gastos – Retiros – Socios
+          } @else if (resumenVentasCaja().totalIngresosCaja > 0) {
             Efectivo – Gastos – Retiros + Ingresos
           } @else {
             Efectivo – Gastos – Retiros

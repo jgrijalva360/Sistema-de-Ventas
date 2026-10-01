@@ -95,6 +95,22 @@
               style="border: none; background: transparent; cursor: pointer; color: #dc2626; font-size: 0.9rem; padding: 0 2px;"
               title="Eliminar este ingreso">✕</button>
           </span>
+          } @else if (r.tipo === 'PAGO_REPARTO') {
+          <span style="background: #eff6ff; border: 1px solid #93c5fd; border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <span style="color: #1d4ed8; font-weight: 800;">-{{ r.monto | currencyMxn }}</span>
+            <span>salida pago reparto a <strong>{{ r.socioNombre }}</strong></span>
+            @if (r.metodoPago && r.metodoPago !== 'EFECTIVO') {
+              <span class="badge" style="background: #e0e7ff; color: #4338ca; font-size: 0.74rem;">{{ r.metodoPago }} (cuenta de {{ r.socioOrigenNombre || 'Socio' }})</span>
+            } @else {
+              <span class="badge" style="background: #dbeafe; color: #1e40af; font-size: 0.74rem;">Efectivo Caja</span>
+            }
+            @if (r.concepto) {
+            <span style="color: #64748b; font-size: 0.78rem;">({{ r.concepto }})</span>
+            }
+            <button type="button" (click)="onEliminarResguardoTurno(r.id)"
+              style="border: none; background: transparent; cursor: pointer; color: #dc2626; font-size: 0.9rem; padding: 0 2px;"
+              title="Eliminar esta salida de reparto">✕</button>
+          </span>
           } @else {
           <span style="background: white; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             <span style="color: #b45309; font-weight: 800;">-{{ r.monto | currencyMxn }}</span>

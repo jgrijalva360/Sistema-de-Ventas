@@ -318,6 +318,16 @@
     }
   }
 
+  &.kpi-partners {
+    .kpi-icon {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
+    .kpi-val {
+      color: #4338ca;
+    }
+  }
+
   &.kpi-neutral {
     .kpi-icon {
       background: #f1f5f9;

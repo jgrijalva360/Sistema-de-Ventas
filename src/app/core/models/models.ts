@@ -102,7 +102,11 @@ export interface ResguardoCajaItem {
   socioNombre: string;
   concepto?: string;
   usuario?: string;
-  tipo?: 'RETIRO' | 'DEVOLUCION';
+  tipo?: 'RETIRO' | 'DEVOLUCION' | 'PAGO_REPARTO';
+  metodoPago?: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA';
+  socioOrigenId?: string;
+  socioOrigenNombre?: string;
+  liquidacionFolio?: string;
 }
 
 export interface CorteActivo {
@@ -435,6 +439,12 @@ export interface DetalleLiquidacionSocio {
   resguardoNeto?: number;
   ajusteDirecto?: number;
   montoNetoACobrar: number;
+  metodoPagoSalida?: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
+  socioOrigenId?: string;
+  socioOrigenNombre?: string;
+  montoPagado?: number;
+  montoPendiente?: number;
+  saldado?: boolean;
 }
 
 export interface GastoBolsilloItem {

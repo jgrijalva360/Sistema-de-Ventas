@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal } from '@angular/core';
+import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CurrencyMxnPipe } from '../../shared/pipes/currency-mxn.pipe';
@@ -19,7 +19,7 @@ import { getFechaLocalString } from '../../shared/utils/date.util';
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnInit {
   public ventasService = inject(VentasService);
   public gastosService = inject(GastosService);
   public productosService = inject(ProductosService);
@@ -34,6 +34,10 @@ export class DashboardComponent {
   public periodo = signal<'HOY' | 'AYER' | 'ESTA_SEMANA' | 'ESTE_MES' | 'MES_ANTERIOR' | 'PERSONALIZADO' | 'TODO'>('HOY');
   public fechaDesde = signal<string>(getFechaLocalString());
   public fechaHasta = signal<string>(getFechaLocalString());
+
+  ngOnInit(): void {
+    this.sociosService.cargarDatos();
+  }
 
   public toggleMostrarValores(): void {
     this.mostrarValores.update((v) => !v);
@@ -168,18 +172,21 @@ export class DashboardComponent {
     let dineroEnCaja = 0;
     let cajaEstadoLabel = 'CERRADO (Sin cortes cerrados)';
 
-    // Movimientos del turno activo
-    const retirosActivo = (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS'))
+    const resguardosActivo = (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS'))
       ? (corteActivo.resguardos || [])
-          .filter((r) => !r.tipo || r.tipo === 'RETIRO')
-          .reduce((acc, r) => acc + (Number(r.monto) || 0), 0)
-      : 0;
+      : [];
 
-    const ingresosActivo = (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS'))
-      ? (corteActivo.resguardos || [])
-          .filter((r) => r.tipo === 'DEVOLUCION')
-          .reduce((acc, r) => acc + (Number(r.monto) || 0), 0)
-      : 0;
+    const retirosPurosActivo = resguardosActivo
+      .filter((r) => !r.tipo || r.tipo === 'RETIRO')
+      .reduce((acc, r) => acc + (Number(r.monto) || 0), 0);
+
+    const pagosSociosEfecActivo = resguardosActivo
+      .filter((r) => r.tipo === 'PAGO_REPARTO' && (!r.metodoPago || r.metodoPago === 'EFECTIVO'))
+      .reduce((acc, r) => acc + (Number(r.monto) || 0), 0);
+
+    const ingresosActivo = resguardosActivo
+      .filter((r) => r.tipo === 'DEVOLUCION')
+      .reduce((acc, r) => acc + (Number(r.monto) || 0), 0);
 
     if (corteActivo && (!corteActivo.sucursalId || corteActivo.sucursalId === sucursalId || sucursalId === 'TODAS')) {
       const fechaInicio = new Date(corteActivo.fechaApertura).getTime();
@@ -200,19 +207,14 @@ export class DashboardComponent {
         .reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
 
       const cajaInicial = corteActivo.cajaInicial || 0;
-      dineroEnCaja = Math.round((cajaInicial + pagosEfecTurno - gastosEfecTurno - retirosActivo + ingresosActivo) * 100) / 100;
+      dineroEnCaja = Math.round((cajaInicial + pagosEfecTurno - gastosEfecTurno - retirosPurosActivo - pagosSociosEfecActivo + ingresosActivo) * 100) / 100;
 
-      let labelExtra = '';
-      if (ingresosActivo > 0 && retirosActivo > 0) {
-        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | -$${retirosActivo.toFixed(2)} retiros | +$${ingresosActivo.toFixed(2)} ingresos)`;
-      } else if (ingresosActivo > 0) {
-        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | +$${ingresosActivo.toFixed(2)} ingresos caja)`;
-      } else if (retirosActivo > 0) {
-        labelExtra = ` (Fondo: $${cajaInicial.toFixed(2)} | -$${retirosActivo.toFixed(2)} retiros)`;
-      } else {
-        labelExtra = ` (Caja inicial: $${cajaInicial.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
-      }
+      const partesLabel: string[] = [`Fondo: $${cajaInicial.toFixed(2)}`];
+      if (retirosPurosActivo > 0) partesLabel.push(`-$${retirosPurosActivo.toFixed(2)} retiros`);
+      if (pagosSociosEfecActivo > 0) partesLabel.push(`-$${pagosSociosEfecActivo.toFixed(2)} socios`);
+      if (ingresosActivo > 0) partesLabel.push(`+$${ingresosActivo.toFixed(2)} ingresos`);
 
+      const labelExtra = partesLabel.length > 1 ? ` (${partesLabel.join(' | ')})` : ` (Fondo inicial: $${cajaInicial.toFixed(2)})`;
       cajaEstadoLabel = `ABIERTO${labelExtra}`;
     } else {
       const cortesOrdenados = [...cortes]
@@ -245,20 +247,115 @@ export class DashboardComponent {
         })
         .reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
 
-      dineroEnCaja = baseCash + pagosEfecDesde - gastosEfecDesde;
+      const pagosSociosEfecDesde = this.sociosService.liquidaciones()
+        .filter((l) => {
+          if (sucursalId !== 'TODAS' && l.sucursalId && l.sucursalId !== sucursalId) return false;
+          const t = new Date(l.fechaCreacion).getTime();
+          return !isNaN(t) && t >= fechaInicioTime;
+        })
+        .reduce((acc, l) => {
+          const sum = (l.socios || [])
+            .filter((s) => !s.metodoPagoSalida || s.metodoPagoSalida === 'EFECTIVO')
+            .reduce((sAcc, s) => sAcc + (Number(s.montoPagado ?? s.montoNetoACobrar) || 0), 0);
+          return acc + sum;
+        }, 0);
+
+      dineroEnCaja = Math.round((baseCash + pagosEfecDesde - gastosEfecDesde - pagosSociosEfecDesde) * 100) / 100;
     }
 
-    // Totales del periodo (cortes cerrados + turno activo si está en rango)
-    const totalRetirosHistorial = cortes.reduce((acc, c) => acc + (Number(c.retiros) || 0), 0);
-    const totalIngresosHistorial = cortes.reduce((acc, c) => acc + (Number(c.ingresosCaja) || 0), 0);
+    // 4. Salidas de Dinero por Pagos a Socios en el Periodo
+    const liquidacionesPeriodo = this.sociosService.liquidaciones().filter((l) => {
+      if (sucursalId !== 'TODAS' && l.sucursalId && l.sucursalId !== sucursalId) return false;
+      const t = new Date(l.fechaCreacion || `${l.fechaHasta}T23:59:59.999`).getTime();
+      return !isNaN(t) && t >= desde && t <= hasta;
+    });
+
+    const foliosLiquidacionesContadas = new Set<string>();
+
+    let totalPagosSociosEfectivo = 0;
+    let totalPagosSociosTransferencia = 0;
+    let totalPagosSociosTarjeta = 0;
+
+    liquidacionesPeriodo.forEach((l) => {
+      if (l.folio) foliosLiquidacionesContadas.add(String(l.folio));
+      if (l.id) foliosLiquidacionesContadas.add(String(l.id));
+
+      (l.socios || []).forEach((s) => {
+        const monto = Number(s.montoPagado ?? s.montoNetoACobrar) || 0;
+        if (monto <= 0) return;
+        const met = (s.metodoPagoSalida || 'EFECTIVO').toUpperCase();
+        if (met === 'TRANSFERENCIA') {
+          totalPagosSociosTransferencia += monto;
+        } else if (met === 'TARJETA') {
+          totalPagosSociosTarjeta += monto;
+        } else {
+          totalPagosSociosEfectivo += monto;
+        }
+      });
+    });
+
+    // 5. Retiros y movimientos en cortes históricos
+    let totalRetirosHistorialPuros = 0;
+    let totalIngresosHistorial = 0;
+
+    cortes.forEach((c) => {
+      if (c.resguardosDetalle && c.resguardosDetalle.length > 0) {
+        c.resguardosDetalle.forEach((r) => {
+          const monto = Number(r.monto) || 0;
+          if (r.tipo === 'DEVOLUCION') {
+            totalIngresosHistorial += monto;
+          } else if (r.tipo === 'PAGO_REPARTO') {
+            if (!r.liquidacionFolio || !foliosLiquidacionesContadas.has(String(r.liquidacionFolio))) {
+              const met = (r.metodoPago || 'EFECTIVO').toUpperCase();
+              if (met === 'TRANSFERENCIA') {
+                totalPagosSociosTransferencia += monto;
+              } else if (met === 'TARJETA') {
+                totalPagosSociosTarjeta += monto;
+              } else {
+                totalPagosSociosEfectivo += monto;
+              }
+            }
+          } else {
+            totalRetirosHistorialPuros += monto;
+          }
+        });
+      } else {
+        totalRetirosHistorialPuros += Number(c.retiros) || 0;
+        totalIngresosHistorial += Number(c.ingresosCaja) || 0;
+      }
+    });
 
     const fechaAperturaActivo = corteActivo ? new Date(corteActivo.fechaApertura).getTime() : 0;
     const activoEnPeriodo = corteActivo && !isNaN(fechaAperturaActivo) && fechaAperturaActivo >= desde && fechaAperturaActivo <= hasta;
 
-    const totalRetiros = Math.round((totalRetirosHistorial + (activoEnPeriodo ? retirosActivo : 0)) * 100) / 100;
+    if (activoEnPeriodo && corteActivo?.resguardos) {
+      corteActivo.resguardos.forEach((r) => {
+        if (r.tipo === 'PAGO_REPARTO') {
+          if (!r.liquidacionFolio || !foliosLiquidacionesContadas.has(String(r.liquidacionFolio))) {
+            const monto = Number(r.monto) || 0;
+            const met = (r.metodoPago || 'EFECTIVO').toUpperCase();
+            if (met === 'TRANSFERENCIA') {
+              totalPagosSociosTransferencia += monto;
+            } else if (met === 'TARJETA') {
+              totalPagosSociosTarjeta += monto;
+            } else {
+              totalPagosSociosEfectivo += monto;
+            }
+          }
+        }
+      });
+    }
+
+    const totalRetiros = Math.round((totalRetirosHistorialPuros + (activoEnPeriodo ? retirosPurosActivo : 0)) * 100) / 100;
     const totalIngresosCaja = Math.round((totalIngresosHistorial + (activoEnPeriodo ? ingresosActivo : 0)) * 100) / 100;
 
-    const cajaEsperada = Math.round((totalEfectivoRecibido - totalGastosEfectivo - totalRetiros + totalIngresosCaja) * 100) / 100;
+    totalPagosSociosEfectivo = Math.round(totalPagosSociosEfectivo * 100) / 100;
+    totalPagosSociosTransferencia = Math.round(totalPagosSociosTransferencia * 100) / 100;
+    totalPagosSociosTarjeta = Math.round(totalPagosSociosTarjeta * 100) / 100;
+    const totalPagosSociosBancos = Math.round((totalPagosSociosTransferencia + totalPagosSociosTarjeta) * 100) / 100;
+    const totalPagosSocios = Math.round((totalPagosSociosEfectivo + totalPagosSociosBancos) * 100) / 100;
+
+    const cajaEsperada = Math.round((totalEfectivoRecibido - totalGastosEfectivo - totalRetiros - totalPagosSociosEfectivo + totalIngresosCaja) * 100) / 100;
     const diferenciaCaja = Math.round((dineroEnCaja - cajaEsperada) * 100) / 100;
     const totalPagosBancarios = pagosVentasTarjeta + pagosVentasTransferencia;
 
@@ -274,6 +371,11 @@ export class DashboardComponent {
       totalGastosTransferencia,
       totalRetiros,
       totalIngresosCaja,
+      totalPagosSocios,
+      totalPagosSociosEfectivo,
+      totalPagosSociosTransferencia,
+      totalPagosSociosTarjeta,
+      totalPagosSociosBancos,
       pagosEfectivo: totalEfectivoRecibido,
       pagosTarjeta: pagosVentasTarjeta,
       pagosTransferencia: pagosVentasTransferencia,

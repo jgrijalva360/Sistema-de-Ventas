@@ -44,7 +44,7 @@ export class CortesComponent implements OnInit, AfterViewInit {
   public totalResguardosTurnoActivo = computed(() => {
     const activo = this.cortesService.corteActivo();
     return (activo?.resguardos || [])
-      .filter((r) => !r.tipo || r.tipo === 'RETIRO')
+      .filter((r) => !r.tipo || r.tipo === 'RETIRO' || (r.tipo === 'PAGO_REPARTO' && (!r.metodoPago || r.metodoPago === 'EFECTIVO')))
       .reduce((sum, r) => sum + (r.monto || 0), 0);
   });
 

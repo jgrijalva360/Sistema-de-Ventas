@@ -345,6 +345,68 @@ export class CortesService {
     return nuevoItem;
   }
 
+  async registrarSalidaRepartoTurnoActivo(datos: {
+    monto: number;
+    socioId: string;
+    socioNombre: string;
+    concepto?: string;
+    metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
+    socioOrigenId?: string;
+    socioOrigenNombre?: string;
+    liquidacionFolio?: string;
+  }): Promise<ResguardoCajaItem | null> {
+    const activo = this.corteActivoSignal();
+    if (!activo) return null;
+
+    const nuevoItem: ResguardoCajaItem = {
+      id: `PAGO-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      fecha: new Date().toISOString(),
+      monto: datos.monto,
+      socioId: datos.socioId,
+      socioNombre: datos.socioNombre,
+      concepto: datos.concepto || `Pago liquidación ${datos.liquidacionFolio ? '#' + datos.liquidacionFolio : ''}`,
+      usuario: activo.usuario,
+      tipo: 'PAGO_REPARTO',
+      metodoPago: datos.metodoPago,
+      socioOrigenId: datos.socioOrigenId,
+      socioOrigenNombre: datos.socioOrigenNombre,
+      liquidacionFolio: datos.liquidacionFolio
+    };
+
+    const actualizados = [...(activo.resguardos || []), nuevoItem];
+    const corteActualizado: CorteActivo = {
+      ...activo,
+      resguardos: actualizados
+    };
+
+    this.corteActivoSignal.set(corteActualizado);
+
+    try {
+      this.syncService.setStatus('saving', 'Registrando salida de pago...');
+      const ref = this.firestoreService.getRefDocConfig('corteActivo');
+      await setDoc(ref, corteActualizado);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+
+      const origenTxt = datos.metodoPago === 'EFECTIVO'
+        ? 'en efectivo de caja'
+        : `por ${datos.metodoPago} (${datos.socioOrigenNombre ? 'cuenta de ' + datos.socioOrigenNombre : 'cuenta de socio'})`;
+
+      await this.bitacoraService.registrarEvento({
+        modulo: 'CORTES',
+        accion: 'EDITAR',
+        descripcion: `Salida de dinero por pago a socio ${datos.socioNombre} de $${datos.monto.toFixed(2)} ${origenTxt} en turno #${activo.id}`,
+        detalles: nuevoItem,
+        sucursalId: activo.sucursalId,
+        sucursalNombre: activo.sucursalNombre
+      });
+    } catch (e) {
+      console.warn('Error al registrar salida de reparto en turno activo:', e);
+    }
+
+    return nuevoItem;
+  }
+
   async eliminarResguardoTurnoActivo(id: string): Promise<void> {
     const activo = this.corteActivoSignal();
     if (!activo || !activo.resguardos) return;
@@ -365,6 +427,31 @@ export class CortesService {
       this.syncService.setStatus('online', 'En Línea');
     } catch (e) {
       console.warn('Error al eliminar resguardo en Firestore:', e);
+    }
+  }
+
+  async eliminarSalidasRepartoTurnoActivo(liquidacionFolio: string): Promise<void> {
+    const activo = this.corteActivoSignal();
+    if (!activo || !activo.resguardos) return;
+
+    const filtrados = activo.resguardos.filter((r) => r.liquidacionFolio !== liquidacionFolio);
+    if (filtrados.length === activo.resguardos.length) return;
+
+    const corteActualizado: CorteActivo = {
+      ...activo,
+      resguardos: filtrados
+    };
+
+    this.corteActivoSignal.set(corteActualizado);
+
+    try {
+      this.syncService.setStatus('saving', 'Actualizando salidas...');
+      const ref = this.firestoreService.getRefDocConfig('corteActivo');
+      await setDoc(ref, corteActualizado);
+      await this.syncService.incrementarRevision();
+      this.syncService.setStatus('online', 'En Línea');
+    } catch (e) {
+      console.warn('Error al actualizar salidas de reparto en Firestore:', e);
     }
   }
 
