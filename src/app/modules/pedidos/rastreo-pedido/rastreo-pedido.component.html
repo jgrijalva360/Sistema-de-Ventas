@@ -1,0 +1,259 @@
+<div class="rastreo-container">
+  <!-- Encabezado Principal -->
+  <header class="rastreo-header">
+    <div class="header-content">
+      <div class="brand-info">
+        <div class="brand-badge">
+          <span class="pulse-dot"></span>
+          <span class="badge-text">Seguimiento en Tiempo Real</span>
+        </div>
+        <h1 class="brand-title">{{ pedido()?.negocioNombre || 'Portal de Rastreo de Pedidos' }}</h1>
+        <p class="brand-subtitle">
+          @if (pedido()?.sucursalNombre) {
+          <span>📍 Sucursal: {{ pedido()?.sucursalNombre }}</span>
+          } @else {
+          <span>Consulta el avance y estado de tu trabajo</span>
+          }
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido Central -->
+  <main class="rastreo-body">
+
+    <!-- Estado: Cargando -->
+    @if (cargando()) {
+    <div class="estado-card loading-card">
+      <div class="spinner"></div>
+      <h2>Localizando tu pedido...</h2>
+      <p>Estamos consultando el estado en vivo con el taller.</p>
+    </div>
+    }
+
+    <!-- Estado: Error de conexión -->
+    @else if (errorMsg()) {
+    <div class="estado-card error-card">
+      <div class="icon-circle error-icon">⚠️</div>
+      <h2>No pudimos cargar el pedido</h2>
+      <p>{{ errorMsg() }}</p>
+    </div>
+    }
+
+    <!-- Estado: Pedido Finalizado / Entregado / Inexistente -->
+    @else if (pedidoFinalizadoOInexistente()) {
+    <div class="estado-card finalizado-card">
+      <div class="icon-circle success-icon">✅</div>
+      <h2>¡Pedido Finalizado o Entregado!</h2>
+      <p class="finalizado-text">
+        @if (folio()) {
+        El pedido con folio <strong>#{{ folio() }}</strong> ya fue entregado y concluido con éxito en la sucursal, o el
+        folio no se encuentra activo.
+        } @else {
+        El pedido consultado ya fue entregado y concluido con éxito en la sucursal, o el código de rastreo no se
+        encuentra activo.
+        }
+      </p>
+      <div class="info-box">
+        <span class="info-icon">ℹ️</span>
+        <span>Por política de seguridad y privacidad, el seguimiento público en tiempo real concluye una vez entregado
+          el trabajo.</span>
+      </div>
+    </div>
+    }
+
+    <!-- Estado: Pedido Activo Encontrado -->
+    @else if (pedido(); as p) {
+    <div class="pedido-card">
+      <!-- Cabecera del Pedido -->
+      <div class="pedido-top">
+        <div class="folio-tag">
+          <span class="folio-label">FOLIO</span>
+          <span class="folio-val">#{{ p.id }}</span>
+        </div>
+
+        <div class="estado-badge" [attr.data-estado]="p.estado">
+          @switch (p.estado) {
+          @case ('PENDIENTE') { ⏳ Pendiente }
+          @case ('EN_PROCESO') { ⚙️ En Proceso }
+          @case ('TERMINADO') { 📦 ¡Listo para Recoger! }
+          @case ('LISTO') { 📦 ¡Listo para Recoger! }
+          @case ('CANCELADO') { 🚫 Cancelado }
+          @default { {{ p.estado }} }
+          }
+        </div>
+      </div>
+
+      <!-- Mensaje destacado si está Listo para Recoger -->
+      @if (p.estado === 'TERMINADO' || p.estado === 'LISTO') {
+      <div class="alerta-listo">
+        <div class="alerta-icono">🎉</div>
+        <div class="alerta-texto">
+          <h3>¡Tu trabajo ya está listo para recoger!</h3>
+          <p>Puedes pasar a la sucursal <strong>{{ p.sucursalNombre }}</strong> a retirarlo.</p>
+        </div>
+      </div>
+      }
+
+      <!-- Alerta si está Cancelado -->
+      @if (p.estado === 'CANCELADO') {
+      <div class="alerta-cancelado">
+        <div class="alerta-icono">⚠️</div>
+        <div class="alerta-texto">
+          <h3>Este pedido fue cancelado</h3>
+          @if (p.motivoCancelacion) {
+          <p>Motivo: {{ p.motivoCancelacion }}</p>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- Stepper de Avance (si no está cancelado) -->
+      @if (p.estado !== 'CANCELADO') {
+      <section class="stepper-section">
+        <h4 class="section-title">Avance del Trabajo</h4>
+        <div class="stepper-track">
+          <!-- Paso 1 -->
+          <div class="step-item" [class.completed]="getEtapaActual(p.estado) >= 1"
+            [class.active]="getEtapaActual(p.estado) === 1">
+            <div class="step-dot">
+              <span class="step-num">1</span>
+            </div>
+            <div class="step-label">
+              <strong>Registrado</strong>
+              <span class="step-sub">{{ p.fechaRegistro | fechaLocal }}</span>
+            </div>
+          </div>
+
+          <div class="step-line" [class.completed]="getEtapaActual(p.estado) >= 2"></div>
+
+          <!-- Paso 2 -->
+          <div class="step-item" [class.completed]="getEtapaActual(p.estado) >= 2"
+            [class.active]="getEtapaActual(p.estado) === 2">
+            <div class="step-dot">
+              <span class="step-num">2</span>
+            </div>
+            <div class="step-label">
+              <strong>En Taller</strong>
+              <span class="step-sub">En elaboración</span>
+            </div>
+          </div>
+
+          <div class="step-line" [class.completed]="getEtapaActual(p.estado) >= 3"></div>
+
+          <!-- Paso 3 -->
+          <div class="step-item step-ready" [class.completed]="getEtapaActual(p.estado) >= 3"
+            [class.active]="getEtapaActual(p.estado) === 3">
+            <div class="step-dot">
+              <span class="step-num">3</span>
+            </div>
+            <div class="step-label">
+              <strong>¡Listo!</strong>
+              <span class="step-sub">Para entrega</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      }
+
+      <!-- Resumen del Cliente y Fechas -->
+      <section class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Cliente</span>
+          <strong class="info-val">{{ p.clienteNombre }}</strong>
+        </div>
+        @if (p.fechaEntrega) {
+        <div class="info-item">
+          <span class="info-label">Fecha Estimada de Entrega</span>
+          <strong class="info-val entrega-val">📅 {{ p.fechaEntrega | fechaLocal }}</strong>
+        </div>
+        }
+      </section>
+
+      <!-- Especificaciones del Pedido -->
+      @if (p.especificaciones) {
+      <section class="especificaciones-section">
+        <h4 class="section-title">Especificaciones del Trabajo</h4>
+        <div class="especificaciones-card">
+          <p>{{ p.especificaciones }}</p>
+        </div>
+      </section>
+      }
+
+      <!-- Insumos / Conceptos (si los hay) -->
+      @if (p.materiasPrimas && p.materiasPrimas.length > 0) {
+      <section class="items-section">
+        <h4 class="section-title">Conceptos / Materiales</h4>
+        <ul class="items-list">
+          @for (item of p.materiasPrimas; track $index) {
+          <li class="item-row">
+            <div class="item-name">
+              <span class="item-cant">{{ item.cantidad }}x</span>
+              <span>{{ item.nombre }}</span>
+            </div>
+            <span class="item-subtotal">{{ item.subtotal | currencyMxn }}</span>
+          </li>
+          }
+        </ul>
+      </section>
+      }
+
+      <!-- Balance Financiero -->
+      <section class="balance-section">
+        <h4 class="section-title">Resumen de Cuenta</h4>
+        <div class="balance-box">
+          <div class="balance-row">
+            <span>Total Acordado:</span>
+            <span class="amount-val">{{ p.totalAcordado | currencyMxn }}</span>
+          </div>
+          <div class="balance-row anticipo-row">
+            <span>Anticipo Cubierto:</span>
+            <span class="amount-val">- {{ p.anticipo | currencyMxn }}</span>
+          </div>
+          <div class="balance-row saldo-row">
+            <strong>Saldo Pendiente por Liquidar:</strong>
+            <strong class="saldo-val" [class.liquidado]="p.saldoRestante <= 0">
+              {{ p.saldoRestante | currencyMxn }}
+            </strong>
+          </div>
+        </div>
+        @if (p.saldoRestante > 0) {
+        <p class="balance-nota">
+          * El saldo pendiente se liquida directamente al momento de recibir tu trabajo en sucursal.
+        </p>
+        } @else {
+        <div class="pagado-badge">
+          ✓ Totalmente liquidado
+        </div>
+        }
+      </section>
+
+      <!-- Botones de Contacto Directo -->
+      <section class="contacto-section">
+        @if (p.negocioTelefono) {
+        <a class="btn-contacto btn-whatsapp" [href]="getWhatsAppUrl()" target="_blank" rel="noopener noreferrer">
+          <span class="btn-icon">💬</span>
+          <span>Contactar por WhatsApp</span>
+        </a>
+        <a class="btn-contacto btn-call" [href]="getLlamarUrl()">
+          <span class="btn-icon">📞</span>
+          <span>Llamar a Sucursal</span>
+        </a>
+        }
+      </section>
+
+      <!-- Actualización en vivo footer -->
+      <div class="live-footer">
+        <span class="pulse-dot-sm"></span>
+        <span>Actualizado en vivo automáticamente</span>
+      </div>
+    </div>
+    }
+
+  </main>
+
+  <!-- Pie de página portal -->
+  <footer class="rastreo-footer">
+    <p>Portal de Seguimiento de Clientes</p>
+  </footer>
+</div>

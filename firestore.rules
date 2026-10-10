@@ -58,5 +58,10 @@ service cloud.firestore {
     match /tickets_soporte/{ticketId} {
       allow read, write: if estaAutenticado();
     }
+    // 7. Rastreo Público de Pedidos (/pedidos_publicos/{pedidoDocId})
+    match /pedidos_publicos/{pedidoDocId} {
+      allow read: if true;
+      allow write: if estaAutenticado();
+    }
   }
 }

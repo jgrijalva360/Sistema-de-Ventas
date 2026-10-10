@@ -57,3 +57,21 @@ export function generarSiguienteAbonoId(abonosExistentes: { id?: string }[] = []
   }
   return `ABO-${maxNum + 1}`;
 }
+
+/**
+ * Genera un token aleatorio criptográfico opaco para rastreo público de pedidos.
+ * Evita la exposición de folios consecutivos legibles (como PED-0001, PED-0002)
+ * para proteger la privacidad e impedir la enumeración no autorizada de pedidos.
+ */
+export function generarTrackingToken(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  }
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 16; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+

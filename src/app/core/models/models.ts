@@ -171,6 +171,7 @@ export interface AbonoPedido {
   concepto: string;
   monto: number;
   metodoPago: string;
+  socioNombre?: string;
   socioTransferenciaId?: string;
   socioTransferenciaNombre?: string;
   socioTarjetaId?: string;
@@ -216,6 +217,29 @@ export interface PedidoPersonalizado {
   fechaCancelacion?: string;
   motivoCancelacion?: string;
   usuarioCancelacion?: string;
+  trackingToken?: string;
+}
+
+export interface PedidoPublicoRastreo {
+  id: string; // Folio ej: PED-0058
+  trackingToken?: string;
+  empresaId: string;
+  negocioNombre: string;
+  negocioTelefono?: string;
+  negocioDireccion?: string;
+  sucursalNombre?: string;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  fechaRegistro: string;
+  fechaEntrega?: string;
+  especificaciones: string;
+  estado: 'PENDIENTE' | 'EN_PROCESO' | 'LISTO' | 'TERMINADO' | 'ENTREGADO' | 'CANCELADO';
+  materiasPrimas?: Array<{ nombre: string; cantidad: number; subtotal: number }>;
+  totalAcordado: number;
+  anticipo: number;
+  saldoRestante: number;
+  motivoCancelacion?: string;
+  ultimaActualizacion: string;
 }
 
 export interface MovimientoInventario {
@@ -582,5 +606,6 @@ export interface ResultadoRestauracionBackup {
   prestamosCount: number;
   configRestaurada: boolean;
 }
+
 
 

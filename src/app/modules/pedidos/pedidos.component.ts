@@ -7,7 +7,10 @@ import { ProductosService } from '../../core/services/productos.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { SociosService } from '../../core/services/socios.service';
 import { ClientesService } from '../../core/services/clientes.service';
+import { FirestoreChunksService } from '../../core/services/firestore-chunks.service';
+import { generateQRCodeDataUrl } from '../../shared/utils/qrcode.util';
 import { PedidoPersonalizado, MateriaPrimaItem, Producto, Cliente } from '../../core/models/models';
+import { generarTrackingToken } from '../../core/utils/consecutivo.util';
 
 export interface ItemPedidoForm {
   tipo: 'INVENTARIO' | 'EXTRA';
@@ -43,6 +46,7 @@ export class PedidosComponent implements AfterViewInit {
   // Modales
   public modalNuevoAbierto = signal<boolean>(false);
   public modalTicketAbierto = signal<boolean>(false);
+  public modalFacturaCartaAbierto = signal<boolean>(false);
   public modalLiquidarAbierto = signal<boolean>(false);
   public modalDetalleAbierto = signal<boolean>(false);
   public modalEditarAbierto = signal<boolean>(false);
@@ -55,6 +59,7 @@ export class PedidosComponent implements AfterViewInit {
   public reponerStockPedido = true;
   public cancelandoPedido = signal<boolean>(false);
   public autoImprimirTicket = signal<boolean>(localStorage.getItem('pos_auto_imprimir_ticket') !== 'false');
+  public mostrarQrSeguimiento = signal<boolean>(localStorage.getItem('pos_mostrar_qr_pedidos') !== 'false');
 
   // Formulario nuevo
   public nuevoCliente = '';
@@ -111,6 +116,7 @@ export class PedidosComponent implements AfterViewInit {
   public configService = inject(ConfiguracionService);
   public sociosService = inject(SociosService);
   public clientesService = inject(ClientesService);
+  public firestoreChunksService = inject(FirestoreChunksService);
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
@@ -156,6 +162,43 @@ export class PedidosComponent implements AfterViewInit {
 
   public vencidosCount = computed(() => {
     return this.pedidosService.pedidos().filter((p) => this.esPedidoVencido(p)).length;
+  });
+
+  // Datos complementarios para Simulación de Factura / Hoja Carta
+  public clientePedidoActual = computed(() => {
+    const ped = this.pedidoSeleccionado();
+    if (!ped) return null;
+    const lista = this.clientesService.clientes();
+    if (ped.clienteId) {
+      const porId = lista.find((c) => c.id === ped.clienteId);
+      if (porId) return porId;
+    }
+    if (ped.clienteNombre) {
+      const porNombre = lista.find(
+        (c) => c.nombre.trim().toLowerCase() === ped.clienteNombre.trim().toLowerCase()
+      );
+      if (porNombre) return porNombre;
+    }
+    return null;
+  });
+
+  public sumaMateriasPrimas = computed(() => {
+    const ped = this.pedidoSeleccionado();
+    if (!ped?.materiasPrimas) return 0;
+    return ped.materiasPrimas.reduce((acc, it) => acc + (it.subtotal || 0), 0);
+  });
+
+  public manoObraPersonalizada = computed(() => {
+    const ped = this.pedidoSeleccionado();
+    if (!ped) return 0;
+    const dif = (ped.totalAcordado || 0) - this.sumaMateriasPrimas();
+    return dif > 0 ? dif : 0;
+  });
+
+  public totalAbonadoPedido = computed(() => {
+    const ped = this.pedidoSeleccionado();
+    if (!ped) return 0;
+    return (ped.totalAcordado || 0) - (ped.saldoRestante || 0);
   });
 
   // Lista Filtrada
@@ -489,6 +532,13 @@ export class PedidosComponent implements AfterViewInit {
     const ped = this.pedidoDetalle();
     if (!ped) return;
     this.verTicket(ped);
+    this.modalDetalleAbierto.set(false);
+  }
+
+  imprimirFacturaDesdeDetalle(): void {
+    const ped = this.pedidoDetalle();
+    if (!ped) return;
+    this.abrirModalFacturaCarta(ped);
     this.modalDetalleAbierto.set(false);
   }
 
@@ -967,6 +1017,30 @@ export class PedidosComponent implements AfterViewInit {
     localStorage.setItem('pos_auto_imprimir_ticket', nuevo ? 'true' : 'false');
   }
 
+  toggleMostrarQr(): void {
+    const nuevo = !this.mostrarQrSeguimiento();
+    this.mostrarQrSeguimiento.set(nuevo);
+    localStorage.setItem('pos_mostrar_qr_pedidos', nuevo ? 'true' : 'false');
+  }
+
+  getQrDataUrl(pedido: PedidoPersonalizado | null): string {
+    if (!pedido) return '';
+    try {
+      const origin = window.location.origin;
+      if (!pedido.trackingToken) {
+        pedido.trackingToken = generarTrackingToken();
+        // Sincronizar en segundo plano con su nuevo token único
+        this.pedidosService.sincronizarPedidoPublico(pedido).catch(() => {});
+      }
+      // URL ultra compacta y segura: no expone folios consecutivos ni identificadores de base de datos
+      const url = `${origin}/rastreo-pedido/${encodeURIComponent(pedido.trackingToken)}`;
+      return generateQRCodeDataUrl(url, { size: 180, margin: 2, errorCorrectionLevel: 'L' });
+    } catch (e) {
+      console.warn('No se pudo generar QR de rastreo:', e);
+      return '';
+    }
+  }
+
   // Ver e Imprimir Ticket
   verTicket(pedido: PedidoPersonalizado): void {
     this.pedidoSeleccionado.set(pedido);
@@ -974,11 +1048,126 @@ export class PedidosComponent implements AfterViewInit {
   }
 
   imprimirTicket(): void {
-    window.print();
+    document.body.classList.remove('imprimiendo-carta');
+    document.documentElement.classList.remove('imprimiendo-carta');
+    const existing = document.getElementById('print-letter-override');
+    if (existing) existing.remove();
+
+    let styleEl = document.getElementById('print-ticket-override') as HTMLStyleElement;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'print-ticket-override';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.innerHTML = `
+      @media print {
+        @page {
+          size: 80mm auto !important;
+          margin: 0mm !important;
+        }
+        html, body {
+          width: 80mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        .factura-print-only,
+        .factura-carta-wrapper,
+        .factura-modal-overlay {
+          display: none !important;
+        }
+      }
+    `;
+
+    const cleanup = () => {
+      styleEl?.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 50);
   }
 
   cerrarModalTicket(): void {
     this.modalTicketAbierto.set(false);
+  }
+
+  // Ver e Imprimir Factura / Comprobante en Hoja Tamaño Carta
+  abrirModalFacturaCarta(pedido: PedidoPersonalizado): void {
+    this.pedidoSeleccionado.set(pedido);
+    this.modalFacturaCartaAbierto.set(true);
+  }
+
+  cerrarModalFacturaCarta(): void {
+    this.modalFacturaCartaAbierto.set(false);
+  }
+
+  cambiarAFacturaCarta(): void {
+    this.modalTicketAbierto.set(false);
+    this.modalFacturaCartaAbierto.set(true);
+  }
+
+  cambiarATicket(): void {
+    this.modalFacturaCartaAbierto.set(false);
+    this.modalTicketAbierto.set(true);
+  }
+
+  imprimirFacturaCarta(pedido?: PedidoPersonalizado): void {
+    if (pedido) {
+      this.pedidoSeleccionado.set(pedido);
+    }
+    if (!this.pedidoSeleccionado()) return;
+
+    document.body.classList.add('imprimiendo-carta');
+    document.documentElement.classList.add('imprimiendo-carta');
+
+    let styleEl = document.getElementById('print-letter-override') as HTMLStyleElement;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'print-letter-override';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.innerHTML = `
+      @media print {
+        @page {
+          size: letter portrait !important;
+          margin: 8mm 10mm !important;
+        }
+        html.imprimiendo-carta, body.imprimiendo-carta {
+          width: 100% !important;
+          max-width: 100% !important;
+          height: auto !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+        }
+        body.imprimiendo-carta .ticket-thermal-80mm,
+        body.imprimiendo-carta .ticket-print-only,
+        body.imprimiendo-carta .ticket-modal-overlay {
+          display: none !important;
+        }
+        body.imprimiendo-carta .factura-print-only,
+        body.imprimiendo-carta .factura-carta-wrapper {
+          display: block !important;
+        }
+      }
+    `;
+
+    const cleanup = () => {
+      document.body.classList.remove('imprimiendo-carta');
+      document.documentElement.classList.remove('imprimiendo-carta');
+      styleEl?.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 80);
   }
 
   // Transiciones de Estado

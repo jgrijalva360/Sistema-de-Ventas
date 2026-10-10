@@ -312,8 +312,22 @@ table {
     margin: 0 !important;
   }
 
-  html, body {
+  html:not(.imprimiendo-carta), body:not(.imprimiendo-carta) {
     width: 80mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html.imprimiendo-carta, body.imprimiendo-carta {
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -355,7 +369,8 @@ table {
   .pos-checkout,
   .checkout-card,
   .pedidos-container,
-  .ticket-no-print {
+  .ticket-no-print,
+  .factura-no-print {
     display: none !important;
   }
 }

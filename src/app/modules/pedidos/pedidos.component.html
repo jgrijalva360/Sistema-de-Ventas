@@ -12,6 +12,11 @@
         [title]="autoImprimirTicket() ? 'Impresión automática ACTIVADA (clic para desactivar)' : 'Impresión automática DESACTIVADA (clic para activar)'">
         <span>{{ autoImprimirTicket() ? '🖨️ Ticket: SÍ' : '🚫 Ticket: NO' }}</span>
       </button>
+      <button type="button" class="btn-toggle-print" [class.active]="mostrarQrSeguimiento()"
+        (click)="toggleMostrarQr()"
+        [title]="mostrarQrSeguimiento() ? 'Código QR de seguimiento en comprobante ACTIVADO (clic para desactivar)' : 'Código QR de seguimiento DESACTIVADO (clic para activar)'">
+        <span>{{ mostrarQrSeguimiento() ? '📱 QR Rastreo: SÍ' : '🚫 QR Rastreo: NO' }}</span>
+      </button>
       <button type="button" class="btn-nuevo-pedido" (click)="abrirModalNuevo()">
         <span class="btn-plus">➕</span> Nuevo Pedido
       </button>
@@ -136,7 +141,7 @@
             <th style="text-align: right;">Anticipo / Abonos</th>
             <th style="text-align: right;">Saldo Pendiente</th>
             <th style="text-align: center;">Estado</th>
-            <th style="text-align: center;">Acciones</th>
+            <th style="text-align: center; white-space: nowrap;">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -162,6 +167,15 @@
             </td>
             <td class="col-acciones" style="text-align: center;">
               <div class="actions-row">
+                <button type="button" class="btn-action btn-factura"
+                  (click)="abrirModalFacturaCarta(ped); $event.stopPropagation()"
+                  title="Ver / Imprimir Nota de Venta en Hoja Carta">
+                  📄 Nota
+                </button>
+                <button type="button" class="btn-action btn-ticket" (click)="verTicket(ped); $event.stopPropagation()"
+                  title="Ver / Imprimir Ticket (80mm)">
+                  🧾 Ticket
+                </button>
                 <button type="button" class="btn-action btn-delete" (click)="eliminar(ped.id); $event.stopPropagation()"
                   title="Eliminar Registro de Pedido">
                   🗑️ Eliminar
@@ -197,54 +211,47 @@
           <label for="pCli">
             Nombre del Cliente *
             @if (clienteSeleccionadoId()) {
-              <span class="badge-cli-tag" title="Cliente registrado en catálogo">✓ Registrado</span>
+            <span class="badge-cli-tag" title="Cliente registrado en catálogo">✓ Registrado</span>
             }
           </label>
           <div class="input-autocomplete-wrapper">
-            <input
-              id="pCli"
-              type="text"
-              [ngModel]="nuevoCliente"
-              (ngModelChange)="onBuscarCliente($event)"
-              (focus)="onBuscarCliente(nuevoCliente)"
-              placeholder="Escribe el nombre del cliente..."
-              autocomplete="off"
-              required
-            />
+            <input id="pCli" type="text" [ngModel]="nuevoCliente" (ngModelChange)="onBuscarCliente($event)"
+              (focus)="onBuscarCliente(nuevoCliente)" placeholder="Escribe el nombre del cliente..." autocomplete="off"
+              required />
           </div>
 
           <!-- Desplegable flotante de sugerencias predictivas -->
           @if (mostrarSugerenciasClientes()) {
-            <div class="cliente-dropdown-menu">
-              @if (sugerenciasClientes().length > 0) {
-                <div class="dropdown-header-title">CLIENTES ENCONTRADOS</div>
-                @for (c of sugerenciasClientes(); track c.id) {
-                  <div class="dropdown-item-cli" (mousedown)="seleccionarClienteSugerido(c)">
-                    <div class="dropdown-item-main">
-                      <span class="cli-avatar-mini">{{ c.nombre.charAt(0).toUpperCase() }}</span>
-                      <div class="cli-text-block">
-                        <strong class="cli-name">{{ c.nombre }}</strong>
-                        @if (c.telefono) {
-                          <span class="cli-phone">📞 {{ c.telefono }}</span>
-                        }
-                      </div>
-                    </div>
-                    <span class="cli-badge-action">Seleccionar</span>
-                  </div>
-                }
-              }
-
-              <!-- Opción rápida si no coincide exacto o si no hay clientes -->
-              @if (nuevoCliente.trim()) {
-                <div class="dropdown-footer-add" (mousedown)="mostrarSugerenciasClientes.set(false)">
-                  <span class="add-icon">➕</span>
-                  <div class="add-text">
-                    <strong>Guardar "{{ nuevoCliente.trim() }}"</strong>
-                    <small>Se registrará en el catálogo al crear el pedido</small>
-                  </div>
+          <div class="cliente-dropdown-menu">
+            @if (sugerenciasClientes().length > 0) {
+            <div class="dropdown-header-title">CLIENTES ENCONTRADOS</div>
+            @for (c of sugerenciasClientes(); track c.id) {
+            <div class="dropdown-item-cli" (mousedown)="seleccionarClienteSugerido(c)">
+              <div class="dropdown-item-main">
+                <span class="cli-avatar-mini">{{ c.nombre.charAt(0).toUpperCase() }}</span>
+                <div class="cli-text-block">
+                  <strong class="cli-name">{{ c.nombre }}</strong>
+                  @if (c.telefono) {
+                  <span class="cli-phone">📞 {{ c.telefono }}</span>
+                  }
                 </div>
-              }
+              </div>
+              <span class="cli-badge-action">Seleccionar</span>
             </div>
+            }
+            }
+
+            <!-- Opción rápida si no coincide exacto o si no hay clientes -->
+            @if (nuevoCliente.trim()) {
+            <div class="dropdown-footer-add" (mousedown)="mostrarSugerenciasClientes.set(false)">
+              <span class="add-icon">➕</span>
+              <div class="add-text">
+                <strong>Guardar "{{ nuevoCliente.trim() }}"</strong>
+                <small>Se registrará en el catálogo al crear el pedido</small>
+              </div>
+            </div>
+            }
+          </div>
           }
         </div>
         <div class="form-group">
@@ -258,12 +265,14 @@
       </div>
 
       @if (nuevoCliente.trim() && !clienteSeleccionadoId()) {
-        <div class="auto-save-cliente-hint">
-          <label class="checkbox-auto-save">
-            <input type="checkbox" [ngModel]="guardarClienteNuevoEnCatalogo()" (ngModelChange)="guardarClienteNuevoEnCatalogo.set($event)" />
-            <span>💾 Guardar automáticamente a "<strong>{{ nuevoCliente.trim() }}</strong>" en el catálogo de clientes</span>
-          </label>
-        </div>
+      <div class="auto-save-cliente-hint">
+        <label class="checkbox-auto-save">
+          <input type="checkbox" [ngModel]="guardarClienteNuevoEnCatalogo()"
+            (ngModelChange)="guardarClienteNuevoEnCatalogo.set($event)" />
+          <span>💾 Guardar automáticamente a "<strong>{{ nuevoCliente.trim() }}</strong>" en el catálogo de
+            clientes</span>
+        </label>
+      </div>
       }
 
       <!-- Fila 2: Especificaciones -->
@@ -471,6 +480,8 @@
 
     <div class="modal-actions ticket-no-print">
       <button type="button" class="btn btn-secondary" (click)="cerrarModalTicket()">✕ Cerrar</button>
+      <button type="button" class="btn btn-outline" (click)="cambiarAFacturaCarta()">📄 Ver Nota de Venta
+        (Carta)</button>
       <button type="button" class="btn btn-primary" (click)="imprimirTicket()">🖨️ Imprimir Ticket (80mm)</button>
     </div>
   </div>
@@ -589,6 +600,18 @@
 
     <div class="ticket-separator">================================</div>
 
+    <!-- Bloque QR de Rastreo en Tiempo Real -->
+    @if (mostrarQrSeguimiento()) {
+    <div class="ticket-qr-block">
+      <div class="ticket-qr-title">📱 ESCANEA PARA SEGUIMIENTO EN VIVO</div>
+      <div class="ticket-qr-image-wrapper">
+        <img [src]="getQrDataUrl(pedidoSeleccionado())" alt="QR Seguimiento" class="ticket-qr-img" />
+      </div>
+      <p class="ticket-qr-hint">Consulta el estado en vivo de tu trabajo desde tu celular</p>
+    </div>
+    <div class="ticket-separator">--------------------------------</div>
+    }
+
     <!-- Pie del Ticket -->
     <div class="ticket-footer-block">
       <p class="ticket-legend">
@@ -598,6 +621,301 @@
     </div>
 
     <div class="ticket-cut-margin">.</div>
+  </div>
+</ng-template>
+}
+
+<!-- Modal y Vista de Simulación de Factura en Hoja Carta (8.5" x 11") -->
+@if (pedidoSeleccionado()) {
+@if (modalFacturaCartaAbierto()) {
+<div class="modal-overlay factura-modal-overlay">
+  <div class="modal-card factura-modal-card">
+    <div class="modal-header factura-no-print">
+      <div class="factura-modal-title-group">
+        <h3 class="modal-title-custom">📄 Nota de Venta de Pedido</h3>
+        <span class="factura-subtitle">Formato optimizado para impresión en hoja tamaño carta</span>
+      </div>
+      <button type="button" class="modal-close" (click)="cerrarModalFacturaCarta()">&times;</button>
+    </div>
+
+    <div class="factura-preview-scroll">
+      <div class="factura-carta-wrapper">
+        <ng-container *ngTemplateOutlet="facturaCartaTemplate"></ng-container>
+      </div>
+    </div>
+
+    <div class="modal-actions factura-no-print">
+      <button type="button" class="btn btn-secondary" (click)="cerrarModalFacturaCarta()">✕ Cerrar</button>
+      <button type="button" class="btn btn-outline" (click)="cambiarATicket()">🧾 Cambiar a Ticket 80mm</button>
+      <button type="button" class="btn btn-primary btn-print-sheet-action" (click)="imprimirFacturaCarta()">
+        🖨️ Imprimir Nota de Venta
+      </button>
+    </div>
+  </div>
+</div>
+} @else {
+<!-- Contenedor invisible en pantalla pero activo para window.print() en modo carta -->
+<div class="factura-print-only">
+  <div class="factura-carta-wrapper">
+    <ng-container *ngTemplateOutlet="facturaCartaTemplate"></ng-container>
+  </div>
+</div>
+}
+
+<!-- Plantilla Modular de Factura / Hoja Carta -->
+<ng-template #facturaCartaTemplate>
+  <div class="factura-hoja-carta" id="facturaImpresion">
+    <!-- Encabezado Corporativo de la Factura -->
+    <header class="factura-header">
+      <div class="factura-empresa-info">
+        <h1 class="factura-business-name">{{ configService.config().businessName || 'SISTEMA DE VENTAS' }}</h1>
+        <p class="factura-business-subtitle">Control de Pedidos</p>
+        <div class="factura-empresa-detalles">
+          @if (pedidoSeleccionado()?.sucursalNombre) {
+          <div><span>Sucursal:</span> <strong>{{ pedidoSeleccionado()?.sucursalNombre }}</strong></div>
+          }
+          @if (configService.config().businessPhone) {
+          <div><span>Teléfono:</span> <strong>{{ configService.config().businessPhone }}</strong></div>
+          }
+          <div><span>Comprobante:</span> Nota de Venta</div>
+        </div>
+      </div>
+
+      <div class="factura-folio-card">
+        <div class="factura-folio-badge">NOTA DE VENTA</div>
+        <div class="factura-folio-number">
+          <span class="folio-label">FOLIO NOTA:</span>
+          <span class="folio-val">#{{ pedidoSeleccionado()?.id }}</span>
+        </div>
+        <div class="factura-fechas-box">
+          <div class="fecha-row">
+            <span class="lbl">Emisión:</span>
+            <span class="val">{{ formatearFechaHora(pedidoSeleccionado()?.fechaRegistro) }}</span>
+          </div>
+          @if (pedidoSeleccionado()?.fechaEntrega) {
+          <div class="fecha-row highlight">
+            <span class="lbl">Entrega:</span>
+            <span class="val">{{ formatearFechaEntregaConHora(pedidoSeleccionado()?.fechaEntrega) }}</span>
+          </div>
+          }
+          <div class="fecha-row">
+            <span class="lbl">Estado:</span>
+            <span class="val status-tag" [class]="getEstadoPillClass(pedidoSeleccionado()!)">
+              {{ getEstadoLabel(pedidoSeleccionado()!) | uppercase }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    @if (pedidoSeleccionado()?.estado === 'CANCELADO') {
+    <div class="factura-banner-cancelado">
+      <div class="banner-title">🚫 PEDIDO CANCELADO</div>
+      <div class="banner-sub">
+        Motivo: {{ pedidoSeleccionado()?.motivoCancelacion || 'Cancelación de pedido' }}
+        @if (pedidoSeleccionado()?.fechaCancelacion) {
+        • Cancelado el {{ formatearFechaHora(pedidoSeleccionado()?.fechaCancelacion) }}
+        }
+      </div>
+    </div>
+    }
+
+    <!-- Bloque de Información del Cliente -->
+    <section class="factura-section factura-cliente-section">
+      <div class="section-title">DATOS DEL CLIENTE / RECEPTOR</div>
+      <div class="factura-cliente-grid">
+        <div class="cliente-item">
+          <span class="cli-lbl">Cliente / Razón Social:</span>
+          <strong class="cli-val main-name">{{ pedidoSeleccionado()?.clienteNombre }}</strong>
+        </div>
+        <div class="cliente-item">
+          <span class="cli-lbl">Teléfono / WhatsApp:</span>
+          <span class="cli-val">{{ pedidoSeleccionado()?.clienteTelefono || clientePedidoActual()?.telefono || 'No
+            registrado' }}</span>
+        </div>
+        <div class="cliente-item">
+          <span class="cli-lbl">Dirección / Entrega:</span>
+          <span class="cli-val">{{ clientePedidoActual()?.direccion || 'Mostrador / Entrega en tienda' }}</span>
+        </div>
+        <div class="cliente-item">
+          <span class="cli-lbl">Correo Electrónico:</span>
+          <span class="cli-val">{{ clientePedidoActual()?.email || 'N/A' }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Especificaciones Técnicas del Pedido -->
+    <section class="factura-section factura-esp-section">
+      <div class="section-title">DESCRIPCIÓN Y ESPECIFICACIONES DEL TRABAJO</div>
+      <div class="factura-esp-content">
+        {{ pedidoSeleccionado()?.especificaciones }}
+      </div>
+    </section>
+
+    <!-- Tabla Detallada de Partidas / Conceptos -->
+    <section class="factura-section factura-conceptos-section">
+      <div class="section-title">DETALLE DE CONCEPTOS Y MATERIALES</div>
+      <table class="factura-table">
+        <thead>
+          <tr>
+            <th class="th-num">#</th>
+            <th class="th-cant">Cant.</th>
+            <th class="th-code">Código / Ref.</th>
+            <th class="th-desc">Descripción / Concepto</th>
+            <th class="th-precio">Precio Unit.</th>
+            <th class="th-total">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (pedidoSeleccionado()?.materiasPrimas && pedidoSeleccionado()!.materiasPrimas.length > 0) {
+          @for (mp of pedidoSeleccionado()?.materiasPrimas; track $index) {
+          <tr>
+            <td class="td-num">{{ $index + 1 }}</td>
+            <td class="td-cant">{{ mp.cantidad }}</td>
+            <td class="td-code">{{ mp.codigo || 'MAT-' + ($index + 1) }}</td>
+            <td class="td-desc">
+              <strong>{{ mp.nombre }}</strong>
+            </td>
+            <td class="td-precio">{{ mp.precioUnitario | currencyMxn }}</td>
+            <td class="td-total">{{ mp.subtotal | currencyMxn }}</td>
+          </tr>
+          }
+          @if (manoObraPersonalizada() > 0) {
+          <tr class="row-mano-obra">
+            <td class="td-num">{{ (pedidoSeleccionado()?.materiasPrimas?.length || 0) + 1 }}</td>
+            <td class="td-cant">1</td>
+            <td class="td-code">SRV-CONF</td>
+            <td class="td-desc">
+              <strong>Mano de obra, confección y servicios del pedido personalizado</strong>
+              <span class="sub-item-tipo">[Trabajo a medida y acabados]</span>
+            </td>
+            <td class="td-precio">{{ manoObraPersonalizada() | currencyMxn }}</td>
+            <td class="td-total">{{ manoObraPersonalizada() | currencyMxn }}</td>
+          </tr>
+          }
+          } @else {
+          <tr>
+            <td class="td-num">1</td>
+            <td class="td-cant">1</td>
+            <td class="td-code">PED-ESP</td>
+            <td class="td-desc">
+              <strong>Servicio y fabricación de trabajo personalizado según especificaciones</strong>
+              <div class="desc-extra">{{ pedidoSeleccionado()?.especificaciones }}</div>
+            </td>
+            <td class="td-precio">{{ pedidoSeleccionado()?.totalAcordado | currencyMxn }}</td>
+            <td class="td-total">{{ pedidoSeleccionado()?.totalAcordado | currencyMxn }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Resumen Financiero, Historial de Pagos y Totales -->
+    <section class="factura-finanzas-grid">
+      <!-- Columna Izquierda: Historial de Abonos y Condiciones -->
+      <div class="finanzas-col-left">
+        <div class="pagos-card">
+          <div class="section-title-sm">HISTORIAL DE ANTICIPOS Y ABONOS REGISTRADOS</div>
+          @if (pedidoSeleccionado()?.anticipo || (pedidoSeleccionado()?.abonos && pedidoSeleccionado()!.abonos!.length >
+          0)) {
+          <table class="factura-pagos-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th>Método</th>
+                <th style="text-align: right;">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (pedidoSeleccionado()?.anticipo && (!pedidoSeleccionado()?.abonos ||
+              pedidoSeleccionado()!.abonos!.length === 0)) {
+              <tr>
+                <td>{{ formatearFechaHora(pedidoSeleccionado()?.fechaRegistro) }}</td>
+                <td>Anticipo Inicial</td>
+                <td>
+                  {{ pedidoSeleccionado()?.metodoPagoAnticipo || 'EFECTIVO' }}
+                  @if (pedidoSeleccionado()?.socioTransferenciaNombre || pedidoSeleccionado()?.socioTarjetaNombre) {
+                  <small>({{ pedidoSeleccionado()?.socioTransferenciaNombre || pedidoSeleccionado()?.socioTarjetaNombre
+                    }})</small>
+                  }
+                </td>
+                <td style="text-align: right; font-weight: 700;">{{ pedidoSeleccionado()?.anticipo | currencyMxn }}</td>
+              </tr>
+              }
+              @for (abo of pedidoSeleccionado()?.abonos; track abo.id) {
+              <tr>
+                <td>{{ formatearFechaHora(abo.fecha) }}</td>
+                <td>{{ abo.concepto || 'Abono a cuenta' }}</td>
+                <td>
+                  {{ abo.metodoPago }}
+                  @if (abo.socioTransferenciaNombre || abo.socioTarjetaNombre || abo.socioNombre) {
+                  <small>({{ abo.socioTransferenciaNombre || abo.socioTarjetaNombre || abo.socioNombre }})</small>
+                  }
+                </td>
+                <td style="text-align: right; font-weight: 700;">{{ abo.monto | currencyMxn }}</td>
+              </tr>
+              }
+            </tbody>
+          </table>
+          } @else {
+          <div class="no-pagos-msg">Sin anticipos ni abonos registrados al momento.</div>
+          }
+        </div>
+
+        <div class="terminos-card">
+          <div class="terminos-title">TÉRMINOS, CONDICIONES Y GARANTÍA</div>
+          <ul class="terminos-list">
+            <li>Este documento es una nota de venta y comprobante de pedido para control interno del negocio y control
+              del cliente.</li>
+            <li>Para cualquier aclaración o entrega física de mercancía es indispensable presentar este comprobante o
+              proporcionar su número de folio.</li>
+            @if (configService.config().fiscalLegend) {
+            <li><strong>Nota del comercio:</strong> {{ configService.config().fiscalLegend }}</li>
+            }
+          </ul>
+        </div>
+
+        @if (mostrarQrSeguimiento()) {
+        <div class="factura-qr-card">
+          <div class="factura-qr-box">
+            <img [src]="getQrDataUrl(pedidoSeleccionado())" alt="QR Seguimiento" class="factura-qr-img" />
+          </div>
+          <div class="factura-qr-info">
+            <strong class="factura-qr-title">📱 Seguimiento en Línea en Tiempo Real</strong>
+            <p class="factura-qr-desc">Escanea este código QR con tu celular para consultar el avance del trabajo, especificaciones y saldo de tu pedido en vivo.</p>
+          </div>
+        </div>
+        }
+      </div>
+
+      <!-- Columna Derecha: Totales y Saldo Restante -->
+      <div class="finanzas-col-right">
+        <div class="totales-box">
+          <div class="tot-line">
+            <span>Subtotal de Conceptos:</span>
+            <strong>{{ pedidoSeleccionado()?.totalAcordado | currencyMxn }}</strong>
+          </div>
+          <div class="tot-line grand-total">
+            <span>TOTAL DE LA NOTA:</span>
+            <span class="total-monto">{{ pedidoSeleccionado()?.totalAcordado | currencyMxn }}</span>
+          </div>
+          <div class="tot-line pagos-sum">
+            <span>Total Pagado / Anticipos:</span>
+            <strong class="text-green">-{{ totalAbonadoPedido() | currencyMxn }}</strong>
+          </div>
+          <div class="saldo-restante-box" [class.liquidado]="(pedidoSeleccionado()?.saldoRestante || 0) <= 0">
+            <span class="saldo-title">SALDO PENDIENTE POR COBRAR:</span>
+            <strong class="saldo-amount">
+              {{ (pedidoSeleccionado()?.saldoRestante || 0) | currencyMxn }}
+            </strong>
+            @if ((pedidoSeleccionado()?.saldoRestante || 0) <= 0) { <div class="badge-pagado">✓ TOTALMENTE LIQUIDADO
+          </div>
+          }
+        </div>
+      </div>
+  </div>
+  </section>
   </div>
 </ng-template>
 }
@@ -784,7 +1102,10 @@
             ✏️ Editar / Corregir Pedido
           </button>
           <button type="button" class="btn-imprimir-nota" (click)="imprimirTicketDesdeDetalle()">
-            🖨️ Imprimir Ticket / Nota
+            🧾 Ticket (80mm)
+          </button>
+          <button type="button" class="btn-imprimir-factura" (click)="imprimirFacturaDesdeDetalle()">
+            📄 Nota de Venta (Carta)
           </button>
         </div>
       </div>
@@ -1062,36 +1383,29 @@
         <div class="form-group cliente-autocomplete-container">
           <label>Nombre del Cliente *</label>
           <div class="input-autocomplete-wrapper">
-            <input
-              type="text"
-              [ngModel]="editCliente"
-              (ngModelChange)="onBuscarEditCliente($event)"
-              (focus)="onBuscarEditCliente(editCliente)"
-              placeholder="Nombre completo"
-              autocomplete="off"
-              required
-            />
+            <input type="text" [ngModel]="editCliente" (ngModelChange)="onBuscarEditCliente($event)"
+              (focus)="onBuscarEditCliente(editCliente)" placeholder="Nombre completo" autocomplete="off" required />
           </div>
           @if (mostrarSugerenciasEditClientes()) {
-            <div class="cliente-dropdown-menu">
-              @if (sugerenciasEditClientes().length > 0) {
-                <div class="dropdown-header-title">CLIENTES ENCONTRADOS</div>
-                @for (c of sugerenciasEditClientes(); track c.id) {
-                  <div class="dropdown-item-cli" (mousedown)="seleccionarEditClienteSugerido(c)">
-                    <div class="dropdown-item-main">
-                      <span class="cli-avatar-mini">{{ c.nombre.charAt(0).toUpperCase() }}</span>
-                      <div class="cli-text-block">
-                        <strong class="cli-name">{{ c.nombre }}</strong>
-                        @if (c.telefono) {
-                          <span class="cli-phone">📞 {{ c.telefono }}</span>
-                        }
-                      </div>
-                    </div>
-                    <span class="cli-badge-action">Seleccionar</span>
-                  </div>
-                }
-              }
+          <div class="cliente-dropdown-menu">
+            @if (sugerenciasEditClientes().length > 0) {
+            <div class="dropdown-header-title">CLIENTES ENCONTRADOS</div>
+            @for (c of sugerenciasEditClientes(); track c.id) {
+            <div class="dropdown-item-cli" (mousedown)="seleccionarEditClienteSugerido(c)">
+              <div class="dropdown-item-main">
+                <span class="cli-avatar-mini">{{ c.nombre.charAt(0).toUpperCase() }}</span>
+                <div class="cli-text-block">
+                  <strong class="cli-name">{{ c.nombre }}</strong>
+                  @if (c.telefono) {
+                  <span class="cli-phone">📞 {{ c.telefono }}</span>
+                  }
+                </div>
+              </div>
+              <span class="cli-badge-action">Seleccionar</span>
             </div>
+            }
+            }
+          </div>
           }
         </div>
         <div class="form-group">

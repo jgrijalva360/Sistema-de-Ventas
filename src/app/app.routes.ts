@@ -23,6 +23,7 @@ import { SuperAdminComponent } from './modules/super-admin/super-admin.component
 import { VerificarCorreoComponent } from './modules/auth/verificar-correo.component';
 import { SociosComponent } from './modules/socios/socios.component';
 import { ClientesComponent } from './modules/clientes/clientes.component';
+import { RastreoPedidoComponent } from './modules/pedidos/rastreo-pedido/rastreo-pedido.component';
 
 export const routes: Routes = [
   {
@@ -34,6 +35,18 @@ export const routes: Routes = [
   {
     path: 'inicio',
     component: LandingPageComponent
+  },
+  {
+    path: 'rastreo-pedido',
+    component: RastreoPedidoComponent
+  },
+  {
+    path: 'rastreo-pedido/:token',
+    component: RastreoPedidoComponent
+  },
+  {
+    path: 'rastreo-pedido/:empresaId/:pedidoId',
+    component: RastreoPedidoComponent
   },
   {
     path: 'login',

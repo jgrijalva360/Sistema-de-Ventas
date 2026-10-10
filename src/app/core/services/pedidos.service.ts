@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, Injector } from '@angular/core';
 import { PedidoPersonalizado, AbonoPedido, MateriaPrimaItem, Venta, PagosDetalle } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { ProductosService } from './productos.service';
@@ -7,9 +7,13 @@ import { VentasService } from './ventas.service';
 import { SyncService } from './sync.service';
 import { Subscription } from 'rxjs';
 import { collectionStream$ } from '../utils/realtime.util';
-import { generarSiguienteConsecutivo, generarSiguienteAbonoId } from '../utils/consecutivo.util';
+import { generarSiguienteConsecutivo, generarSiguienteAbonoId, generarTrackingToken } from '../utils/consecutivo.util';
 
 import { BitacoraService } from './bitacora.service';
+import { FirebaseService } from './firebase.service';
+import { ConfiguracionService } from './configuracion.service';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { PedidoPublicoRastreo } from '../models/models';
 
 export interface ItemVentaConsolidacion {
   id: string;
@@ -46,8 +50,18 @@ export class PedidosService {
     private sucursalesService: SucursalesService,
     private ventasService: VentasService,
     private syncService: SyncService,
-    private bitacoraService: BitacoraService
+    private bitacoraService: BitacoraService,
+    private firebaseService: FirebaseService,
+    private injector: Injector
   ) {}
+
+  private getConfigService(): ConfiguracionService | null {
+    try {
+      return this.injector.get(ConfiguracionService);
+    } catch {
+      return null;
+    }
+  }
 
   normalizarPedido(p: any): PedidoPersonalizado {
     const rawAbonos = Array.isArray(p.abonos) && p.abonos.length > 0
@@ -69,7 +83,12 @@ export class PedidosService {
         fecha,
         concepto,
         monto,
-        metodoPago: metodo
+        metodoPago: metodo,
+        socioNombre: a.socioNombre || undefined,
+        socioTransferenciaId: a.socioTransferenciaId || undefined,
+        socioTransferenciaNombre: a.socioTransferenciaNombre || undefined,
+        socioTarjetaId: a.socioTarjetaId || undefined,
+        socioTarjetaNombre: a.socioTarjetaNombre || undefined
       };
     });
 
@@ -127,7 +146,8 @@ export class PedidosService {
       fechaLiquidacion: p.fechaLiquidacion,
       insumosDescontados: Boolean(p.insumosDescontados),
       sucursalId: p.sucursalId || 'SUC-MAIN',
-      sucursalNombre: p.sucursalNombre || 'Principal'
+      sucursalNombre: p.sucursalNombre || 'Principal',
+      trackingToken: p.trackingToken || generarTrackingToken()
     };
   }
 
@@ -204,12 +224,14 @@ export class PedidosService {
       abonos: abonosIniciales,
       insumosDescontados: false,
       sucursalId: sucursal.id,
-      sucursalNombre: sucursal.nombre
+      sucursalNombre: sucursal.nombre,
+      trackingToken: generarTrackingToken()
     };
 
     const current = [nuevoPedido, ...this.pedidosSignal()];
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.sincronizarPedidoPublico(nuevoPedido);
 
     // Registrar en Bitácora
     await this.bitacoraService.registrarEvento({
@@ -291,6 +313,7 @@ export class PedidosService {
 
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.sincronizarPedidoPublico(pedido);
 
     // Registrar en Bitácora
     await this.bitacoraService.registrarEvento({
@@ -350,6 +373,7 @@ export class PedidosService {
 
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.sincronizarPedidoPublico(pedido);
 
     // Registrar en ventas para reflejar en corte de caja, balance y reportes
     await this.ventasService.registrarPagoPedido({
@@ -391,6 +415,7 @@ export class PedidosService {
     current[index] = actualizado;
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.sincronizarPedidoPublico(actualizado);
     return actualizado;
   }
 
@@ -474,6 +499,7 @@ export class PedidosService {
 
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.sincronizarPedidoPublico(pedido);
     return pedido;
   }
 
@@ -482,6 +508,7 @@ export class PedidosService {
     const current = this.pedidosSignal().filter((p) => p.id !== id);
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
+    await this.eliminarPedidoPublico(id, pedidoEliminado?.trackingToken);
 
     if (pedidoEliminado) {
       await this.bitacoraService.registrarEvento({
@@ -492,6 +519,81 @@ export class PedidosService {
         sucursalId: pedidoEliminado.sucursalId,
         sucursalNombre: pedidoEliminado.sucursalNombre
       });
+    }
+  }
+
+  /**
+   * Sincroniza el pedido activo a la colección pública 'pedidos_publicos' para consulta por QR.
+   * Utiliza un trackingToken aleatorio opaco para no exponer el id consecutivo del pedido.
+   * Si el pedido ya está ENTREGADO, elimina el documento para ahorrar cuota y espacio.
+   */
+  async sincronizarPedidoPublico(pedido: PedidoPersonalizado): Promise<void> {
+    try {
+      const empresaId = this.firestoreService.getDocIdEmpresa();
+      if (!pedido.trackingToken) {
+        pedido.trackingToken = generarTrackingToken();
+      }
+      const token = pedido.trackingToken;
+      const docRef = doc(this.firebaseService.firestore, 'pedidos_publicos', token);
+
+      // Si el pedido ya fue entregado, eliminamos el doc público para no ocupar espacio
+      if (pedido.estado === 'ENTREGADO') {
+        await deleteDoc(docRef);
+        // Limpieza de formato legacy por si existía anteriormente
+        try {
+          const legacyRef = doc(this.firebaseService.firestore, 'pedidos_publicos', `${empresaId}_${pedido.id}`);
+          await deleteDoc(legacyRef);
+        } catch (_) {}
+        return;
+      }
+
+      const config = this.getConfigService()?.config();
+      const publicData: PedidoPublicoRastreo = {
+        id: pedido.id,
+        trackingToken: token,
+        empresaId,
+        negocioNombre: config?.businessName || 'Sistema de Ventas',
+        negocioTelefono: config?.businessPhone || '',
+        negocioDireccion: (config as any)?.businessAddress || '',
+        sucursalNombre: pedido.sucursalNombre || 'Principal',
+        clienteNombre: pedido.clienteNombre,
+        clienteTelefono: pedido.clienteTelefono || '',
+        fechaRegistro: pedido.fechaRegistro,
+        fechaEntrega: pedido.fechaEntrega || '',
+        especificaciones: pedido.especificaciones || '',
+        estado: pedido.estado,
+        materiasPrimas: (pedido.materiasPrimas || []).map((m) => ({
+          nombre: m.nombre,
+          cantidad: m.cantidad,
+          subtotal: m.subtotal
+        })),
+        totalAcordado: pedido.totalAcordado,
+        anticipo: pedido.anticipo,
+        saldoRestante: pedido.saldoRestante,
+        motivoCancelacion: pedido.motivoCancelacion || '',
+        ultimaActualizacion: new Date().toISOString()
+      };
+
+      await setDoc(docRef, publicData, { merge: true });
+    } catch (e) {
+      console.warn('Aviso al sincronizar pedido en tracking público:', e);
+    }
+  }
+
+  /**
+   * Elimina el documento de tracking público cuando se borra el pedido
+   */
+  async eliminarPedidoPublico(pedidoId: string, trackingToken?: string): Promise<void> {
+    try {
+      if (trackingToken) {
+        const docRef = doc(this.firebaseService.firestore, 'pedidos_publicos', trackingToken);
+        await deleteDoc(docRef);
+      }
+      const empresaId = this.firestoreService.getDocIdEmpresa();
+      const legacyRef = doc(this.firebaseService.firestore, 'pedidos_publicos', `${empresaId}_${pedidoId}`);
+      await deleteDoc(legacyRef);
+    } catch (e) {
+      console.warn('Aviso al eliminar documento público de pedido:', e);
     }
   }
 
