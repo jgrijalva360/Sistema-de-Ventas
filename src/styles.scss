@@ -305,11 +305,10 @@ table {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ── Global Print Reset (Para Tickets Térmicos 80mm en 1 sola página) ─────────────── */
+/* ── Global Print Reset ──────────────────────────────────────────────────────── */
 @media print {
   @page {
-    size: 80mm auto;
-    margin: 0 !important;
+    margin: 0;
   }
 
   html:not(.imprimiendo-carta), body:not(.imprimiendo-carta) {

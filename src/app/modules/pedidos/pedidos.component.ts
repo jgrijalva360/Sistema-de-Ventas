@@ -1002,10 +1002,7 @@ export class PedidosComponent implements AfterViewInit {
     this.pedidoSeleccionado.set(nuevo);
 
     if (this.autoImprimirTicket()) {
-      this.modalTicketAbierto.set(false);
-      setTimeout(() => {
-        window.print();
-      }, 50);
+      this.imprimirTicket(nuevo);
     } else {
       this.modalTicketAbierto.set(false);
     }
@@ -1047,11 +1044,24 @@ export class PedidosComponent implements AfterViewInit {
     this.modalTicketAbierto.set(true);
   }
 
-  imprimirTicket(): void {
+  imprimirTicket(pedido?: PedidoPersonalizado): void {
+    if (pedido) {
+      this.pedidoSeleccionado.set(pedido);
+    }
+    if (!this.pedidoSeleccionado()) return;
+
+    // Asegurar que el modal del ticket esté activo y la plantilla montada en el DOM
+    this.modalFacturaCartaAbierto.set(false);
+    this.modalTicketAbierto.set(true);
+
+    document.body.classList.add('imprimiendo-ticket');
+    document.documentElement.classList.add('imprimiendo-ticket');
     document.body.classList.remove('imprimiendo-carta');
     document.documentElement.classList.remove('imprimiendo-carta');
-    const existing = document.getElementById('print-letter-override');
-    if (existing) existing.remove();
+
+    // Remover override de carta si existiera
+    const existingCarta = document.getElementById('print-letter-override');
+    if (existingCarta) existingCarta.remove();
 
     let styleEl = document.getElementById('print-ticket-override') as HTMLStyleElement;
     if (!styleEl) {
@@ -1062,23 +1072,105 @@ export class PedidosComponent implements AfterViewInit {
     styleEl.innerHTML = `
       @media print {
         @page {
-          size: 80mm auto !important;
-          margin: 0mm !important;
+          size: 80mm auto;
+          margin: 0mm;
         }
-        html, body {
+        html, body, html.imprimiendo-ticket, body.imprimiendo-ticket {
           width: 80mm !important;
+          max-width: 80mm !important;
+          height: auto !important;
+          min-height: 0 !important;
           margin: 0 !important;
           padding: 0 !important;
+          background: #ffffff !important;
+          overflow: visible !important;
         }
+        /* Ocultar elementos de carta y modales ajenos */
         .factura-print-only,
         .factura-carta-wrapper,
-        .factura-modal-overlay {
+        .factura-modal-overlay,
+        .factura-modal-card,
+        .factura-hoja-carta {
           display: none !important;
+        }
+        /* Activar contenedor del ticket 80mm */
+        body.imprimiendo-ticket .ticket-modal-overlay {
+          position: static !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          display: block !important;
+          width: 80mm !important;
+          backdrop-filter: none !important;
+        }
+        body.imprimiendo-ticket .ticket-modal-card {
+          box-shadow: none !important;
+          border: none !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          max-width: 80mm !important;
+          width: 80mm !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+        }
+        body.imprimiendo-ticket .ticket-wrapper {
+          padding: 0 !important;
+          margin: 0 !important;
+          background: transparent !important;
+          display: block !important;
+          width: 80mm !important;
+          overflow: visible !important;
+        }
+        body.imprimiendo-ticket .ticket-print-only {
+          display: block !important;
+          width: 80mm !important;
+        }
+        body.imprimiendo-ticket .ticket-thermal-80mm {
+          position: static !important;
+          display: block !important;
+          width: 72mm !important;
+          max-width: 72mm !important;
+          margin: 0 auto !important;
+          padding: 2mm 2mm 6mm 2mm !important;
+          box-shadow: none !important;
+          border: none !important;
+          border-radius: 0 !important;
+          color: #000000 !important;
+          background: #ffffff !important;
+          font-size: 11px !important;
+          line-height: 1.25 !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        body.imprimiendo-ticket .ticket-thermal-80mm * {
+          color: #000000 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body.imprimiendo-ticket .ticket-qr-image-wrapper {
+          background: #ffffff !important;
+          margin: 4px auto !important;
+          padding: 4px !important;
+        }
+        body.imprimiendo-ticket .ticket-qr-img {
+          width: 140px !important;
+          height: 140px !important;
+          max-width: 100% !important;
+          display: block !important;
+          margin: 0 auto !important;
+        }
+        body.imprimiendo-ticket .ticket-cut-margin {
+          height: 6mm !important;
+          display: block !important;
         }
       }
     `;
 
     const cleanup = () => {
+      document.body.classList.remove('imprimiendo-ticket');
+      document.documentElement.classList.remove('imprimiendo-ticket');
       styleEl?.remove();
       window.removeEventListener('afterprint', cleanup);
     };
@@ -1087,7 +1179,7 @@ export class PedidosComponent implements AfterViewInit {
     setTimeout(() => {
       window.print();
       setTimeout(cleanup, 2500);
-    }, 50);
+    }, 100);
   }
 
   cerrarModalTicket(): void {
@@ -1120,8 +1212,16 @@ export class PedidosComponent implements AfterViewInit {
     }
     if (!this.pedidoSeleccionado()) return;
 
+    // Asegurar que la plantilla esté montada en el DOM
+    this.modalTicketAbierto.set(false);
+    this.modalFacturaCartaAbierto.set(true);
+
     document.body.classList.add('imprimiendo-carta');
     document.documentElement.classList.add('imprimiendo-carta');
+
+    // Remover override de ticket si existiera
+    const existingTicket = document.getElementById('print-ticket-override');
+    if (existingTicket) existingTicket.remove();
 
     let styleEl = document.getElementById('print-letter-override') as HTMLStyleElement;
     if (!styleEl) {
@@ -1132,10 +1232,10 @@ export class PedidosComponent implements AfterViewInit {
     styleEl.innerHTML = `
       @media print {
         @page {
-          size: letter portrait !important;
-          margin: 8mm 10mm !important;
+          size: letter portrait;
+          margin: 10mm 12mm;
         }
-        html.imprimiendo-carta, body.imprimiendo-carta {
+        html, body, html.imprimiendo-carta, body.imprimiendo-carta {
           width: 100% !important;
           max-width: 100% !important;
           height: auto !important;
@@ -1143,15 +1243,64 @@ export class PedidosComponent implements AfterViewInit {
           margin: 0 !important;
           padding: 0 !important;
           background: #ffffff !important;
+          overflow: visible !important;
         }
         body.imprimiendo-carta .ticket-thermal-80mm,
         body.imprimiendo-carta .ticket-print-only,
         body.imprimiendo-carta .ticket-modal-overlay {
           display: none !important;
         }
+        body.imprimiendo-carta .factura-modal-overlay {
+          position: static !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          display: block !important;
+          width: 100% !important;
+          backdrop-filter: none !important;
+        }
+        body.imprimiendo-carta .factura-modal-card {
+          box-shadow: none !important;
+          border: none !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          max-width: 100% !important;
+          width: 100% !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        body.imprimiendo-carta .factura-preview-scroll {
+          padding: 0 !important;
+          margin: 0 !important;
+          background: transparent !important;
+          display: block !important;
+          overflow: visible !important;
+        }
         body.imprimiendo-carta .factura-print-only,
         body.imprimiendo-carta .factura-carta-wrapper {
           display: block !important;
+          width: 100% !important;
+        }
+        body.imprimiendo-carta .factura-hoja-carta {
+          box-shadow: none !important;
+          border: none !important;
+          border-radius: 0 !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 0 !important;
+          height: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          box-sizing: border-box !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        body.imprimiendo-carta .factura-hoja-carta * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
       }
     `;
@@ -1167,7 +1316,7 @@ export class PedidosComponent implements AfterViewInit {
     setTimeout(() => {
       window.print();
       setTimeout(cleanup, 2500);
-    }, 80);
+    }, 100);
   }
 
   // Transiciones de Estado
@@ -1225,10 +1374,8 @@ export class PedidosComponent implements AfterViewInit {
       this.pedidoDetalle.set(act);
     }
 
-    if (this.autoImprimirTicket()) {
-      setTimeout(() => {
-        window.print();
-      }, 50);
+    if (this.autoImprimirTicket() && act) {
+      this.imprimirTicket(act);
     }
   }
 

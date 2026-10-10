@@ -1602,18 +1602,14 @@
 
 /* ── Reglas de Impresión Térmica (80mm) y Hoja Carta ─────────────────── */
 @media print {
-  @page {
-    size: 80mm auto;
-    margin: 0mm !important;
-  }
-
   .ticket-no-print,
   .factura-no-print {
     display: none !important;
   }
 
   /* Modo Ticket 80mm */
-  body:not(.imprimiendo-carta) {
+  body:not(.imprimiendo-carta),
+  body.imprimiendo-ticket {
     .ticket-print-only {
       display: block !important;
       position: static !important;
@@ -1758,11 +1754,14 @@
 
     .factura-hoja-carta {
       box-shadow: none !important;
+      border: none !important;
       border-radius: 0 !important;
       padding: 0 !important;
       margin: 0 !important;
       width: 100% !important;
+      max-width: 100% !important;
       min-height: 0 !important;
+      height: auto !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
 
@@ -1888,10 +1887,11 @@
 
 /* ── Estructura de la Hoja Tamaño Carta (Simulación Factura) ── */
 .factura-hoja-carta {
-  width: 215mm;
-  min-height: 279mm;
+  width: 100%;
+  max-width: 215.9mm;
+  min-height: 279.4mm;
   background: #ffffff;
-  padding: 16mm 18mm;
+  padding: 14mm 16mm;
   box-sizing: border-box;
   color: #1e293b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
