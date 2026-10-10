@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
 import {
   ConfigSistema,
   ListasConfig,
@@ -17,7 +17,8 @@ import {
   LiquidacionSocios,
   AjusteEntreSocios,
   ResumenArchivoBackup,
-  ResultadoRestauracionBackup
+  ResultadoRestauracionBackup,
+  Cliente
 } from '../models/models';
 import { FirestoreChunksService } from './firestore-chunks.service';
 import { ProductosService } from './productos.service';
@@ -26,6 +27,7 @@ import { GastosService } from './gastos.service';
 import { CortesService } from './cortes.service';
 import { MovimientosService } from './movimientos.service';
 import { PedidosService } from './pedidos.service';
+import { ClientesService } from './clientes.service';
 import { SucursalesService } from './sucursales.service';
 import { SyncService } from './sync.service';
 import { AuthService } from './auth.service';
@@ -56,6 +58,7 @@ export const DEFAULT_LISTAS: ListasConfig = {
 export class ConfiguracionService {
   private configSignal = signal<ConfigSistema>(DEFAULT_CONFIG);
   private listasSignal = signal<ListasConfig>(DEFAULT_LISTAS);
+  private clientesService = inject(ClientesService);
 
   public config = this.configSignal.asReadonly();
   public listas = this.listasSignal.asReadonly();
@@ -169,6 +172,7 @@ export class ConfiguracionService {
       corteActivo: this.cortesService.corteActivo(),
       carritosPendientes: this.ventasService.carritosPendientes(),
       pedidosPersonalizados: this.pedidosService.pedidos(),
+      clientes: this.clientesService.clientes(),
       socios: this.sociosService.socios(),
       liquidacionesSocios: this.sociosService.liquidaciones(),
       prestamosSocios: this.sociosService.prestamos(),
@@ -211,6 +215,7 @@ export class ConfiguracionService {
     const rawCortes = normalizar(data.cortes, data.cortesHistorial, data.cortesCaja);
     const hasCorteActivo = Boolean(data.corteActivo && (data.corteActivo.id || data.corteActivo.estado === 'ABIERTO'));
     const rawPedidos = normalizar(data.pedidosPersonalizados, data.pedidos, data.customOrders);
+    const rawClientes = normalizar(data.clientes, data.catalogoClientes, data.customers);
     const rawSucursales = normalizar(data.sucursales, data.branches);
     const rawBitacora = normalizar(data.bitacora, data.auditoria, data.bitacoraEventos, data.log);
     const rawUsuarios = normalizar(data.usuarios, data.colaboradores, data.cajeros, data.users);
@@ -230,6 +235,7 @@ export class ConfiguracionService {
       gastosCount: rawGastos.length,
       cortesCount: rawCortes.length + (hasCorteActivo ? 1 : 0),
       pedidosCount: rawPedidos.length,
+      clientesCount: rawClientes.length,
       sucursalesCount: rawSucursales.length,
       bitacoraCount: rawBitacora.length,
       usuariosCount: rawUsuarios.length,
@@ -249,6 +255,7 @@ export class ConfiguracionService {
       restaurarGastos: boolean;
       restaurarCortes: boolean;
       restaurarPedidos: boolean;
+      restaurarClientes?: boolean;
       restaurarSucursales: boolean;
       restaurarConfiguracion: boolean;
       restaurarBitacora?: boolean;
@@ -295,6 +302,7 @@ export class ConfiguracionService {
     let gastosRestaurados = 0;
     let cortesRestaurados = 0;
     let pedidosRestaurados = 0;
+    let clientesRestaurados = 0;
     let bitacoraRestaurada = 0;
     let usuariosRestaurados = 0;
     let sociosRestaurados = 0;
@@ -860,6 +868,27 @@ export class ConfiguracionService {
       }
     }
 
+    // 11. Clientes
+    if (opciones.restaurarClientes !== false) {
+      const rawClientes = normalizar(data.clientes, data.catalogoClientes, data.customers);
+      if (rawClientes.length > 0) {
+        const clientes: Cliente[] = rawClientes.map((c: any, idx: number) => ({
+          id: c.id || `CLI-${String(idx + 1).padStart(4, '0')}`,
+          nombre: c.nombre || `Cliente ${idx + 1}`,
+          telefono: c.telefono || '',
+          email: c.email || '',
+          direccion: c.direccion || '',
+          notas: c.notas || '',
+          fechaRegistro: c.fechaRegistro || new Date().toISOString(),
+          sucursalId: c.sucursalId || undefined,
+          activo: c.activo !== false
+        }));
+        this.clientesService.setClientes(clientes);
+        await this.firestoreService.guardarColeccionChunked('clientes', clientes);
+        clientesRestaurados = clientes.length;
+      }
+    }
+
     await this.syncService.incrementarRevision();
     this.syncService.setStatus('online', 'En Línea');
 
@@ -870,6 +899,7 @@ export class ConfiguracionService {
       movimientosCount: movimientosRestaurados,
       cortesCount: cortesRestaurados,
       pedidosCount: pedidosRestaurados,
+      clientesCount: clientesRestaurados,
       sucursalesCount: sucursalesRestauradas,
       bitacoraCount: bitacoraRestaurada,
       usuariosCount: usuariosRestaurados,
@@ -890,6 +920,7 @@ export class ConfiguracionService {
       restaurarGastos: true,
       restaurarCortes: true,
       restaurarPedidos: true,
+      restaurarClientes: true,
       restaurarSucursales: true,
       restaurarConfiguracion: true,
       restaurarBitacora: true,
@@ -1001,6 +1032,7 @@ export class ConfiguracionService {
       this.movimientosService.setMovimientos([]);
       this.cortesService.setCortes([], null);
       this.pedidosService.setPedidos([]);
+      this.clientesService.setClientes([]);
       this.bitacoraService.setEventos([]);
       this.sociosService.setLiquidaciones([]);
       this.sociosService.setPrestamos([]);

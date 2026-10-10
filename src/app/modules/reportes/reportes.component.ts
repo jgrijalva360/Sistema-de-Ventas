@@ -225,12 +225,30 @@ export class ReportesComponent implements OnInit, AfterViewInit {
         ? v.items.map((i) => `${i.cantidad}x ${i.nombre || 'Producto'}`).join(', ')
         : 'Venta Mostrador';
 
+      const esPedido = !!(
+        v.pedidoId ||
+        (v.items || []).some(
+          (it) =>
+            (it.codigo && it.codigo.startsWith('PED-')) ||
+            (it.nombre && it.nombre.includes('(PED-'))
+        )
+      );
+
+      let contacto = v.usuario || 'Cajero';
+      if (esPedido && v.items && v.items.length > 0) {
+        const itemNombre = v.items[0].nombre || '';
+        const partes = itemNombre.split(' - ');
+        if (partes.length > 1) {
+          contacto = partes.slice(1).join(' - ').trim();
+        }
+      }
+
       movs.push({
-        tipo: 'VENTA',
+        tipo: esPedido ? 'PEDIDO' : 'VENTA',
         id: v.id,
         fecha: v.fecha,
         descripcion: itemsDesc,
-        contacto: v.usuario || 'Cajero',
+        contacto,
         sucursalNombre: v.sucursalNombre || 'Principal',
         metodoPago: metodos.length > 0 ? metodos.join(' + ') : 'Efectivo',
         ingreso: v.total || 0,

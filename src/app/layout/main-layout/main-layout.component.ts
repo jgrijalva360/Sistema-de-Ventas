@@ -15,6 +15,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { BitacoraService } from '../../core/services/bitacora.service';
 import { SuscripcionService } from '../../core/services/suscripcion.service';
 import { SociosService } from '../../core/services/socios.service';
+import { ClientesService } from '../../core/services/clientes.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -23,6 +24,10 @@ import { SociosService } from '../../core/services/socios.service';
   template: `
     <div class="app-layout">
       <app-sidebar [isOpen]="isSidebarOpen()" (closeSidebar)="isSidebarOpen.set(false)" />
+
+      @if (isSidebarOpen()) {
+        <div class="sidebar-backdrop" (click)="isSidebarOpen.set(false)"></div>
+      }
 
       <div class="main-wrapper">
         <!-- Banner de Modo Soporte para SuperAdministrador -->
@@ -213,12 +218,29 @@ import { SociosService } from '../../core/services/socios.service';
       to { transform: translateY(0); opacity: 1; }
     }
 
-    @media (max-width: 900px) {
+    .sidebar-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 1040;
+      animation: fadeInBackdrop 0.2s ease;
+    }
+
+    @keyframes fadeInBackdrop {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @media (max-width: 991px) {
       .main-wrapper {
         margin-left: 0;
       }
       .page-content {
-        padding: 16px;
+        padding: 14px 12px;
       }
     }
   `]
@@ -239,6 +261,7 @@ export class MainLayoutComponent implements OnInit {
   private configuracionService = inject(ConfiguracionService);
   private bitacoraService = inject(BitacoraService);
   private sociosService = inject(SociosService);
+  private clientesService = inject(ClientesService);
 
   async ngOnInit(): Promise<void> {
     // 0. Esperar a que la sesión de Firebase Auth esté lista
@@ -251,6 +274,7 @@ export class MainLayoutComponent implements OnInit {
       this.gastosService.cargarGastos(),
       this.cortesService.cargarCortes(),
       this.pedidosService.cargarPedidos(),
+      this.clientesService.cargarClientes(),
       this.movimientosService.cargarMovimientos(),
       this.sucursalesService.cargarSucursales(),
       this.configuracionService.cargarConfiguracion(),
@@ -267,6 +291,7 @@ export class MainLayoutComponent implements OnInit {
     this.gastosService.iniciarEscuchadorLive();
     this.cortesService.iniciarEscuchadoresLive();
     this.pedidosService.iniciarEscuchadorLive();
+    this.clientesService.iniciarEscuchadorLive();
     this.sucursalesService.iniciarEscuchadorLive();
     this.bitacoraService.iniciarEscuchadorLive();
   }

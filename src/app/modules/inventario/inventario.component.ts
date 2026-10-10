@@ -10,6 +10,7 @@ import { SucursalesService } from '../../core/services/sucursales.service';
 import { SuscripcionService } from '../../core/services/suscripcion.service';
 import { Producto, StockSucursal } from '../../core/models/models';
 import { renderBarcodeToCanvas } from '../../shared/utils/barcode.util';
+import { ScannerCamaraModalComponent } from '../../shared/components/scanner-camara-modal/scanner-camara-modal.component';
 
 export interface ItemAuditoria {
   codigo: string;
@@ -33,7 +34,7 @@ export interface ItemAuditoria {
 @Component({
   selector: 'app-inventario',
   standalone: true,
-  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe, RouterLink, DecimalPipe],
+  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe, RouterLink, DecimalPipe, ScannerCamaraModalComponent],
   templateUrl: './inventario.component.html',
   styleUrl: './inventario.component.scss'
 })
@@ -44,6 +45,10 @@ export class InventarioComponent implements AfterViewInit {
   public busqueda = signal<string>('');
   public filtro = signal<'TODOS' | 'BAJO' | 'AGOTADO'>('TODOS');
   public sucursalFiltro = signal<string>('TODAS');
+
+  // Escáner de Códigos con Cámara
+  public scannerModalAbierto = signal<boolean>(false);
+  public scannerDestino = signal<'BUSQUEDA' | 'NUEVO_PRODUCTO'>('BUSQUEDA');
 
   // Control de Formulario / Modal de Registro y Edición de Producto
   public formularioRegistroVisible = signal<boolean>(false);
@@ -58,7 +63,8 @@ export class InventarioComponent implements AfterViewInit {
     stockActual: 0,
     stockMinimo: 1,
     grupo: 'GENERAL',
-    precioVariable: false
+    precioVariable: false,
+    sinStock: false
   };
   public nuevaSucursalDestino = signal<string>('SUC-MAIN');
 
@@ -95,6 +101,7 @@ export class InventarioComponent implements AfterViewInit {
   // ── Métricas Financieras y Valuación FIFO de Inventario ──────
   public valorInventarioCosto = computed(() => {
     return this.productosService.productos().reduce((acc, p) => {
+      if (p.sinStock) return acc;
       const stock = this.obtenerStockMostrado(p).stockActual || 0;
       const costo = this.obtenerCostoProducto(p);
       return acc + (stock * costo);
@@ -103,6 +110,7 @@ export class InventarioComponent implements AfterViewInit {
 
   public valorInventarioVenta = computed(() => {
     return this.productosService.productos().reduce((acc, p) => {
+      if (p.sinStock) return acc;
       const stock = this.obtenerStockMostrado(p).stockActual || 0;
       return acc + (stock * (p.precioVenta || 0));
     }, 0);
@@ -128,8 +136,28 @@ export class InventarioComponent implements AfterViewInit {
     }
   }
 
+  abrirScanner(destino: 'BUSQUEDA' | 'NUEVO_PRODUCTO' = 'BUSQUEDA'): void {
+    this.scannerDestino.set(destino);
+    this.scannerModalAbierto.set(true);
+  }
+
+  onCodigoEscaneado(codigo: string): void {
+    this.scannerModalAbierto.set(false);
+    if (this.scannerDestino() === 'BUSQUEDA') {
+      this.busqueda.set(codigo);
+      setTimeout(() => this.busquedaInputRef?.nativeElement.focus(), 100);
+    } else {
+      this.nuevoProducto.codigo = codigo;
+      this.onCodigoChange();
+      setTimeout(() => this.nuevoCodigoInputRef?.nativeElement.focus(), 100);
+    }
+  }
+
   // Obtiene el stock correspondiente según la sucursal seleccionada en el filtro
   public obtenerStockMostrado(prod: Producto): StockSucursal {
+    if (prod.sinStock) {
+      return { stockActual: 0, stockMinimo: 0 };
+    }
     const suc = this.sucursalFiltro();
     if (suc === 'TODAS') {
       return {
@@ -142,6 +170,7 @@ export class InventarioComponent implements AfterViewInit {
 
   public productosAgotados = computed(() => {
     return this.productosService.productos().filter((p) => {
+      if (p.sinStock) return false;
       const stock = this.obtenerStockMostrado(p);
       return stock.stockActual <= 0;
     });
@@ -149,6 +178,7 @@ export class InventarioComponent implements AfterViewInit {
 
   public productosConStockBajo = computed(() => {
     return this.productosService.productos().filter((p) => {
+      if (p.sinStock) return false;
       const stock = this.obtenerStockMostrado(p);
       return stock.stockActual > 0 && stock.stockActual <= stock.stockMinimo;
     });
@@ -161,8 +191,14 @@ export class InventarioComponent implements AfterViewInit {
 
     return list.filter((p) => {
       const stock = this.obtenerStockMostrado(p);
-      if (f === 'BAJO' && (stock.stockActual > stock.stockMinimo || stock.stockActual <= 0)) return false;
-      if (f === 'AGOTADO' && stock.stockActual > 0) return false;
+      if (f === 'BAJO') {
+        if (p.sinStock) return false;
+        if (stock.stockActual > stock.stockMinimo || stock.stockActual <= 0) return false;
+      }
+      if (f === 'AGOTADO') {
+        if (p.sinStock) return false;
+        if (stock.stockActual > 0) return false;
+      }
       if (query) {
         const matchesCod = (p.codigo || '').toLowerCase().includes(query);
         const matchesNom = (p.nombre || '').toLowerCase().includes(query);
@@ -249,12 +285,56 @@ export class InventarioComponent implements AfterViewInit {
     costo: number;
     ganancia: number;
     porcentaje: number;
+    noAplica?: boolean;
   } {
+    if (prod.sinStock) {
+      return {
+        costo: 0,
+        ganancia: prod.precioVenta || 0,
+        porcentaje: 0,
+        noAplica: true
+      };
+    }
     const costo = this.obtenerCostoProducto(prod);
     const precio = prod.precioVenta || 0;
     const ganancia = precio - costo;
     const porcentaje = precio > 0 ? Math.round((ganancia / precio) * 100) : 0;
-    return { costo, ganancia, porcentaje };
+    return { costo, ganancia, porcentaje, noAplica: false };
+  }
+
+  public margenNuevoProducto(): { ganancia: number; porcentaje: number; noAplica: boolean } {
+    if (this.nuevoProducto.sinStock) {
+      return { ganancia: Number(this.nuevoProducto.precioVenta) || 0, porcentaje: 100, noAplica: true };
+    }
+    const precio = Number(this.nuevoProducto.precioVenta) || 0;
+    const costo = Number(this.nuevoProducto.ultimoCosto) || 0;
+    const ganancia = precio - costo;
+    const porcentaje = precio > 0 ? Math.round((ganancia / precio) * 100) : 0;
+    return { ganancia, porcentaje, noAplica: false };
+  }
+
+  onSinStockChangeNuevo(): void {
+    if (this.nuevoProducto.sinStock) {
+      this.nuevoProducto.stockActual = 0;
+      this.nuevoProducto.stockMinimo = 0;
+      this.nuevoProducto.ultimoCosto = 0;
+      this.nuevoProducto.precioVariable = true;
+    }
+  }
+
+  onSinStockChangeEdicion(): void {
+    const prod = this.productoEnEdicion();
+    if (prod && prod.sinStock) {
+      prod.stockActual = 0;
+      prod.stockMinimo = 0;
+      prod.ultimoCosto = 0;
+      prod.precioVariable = true;
+      const mapa = { ...this.stocksEdicion() };
+      Object.keys(mapa).forEach((sid) => {
+        mapa[sid] = { stockActual: 0, stockMinimo: 0 };
+      });
+      this.stocksEdicion.set(mapa);
+    }
   }
 
   limpiarFormulario(): void {
@@ -266,7 +346,8 @@ export class InventarioComponent implements AfterViewInit {
       stockActual: 0,
       stockMinimo: 1,
       grupo: 'GENERAL',
-      precioVariable: false
+      precioVariable: false,
+      sinStock: false
     };
   }
 
@@ -284,18 +365,27 @@ export class InventarioComponent implements AfterViewInit {
       return;
     }
 
-    const sucursalDestino = this.nuevaSucursalDestino() || this.sucursalesService.activaId() || 'SUC-MAIN';
-    this.nuevoProducto.stockPorSucursal = {
-      [sucursalDestino]: {
-        stockActual: Number(this.nuevoProducto.stockActual) || 0,
-        stockMinimo: Number(this.nuevoProducto.stockMinimo) || 1
+    if (this.nuevoProducto.sinStock) {
+      this.nuevoProducto.stockPorSucursal = {};
+      this.nuevoProducto.stockActual = 0;
+      this.nuevoProducto.stockMinimo = 0;
+      this.nuevoProducto.ultimoCosto = 0;
+      this.nuevoProducto.lotesFifo = [];
+      await this.productosService.guardarProducto(this.nuevoProducto);
+    } else {
+      const sucursalDestino = this.nuevaSucursalDestino() || this.sucursalesService.activaId() || 'SUC-MAIN';
+      this.nuevoProducto.stockPorSucursal = {
+        [sucursalDestino]: {
+          stockActual: Number(this.nuevoProducto.stockActual) || 0,
+          stockMinimo: Number(this.nuevoProducto.stockMinimo) || 1
+        }
+      };
+      if (this.nuevoProducto.ultimoCosto !== undefined) {
+        this.nuevoProducto.ultimoCosto = Number(this.nuevoProducto.ultimoCosto) || 0;
       }
-    };
-    if (this.nuevoProducto.ultimoCosto !== undefined) {
-      this.nuevoProducto.ultimoCosto = Number(this.nuevoProducto.ultimoCosto) || 0;
+      await this.productosService.guardarProducto(this.nuevoProducto, sucursalDestino);
     }
 
-    await this.productosService.guardarProducto(this.nuevoProducto, sucursalDestino);
     this.limpiarFormulario();
     this.formularioRegistroVisible.set(false);
   }
@@ -315,9 +405,18 @@ export class InventarioComponent implements AfterViewInit {
   async onGuardarEdicion(): Promise<void> {
     const prod = this.productoEnEdicion();
     if (prod) {
-      prod.stockPorSucursal = { ...this.stocksEdicion() };
-      if (prod.ultimoCosto !== undefined) {
-        prod.ultimoCosto = Number(prod.ultimoCosto) || 0;
+      if (prod.sinStock) {
+        prod.stockPorSucursal = {};
+        prod.stockActual = 0;
+        prod.stockMinimo = 0;
+        prod.ultimoCosto = 0;
+        prod.costoPromedio = 0;
+        prod.lotesFifo = [];
+      } else {
+        prod.stockPorSucursal = { ...this.stocksEdicion() };
+        if (prod.ultimoCosto !== undefined) {
+          prod.ultimoCosto = Number(prod.ultimoCosto) || 0;
+        }
       }
       await this.productosService.guardarProducto(prod);
       this.productoEnEdicion.set(null);
@@ -332,7 +431,7 @@ export class InventarioComponent implements AfterViewInit {
 
   // ── Auditoría Completa: Catálogo vs Kardex por Sucursal ──────
   public auditoriaInventario = computed<ItemAuditoria[]>(() => {
-    const productos = this.productosService.productos();
+    const productos = this.productosService.productos().filter((p) => !p.sinStock);
     const movimientos = this.movimientosService.movimientos();
     const suc = this.sucursalFiltro();
 
@@ -381,12 +480,12 @@ export class InventarioComponent implements AfterViewInit {
         totalMovimientos,
         ultimoMovimiento: ultimoMov
           ? {
-              fecha: ultimoMov.fecha,
-              tipo: ultimoMov.tipo,
-              cantidad: ultimoMov.cantidad,
-              stockNuevo: ultimoMov.stockNuevo,
-              motivo: ultimoMov.motivo
-            }
+            fecha: ultimoMov.fecha,
+            tipo: ultimoMov.tipo,
+            cantidad: ultimoMov.cantidad,
+            stockNuevo: ultimoMov.stockNuevo,
+            motivo: ultimoMov.motivo
+          }
           : undefined,
         estado
       };

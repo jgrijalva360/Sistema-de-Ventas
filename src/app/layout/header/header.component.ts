@@ -494,10 +494,29 @@ import { SoporteService } from '../../core/services/soporte.service';
       }
     }
 
-    @media (max-width: 768px) {
-      .btn-hamburger { display: block; }
-      .user-email { display: none; }
+    @media (max-width: 991px) {
+      .btn-hamburger { display: flex; align-items: center; justify-content: center; }
       .main-header { padding: 0 12px; }
+      .user-email { display: none; }
+      .branch-selector-wrapper {
+        padding: 3px 6px;
+        .branch-select { max-width: 120px; font-size: 0.8rem; }
+      }
+      .cajero-badge {
+        padding: 3px 8px;
+        .cajero-label { display: none; }
+        .cajero-nombre { max-width: 80px; font-size: 0.78rem; }
+      }
+      .sync-indicator {
+        padding: 4px 6px;
+        .sync-text { display: none; }
+      }
+    }
+
+    @media (max-width: 576px) {
+      .branch-selector-wrapper .branch-icon { display: none; }
+      .header-left, .header-right { gap: 8px; }
+      .btn-logout { padding: 4px 6px; font-size: 0.72rem; }
     }
   `]
 })

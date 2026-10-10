@@ -1,3 +1,4 @@
+@use './styles/grid' as *;
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
@@ -23,6 +24,11 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 body {
@@ -338,8 +344,16 @@ table {
   .main-header,
   .app-sidebar,
   .app-header,
+  .support-mode-banner,
+  .sub-alert-banner,
+  .sidebar-backdrop,
   .version-banner,
+  .pos-screen-content,
+  .pos-layout-row,
   .pos-layout,
+  .pos-main,
+  .pos-checkout,
+  .checkout-card,
   .pedidos-container,
   .ticket-no-print {
     display: none !important;

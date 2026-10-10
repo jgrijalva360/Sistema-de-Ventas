@@ -29,16 +29,24 @@
         <!-- Fila 1: Buscador de Producto a lo ancho -->
         <div class="form-group search-autocomplete-container col-span-full">
           <label for="movProducto">Producto (Código o Nombre) *</label>
-          <div class="input-with-action">
-            <input #movProductoRef id="movProducto" type="text" [value]="busquedaProducto()"
-              (input)="onInputChange($event)" (focus)="onInputFocus()" (blur)="cerrarSugerencias()"
-              (keydown.arrowdown)="navegarSugerencias(1, $event)" (keydown.arrowup)="navegarSugerencias(-1, $event)"
-              (keydown.enter)="onEnterProducto($event)" (keydown.escape)="mostrarSugerencias.set(false)"
-              placeholder="Escribe el nombre o código del producto..." autocomplete="off" required />
-            @if (codigoSeleccionado()) {
-            <button type="button" class="btn-clear-prod" (click)="limpiarSeleccion()"
-              title="Borrar selección">&times;</button>
-            }
+          <div class="input-with-action" style="display: flex; gap: 8px; align-items: center;">
+            <div style="position: relative; flex: 1;">
+              <input #movProductoRef id="movProducto" type="text" [value]="busquedaProducto()"
+                (input)="onInputChange($event)" (focus)="onInputFocus()" (blur)="cerrarSugerencias()"
+                (keydown.arrowdown)="navegarSugerencias(1, $event)" (keydown.arrowup)="navegarSugerencias(-1, $event)"
+                (keydown.enter)="onEnterProducto($event)" (keydown.escape)="mostrarSugerencias.set(false)"
+                placeholder="Escribe el nombre o código del producto..." autocomplete="off" required
+                [style.padding-right]="codigoSeleccionado() ? '36px' : '14px'" />
+              @if (codigoSeleccionado()) {
+              <button type="button" class="btn-clear-prod" (click)="limpiarSeleccion()"
+                title="Borrar selección">&times;</button>
+              }
+            </div>
+            <button type="button" class="btn btn-secondary" (click)="abrirScanner()"
+              title="Escanear código de barras o QR con la cámara del celular"
+              style="display: inline-flex; align-items: center; gap: 5px; font-weight: 700; white-space: nowrap; height: 42px; padding: 0 14px;">
+              📷 <span class="d-none d-sm-inline">Escanear</span>
+            </button>
           </div>
 
           <!-- Lista desplegable de sugerencias filtradas en tiempo real -->
@@ -459,4 +467,12 @@
     </div>
   </div>
 </div>
+}
+
+<!-- Modal de Escáner de Código con Cámara -->
+@if (scannerModalAbierto()) {
+  <app-scanner-camara-modal
+    (codigoEscaneado)="onCodigoEscaneado($event)"
+    (cerrar)="scannerModalAbierto.set(false)">
+  </app-scanner-camara-modal>
 }

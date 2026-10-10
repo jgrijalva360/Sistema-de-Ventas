@@ -463,7 +463,17 @@
             </div>
           </label>
 
-          <!-- 7. Sucursales -->
+          <!-- 7. Directorio de Clientes -->
+          <label class="module-card" [class.selected]="optClientes()">
+            <input type="checkbox" [ngModel]="optClientes()" (ngModelChange)="optClientes.set($event)" />
+            <div class="module-icon">👤</div>
+            <div class="module-info">
+              <strong>Directorio de Clientes</strong>
+              <small>{{ resumenBackup()?.clientesCount || 0 }} clientes registrados</small>
+            </div>
+          </label>
+
+          <!-- 8. Sucursales -->
           <label class="module-card" [class.selected]="optSucursales()">
             <input type="checkbox" [ngModel]="optSucursales()" (ngModelChange)="optSucursales.set($event)" />
             <div class="module-icon">🏪</div>
@@ -473,7 +483,7 @@
             </div>
           </label>
 
-          <!-- 8. Configuración General -->
+          <!-- 9. Configuración General -->
           <label class="module-card" [class.selected]="optConfiguracion()">
             <input type="checkbox" [ngModel]="optConfiguracion()" (ngModelChange)="optConfiguracion.set($event)" />
             <div class="module-icon">⚙️</div>
@@ -483,7 +493,7 @@
             </div>
           </label>
 
-          <!-- 9. Bitácora y Auditoría -->
+          <!-- 10. Bitácora y Auditoría -->
           <label class="module-card" [class.selected]="optBitacora()">
             <input type="checkbox" [ngModel]="optBitacora()" (ngModelChange)="optBitacora.set($event)" />
             <div class="module-icon">📜</div>
@@ -493,7 +503,7 @@
             </div>
           </label>
 
-          <!-- 10. Colaboradores y Cajas -->
+          <!-- 11. Colaboradores y Cajas -->
           <label class="module-card" [class.selected]="optUsuarios()">
             <input type="checkbox" [ngModel]="optUsuarios()" (ngModelChange)="optUsuarios.set($event)" />
             <div class="module-icon">👥</div>
@@ -503,7 +513,7 @@
             </div>
           </label>
 
-          <!-- 11. Socios y Repartos -->
+          <!-- 12. Socios y Repartos -->
           <label class="module-card" [class.selected]="optSocios()">
             <input type="checkbox" [ngModel]="optSocios()" (ngModelChange)="optSocios.set($event)" />
             <div class="module-icon">🤝</div>

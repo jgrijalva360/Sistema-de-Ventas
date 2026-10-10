@@ -29,28 +29,197 @@
   background: #fff1f2 !important;
 }
 
-/* ── Estilos Formulario de Registro ── */
+/* ── Estilos Formulario de Registro Rediseñado ── */
 .registro-card {
   background: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 4px 18px rgba(2, 132, 199, 0.12);
+  margin-bottom: 24px;
+  border: 2px solid #0284c7;
+}
+
+.form-section-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  transition: all 0.2s ease;
+
+  .form-section-title {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: -0.01em;
+  }
+}
+
+.banner-servicio {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+
+  .banner-icono {
+    font-size: 1.6rem;
+  }
+  .banner-titulo {
+    font-size: 0.88rem;
+    color: #166534;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .banner-desc {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #475569;
+    line-height: 1.35;
+  }
 }
 
 .field-label {
-  display: block;
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
   font-weight: 700;
   color: #1e3a5f;
   margin-bottom: 6px;
 }
 
-.form-group-full {
-  width: 100%;
+.badge-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.input-with-scanner {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .custom-input {
+    padding-right: 110px;
+  }
+
+  .btn-scanner-embedded {
+    position: absolute;
+    right: 5px;
+    height: 32px;
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: #0369a1;
+    }
+  }
+}
+
+.barcode-pills-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-barcode-pill {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  flex: 1;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.primary-pill {
+    background: #e0f2fe;
+    border-color: #bae6fd;
+    color: #0284c7;
+
+    &:hover:not(:disabled) {
+      background: #bae6fd;
+      color: #0369a1;
+    }
+  }
+}
+
+.tipo-producto-card {
+  min-height: 42px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &.active {
+    background: #f0fdf4;
+    border-color: #86efac;
+    box-shadow: 0 1px 4px rgba(22, 163, 74, 0.12);
+  }
+
+  &:hover {
+    border-color: #0284c7;
+  }
+
+  .tipo-producto-text {
+    display: flex;
+    flex-direction: column;
+
+    strong {
+      font-size: 0.84rem;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    span {
+      font-size: 0.73rem;
+      color: #64748b;
+    }
+  }
 }
 
 .custom-input {
   width: 100%;
-  padding: 9px 14px;
+  height: 42px;
+  padding: 8px 12px;
   font-size: 0.92rem;
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
@@ -67,61 +236,155 @@
   &::placeholder {
     color: #94a3b8;
   }
+
+  &.input-disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  &.input-precio-destacado {
+    color: #0284c7;
+    font-weight: 800;
+    font-size: 1.05rem;
+  }
 }
 
-.btn-barcode {
+.margen-indicator-box {
+  height: 42px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  padding: 0 12px;
+  text-align: center;
+  transition: all 0.2s ease;
+
+  &.margen-directo {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    .margen-valor { color: #475569; font-weight: 700; font-size: 0.84rem; }
+  }
+
+  &.margen-alto {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    .margen-valor { color: #15803d; font-weight: 800; font-size: 0.88rem; }
+  }
+
+  &.margen-medio {
+    background: #fefce8;
+    border-color: #fef08a;
+    .margen-valor { color: #b45309; font-weight: 800; font-size: 0.88rem; }
+  }
+
+  &.margen-bajo {
+    background: #fef2f2;
+    border-color: #fecaca;
+    .margen-valor { color: #b91c1c; font-weight: 800; font-size: 0.88rem; }
+  }
+
+  .margen-placeholder {
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+}
+
+.precio-variable-box {
+  height: 42px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
   cursor: pointer;
-  border: none;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: all 0.2s ease;
 
-  &:active {
-    transform: scale(0.99);
+  &:hover {
+    border-color: #0284c7;
   }
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.btn-sugerir {
-  background-color: #009ca6;
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background-color: #008891;
+  .precio-variable-label {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #1e3a5f;
+    cursor: pointer;
+    user-select: none;
   }
 }
 
-.btn-guardar-img {
-  background-color: #52606d;
-  color: #ffffff;
-
-  &:hover:not(:disabled) {
-    background-color: #43505c;
-  }
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #0284c7;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.form-row-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr 1.3fr;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.form-group-col {
+.form-actions-toolbar {
   display: flex;
-  flex-direction: column;
-}
+  align-items: center;
+  gap: 12px;
+  padding-top: 18px;
+  margin-top: 20px;
+  border-top: 1.5px solid #e2e8f0;
+  flex-wrap: wrap;
 
-.variable-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  .btn-save-producto {
+    background: #16a34a;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    &:hover {
+      background: #15803d;
+      transform: translateY(-1px);
+    }
+  }
+
+  .btn-clean-fields {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1.5px solid #cbd5e1;
+    padding: 10px 18px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    border-radius: 8px;
+
+    &:hover {
+      background: #e2e8f0;
+    }
+  }
+
+  .btn-cancel-registro {
+    margin-left: auto;
+    background: #ffffff;
+    color: #64748b;
+    border: 1.5px solid #cbd5e1;
+    padding: 10px 18px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    border-radius: 8px;
+
+    &:hover {
+      background: #fee2e2;
+      color: #dc2626;
+      border-color: #fca5a5;
+    }
+  }
 }
 
 .checkbox-container {
@@ -165,17 +428,5 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@media (max-width: 900px) {
-  .form-row-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .form-row-grid {
-    grid-template-columns: 1fr;
   }
 }

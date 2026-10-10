@@ -31,6 +31,7 @@ import { doc, setDoc } from 'firebase/firestore';
             <span class="brand-sub">Punto de Venta</span>
           </div>
         }
+        <button type="button" class="btn-sidebar-close-mobile" (click)="closeNav()" title="Cerrar Menú">✕</button>
       </div>
 
       <nav class="sidebar-nav">
@@ -96,6 +97,10 @@ import { doc, setDoc } from 'firebase/firestore';
           <a routerLink="/pedidos" routerLinkActive="active" (click)="closeNav()" class="nav-item">
             <span class="nav-icon">🎨</span>
             <span>Pedidos</span>
+          </a>
+          <a routerLink="/clientes" routerLinkActive="active" (click)="closeNav()" class="nav-item">
+            <span class="nav-icon">👥</span>
+            <span>Clientes</span>
           </a>
 
           @if (authService.esEncargado()) {
@@ -1612,9 +1617,33 @@ import { doc, setDoc } from 'firebase/firestore';
       z-index: 90;
     }
 
-    @media (max-width: 768px) {
+    .btn-sidebar-close-mobile {
+      display: none;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      margin-left: auto;
+      padding: 4px 10px;
+      border-radius: 6px;
+      transition: background 0.15s;
+
+      &:hover {
+        background: rgba(239, 68, 68, 0.4);
+      }
+    }
+
+    @media (max-width: 991px) {
+      .btn-sidebar-close-mobile {
+        display: block;
+      }
+
       .sidebar {
         transform: translateX(-100%);
+        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+
         &.open {
           transform: translateX(0);
         }

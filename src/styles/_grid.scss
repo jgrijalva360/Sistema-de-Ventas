@@ -1,0 +1,244 @@
+@use "sass:map";
+@use "sass:math";
+
+// ══════════════════════════════════════════════════════════════════════
+//  SISTEMA DE GRID RESPONSIVO (COMPATIBLE CON BOOTSTRAP 5)
+// ══════════════════════════════════════════════════════════════════════
+
+// 1. Breakpoints Estándar
+$grid-breakpoints: (
+  xs: 0,
+  sm: 576px,
+  md: 768px,
+  lg: 992px,
+  xl: 1200px,
+  xxl: 1400px
+);
+
+$container-max-widths: (
+  sm: 540px,
+  md: 720px,
+  lg: 960px,
+  xl: 1140px,
+  xxl: 1320px
+);
+
+$grid-columns: 12;
+$grid-gutter-width: 1.5rem;
+
+// 2. Contenedores
+.container,
+.container-fluid {
+  width: 100%;
+  padding-right: calc($grid-gutter-width * 0.5);
+  padding-left: calc($grid-gutter-width * 0.5);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.container {
+  @each $breakpoint, $container-max-width in $container-max-widths {
+    @media (min-width: map.get($grid-breakpoints, $breakpoint)) {
+      max-width: $container-max-width;
+    }
+  }
+}
+
+// 3. Fila (Row) y Gutters
+.row {
+  --bs-gutter-x: 1.5rem;
+  --bs-gutter-y: 0;
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: calc(-1 * var(--bs-gutter-y));
+  margin-right: calc(-0.5 * var(--bs-gutter-x));
+  margin-left: calc(-0.5 * var(--bs-gutter-x));
+
+  > * {
+    box-sizing: border-box;
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    padding-right: calc(var(--bs-gutter-x) * 0.5);
+    padding-left: calc(var(--bs-gutter-x) * 0.5);
+    margin-top: var(--bs-gutter-y);
+  }
+}
+
+// Gutters (g-0 a g-5, gx-*, gy-*)
+$gutters: (
+  0: 0,
+  1: 0.25rem,
+  2: 0.5rem,
+  3: 1rem,
+  4: 1.5rem,
+  5: 3rem
+);
+
+@each $i, $val in $gutters {
+  .g-#{$i}, .gx-#{$i} { --bs-gutter-x: #{$val}; }
+  .g-#{$i}, .gy-#{$i} { --bs-gutter-y: #{$val}; }
+}
+
+// 4. Columnas Base (xs - mobile first)
+.col {
+  flex: 1 0 0%;
+}
+
+.col-auto {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+@for $i from 1 through $grid-columns {
+  .col-#{$i} {
+    flex: 0 0 auto;
+    width: math.percentage(math.div($i, $grid-columns));
+  }
+}
+
+// 5. Columnas Responsivas por Breakpoint (sm, md, lg, xl, xxl)
+@each $bp, $width in $grid-breakpoints {
+  @if $width > 0 {
+    @media (min-width: $width) {
+      .col-#{$bp} {
+        flex: 1 0 0%;
+      }
+
+      .col-#{$bp}-auto {
+        flex: 0 0 auto;
+        width: auto;
+      }
+
+      @for $i from 1 through $grid-columns {
+        .col-#{$bp}-#{$i} {
+          flex: 0 0 auto;
+          width: math.percentage(math.div($i, $grid-columns));
+        }
+      }
+
+      // Gutters responsivos por breakpoint
+      @each $i, $val in $gutters {
+        .g-#{$bp}-#{$i}, .gx-#{$bp}-#{$i} { --bs-gutter-x: #{$val}; }
+        .g-#{$bp}-#{$i}, .gy-#{$bp}-#{$i} { --bs-gutter-y: #{$val}; }
+      }
+    }
+  }
+}
+
+// 6. Utilidades Flex y Display
+.d-none { display: none !important; }
+.d-inline { display: inline !important; }
+.d-inline-block { display: inline-block !important; }
+.d-block { display: block !important; }
+.d-flex { display: flex !important; }
+.d-inline-flex { display: inline-flex !important; }
+.d-grid { display: grid !important; }
+
+.flex-row { flex-direction: row !important; }
+.flex-column { flex-direction: column !important; }
+.flex-wrap { flex-wrap: wrap !important; }
+.flex-nowrap { flex-wrap: nowrap !important; }
+
+.justify-content-start { justify-content: flex-start !important; }
+.justify-content-end { justify-content: flex-end !important; }
+.justify-content-center { justify-content: center !important; }
+.justify-content-between { justify-content: space-between !important; }
+.justify-content-around { justify-content: space-around !important; }
+
+.align-items-start { align-items: flex-start !important; }
+.align-items-end { align-items: flex-end !important; }
+.align-items-center { align-items: center !important; }
+.align-items-stretch { align-items: stretch !important; }
+
+.w-100 { width: 100% !important; }
+.h-100 { height: 100% !important; }
+
+.text-start { text-align: left !important; }
+.text-center { text-align: center !important; }
+.text-end { text-align: right !important; }
+
+// Display responsivo por breakpoint
+@each $bp, $width in $grid-breakpoints {
+  @if $width > 0 {
+    @media (min-width: $width) {
+      .d-#{$bp}-none { display: none !important; }
+      .d-#{$bp}-inline { display: inline !important; }
+      .d-#{$bp}-inline-block { display: inline-block !important; }
+      .d-#{$bp}-block { display: block !important; }
+      .d-#{$bp}-flex { display: flex !important; }
+      .d-#{$bp}-inline-flex { display: inline-flex !important; }
+      .d-#{$bp}-grid { display: grid !important; }
+
+      .flex-#{$bp}-row { flex-direction: row !important; }
+      .flex-#{$bp}-column { flex-direction: column !important; }
+      .flex-#{$bp}-wrap { flex-wrap: wrap !important; }
+
+      .justify-content-#{$bp}-start { justify-content: flex-start !important; }
+      .justify-content-#{$bp}-end { justify-content: flex-end !important; }
+      .justify-content-#{$bp}-center { justify-content: center !important; }
+      .justify-content-#{$bp}-between { justify-content: space-between !important; }
+
+      .align-items-#{$bp}-start { align-items: flex-start !important; }
+      .align-items-#{$bp}-end { align-items: flex-end !important; }
+      .align-items-#{$bp}-center { align-items: center !important; }
+
+      .text-#{$bp}-start { text-align: left !important; }
+      .text-#{$bp}-center { text-align: center !important; }
+      .text-#{$bp}-end { text-align: right !important; }
+    }
+  }
+}
+
+// 7. Tablas Responsivas
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
+// 8. Utilidades de Espaciado (Margin, Padding, Gap)
+$spacers: (
+  0: 0,
+  1: 0.25rem,
+  2: 0.5rem,
+  3: 1rem,
+  4: 1.5rem,
+  5: 3rem
+);
+
+@each $key, $val in $spacers {
+  .m-#{$key} { margin: #{$val} !important; }
+  .mt-#{$key} { margin-top: #{$val} !important; }
+  .mb-#{$key} { margin-bottom: #{$val} !important; }
+  .ms-#{$key} { margin-left: #{$val} !important; }
+  .me-#{$key} { margin-right: #{$val} !important; }
+  .mx-#{$key} { margin-left: #{$val} !important; margin-right: #{$val} !important; }
+  .my-#{$key} { margin-top: #{$val} !important; margin-bottom: #{$val} !important; }
+
+  .p-#{$key} { padding: #{$val} !important; }
+  .pt-#{$key} { padding-top: #{$val} !important; }
+  .pb-#{$key} { padding-bottom: #{$val} !important; }
+  .ps-#{$key} { padding-left: #{$val} !important; }
+  .pe-#{$key} { padding-right: #{$val} !important; }
+  .px-#{$key} { padding-left: #{$val} !important; padding-right: #{$val} !important; }
+  .py-#{$key} { padding-top: #{$val} !important; padding-bottom: #{$val} !important; }
+
+  .gap-#{$key} { gap: #{$val} !important; }
+}
+
+.ms-auto { margin-left: auto !important; }
+.me-auto { margin-right: auto !important; }
+.mx-auto { margin-left: auto !important; margin-right: auto !important; }
+
+// 9. Utilidades de Bordes y Redondeo
+.border { border: 1px solid #cbd5e1 !important; }
+.border-top { border-top: 1px solid #e2e8f0 !important; }
+.border-bottom { border-bottom: 1px solid #e2e8f0 !important; }
+.border-0 { border: 0 !important; }
+
+.rounded { border-radius: 8px !important; }
+.rounded-circle { border-radius: 50% !important; }
+.rounded-pill { border-radius: 999px !important; }
+

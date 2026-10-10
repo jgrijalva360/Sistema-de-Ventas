@@ -1,0 +1,405 @@
+<div class="clientes-page">
+  <!-- Encabezado de Sección -->
+  <div class="content-header">
+    <div class="header-titles">
+      <h2>👥 Directorio y Catálogo de Clientes</h2>
+      <p>Gestión centralizada de contactos, datos principales e historial de pedidos.</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary btn-importar" (click)="importarDesdePedidos()" title="Importar clientes únicos desde los pedidos históricos">
+        <span>📥 Importar de Pedidos</span>
+      </button>
+      <button type="button" class="btn btn-primary" (click)="abrirModalNuevo()">
+        <span>➕ Registrar Nuevo Cliente</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Métricas Rápidas -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-icon bg-blue">👥</div>
+      <div class="metric-info">
+        <span class="metric-label">Total Clientes</span>
+        <strong class="metric-value">{{ clientesService.totalClientes() }}</strong>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon bg-green">📞</div>
+      <div class="metric-info">
+        <span class="metric-label">Con Teléfono / WhatsApp</span>
+        <strong class="metric-value">{{ clientesService.totalConTelefono() }}</strong>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon bg-purple">🎨</div>
+      <div class="metric-info">
+        <span class="metric-label">Con Pedidos Realizados</span>
+        <strong class="metric-value">{{ totalClientesConPedidos() }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de Búsqueda y Filtros -->
+  <div class="search-bar-card">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        [ngModel]="busqueda()"
+        (ngModelChange)="busqueda.set($event)"
+        placeholder="Buscar por nombre de cliente, teléfono, email, dirección o folio (CLI-0001)..."
+      />
+      @if (busqueda()) {
+        <button type="button" class="btn-clear-search" (click)="busqueda.set('')" title="Limpiar búsqueda">✕</button>
+      }
+    </div>
+    <div class="search-counter">
+      Mostrando <strong>{{ clientesFiltrados().length }}</strong> de <strong>{{ clientesService.totalClientes() }}</strong> clientes
+    </div>
+  </div>
+
+  <!-- Tabla de Clientes -->
+  <div class="card table-card">
+    @if (clientesFiltrados().length > 0) {
+      <div class="table-responsive">
+        <table class="table-clientes">
+          <thead>
+            <tr>
+              <th style="width: 110px;">Folio</th>
+              <th>Nombre del Cliente</th>
+              <th>Teléfono / WhatsApp</th>
+              <th>Correo Electrónico</th>
+              <th>Dirección / Entrega</th>
+              <th style="text-align: center;">Pedidos</th>
+              <th style="text-align: right; width: 180px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cli of clientesFiltrados(); track cli.id) {
+              <tr>
+                <td class="col-folio">
+                  <span class="badge-folio">{{ cli.id }}</span>
+                </td>
+                <td class="col-nombre">
+                  <div class="cliente-avatar-cell">
+                    <div class="avatar-circle">
+                      {{ cli.nombre.charAt(0).toUpperCase() }}
+                    </div>
+                    <div class="cliente-nombre-block">
+                      <strong>{{ cli.nombre }}</strong>
+                      @if (cli.notas) {
+                        <span class="cliente-notas-snippet" [title]="cli.notas">📝 {{ cli.notas }}</span>
+                      }
+                    </div>
+                  </div>
+                </td>
+                <td class="col-tel">
+                  @if (cli.telefono) {
+                    <div class="tel-container">
+                      <span>{{ cli.telefono }}</span>
+                      <a
+                        [href]="obtenerEnlaceWhatsapp(cli.telefono)"
+                        target="_blank"
+                        rel="noopener"
+                        class="btn-whatsapp-mini"
+                        title="Enviar WhatsApp"
+                      >
+                        💬 WhatsApp
+                      </a>
+                    </div>
+                  } @else {
+                    <span class="text-muted">Sin teléfono</span>
+                  }
+                </td>
+                <td class="col-email">
+                  @if (cli.email) {
+                    <a [href]="'mailto:' + cli.email" class="link-email">{{ cli.email }}</a>
+                  } @else {
+                    <span class="text-muted">-</span>
+                  }
+                </td>
+                <td class="col-direccion">
+                  @if (cli.direccion) {
+                    <span class="direccion-text" [title]="cli.direccion">{{ cli.direccion }}</span>
+                  } @else {
+                    <span class="text-muted">-</span>
+                  }
+                </td>
+                <td class="col-pedidos" style="text-align: center;">
+                  @if (obtenerConteoPedidos(cli) > 0) {
+                    <button type="button" class="badge-pedidos-count" (click)="abrirModalPedidos(cli)" title="Ver pedidos asociados">
+                      <span>🎨 {{ obtenerConteoPedidos(cli) }} pedido(s)</span>
+                    </button>
+                  } @else {
+                    <span class="badge-pedidos-zero">0 pedidos</span>
+                  }
+                </td>
+                <td class="col-acciones" style="text-align: right;">
+                  <div class="actions-group">
+                    <button type="button" class="btn-action btn-edit" (click)="abrirModalEditar(cli)" title="Editar Cliente">
+                      ✏️
+                    </button>
+                    <button type="button" class="btn-action btn-delete" (click)="confirmarEliminarCliente(cli)" title="Eliminar Cliente">
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="empty-state">
+        <div class="empty-icon">👥</div>
+        <h3>No se encontraron clientes</h3>
+        @if (busqueda()) {
+          <p>No hay clientes que coincidan con la búsqueda "<strong>{{ busqueda() }}</strong>".</p>
+          <button type="button" class="btn btn-secondary" (click)="busqueda.set('')">Limpiar Búsqueda</button>
+        } @else {
+          <p>Aún no hay clientes registrados en el catálogo.</p>
+          <div class="empty-actions">
+            <button type="button" class="btn btn-primary" (click)="abrirModalNuevo()">➕ Registrar Primer Cliente</button>
+            <button type="button" class="btn btn-secondary" (click)="importarDesdePedidos()">📥 Importar de Pedidos</button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: REGISTRAR NUEVO CLIENTE -->
+<!-- ============================================================ -->
+@if (modalNuevoAbierto()) {
+  <div class="modal-backdrop" (click)="cerrarModalNuevo()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon-header">👤</span>
+          <h3>Registrar Nuevo Cliente</h3>
+        </div>
+        <button type="button" class="btn-modal-close" (click)="cerrarModalNuevo()">&times;</button>
+      </div>
+
+      <form (ngSubmit)="guardarNuevoCliente()">
+        <div class="modal-body form-grid-modal">
+          <div class="form-group full-width">
+            <label for="nNom">Nombre Completo del Cliente *</label>
+            <input
+              id="nNom"
+              type="text"
+              [(ngModel)]="nuevoNombre"
+              name="nuevoNombre"
+              placeholder="Ej: Lic. Roberto García, María Fernández..."
+              required
+              autofocus
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="nTel">Teléfono / WhatsApp</label>
+            <input
+              id="nTel"
+              type="tel"
+              [(ngModel)]="nuevoTelefono"
+              name="nuevoTelefono"
+              placeholder="Ej: 55 1234 5678"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="nEmail">Correo Electrónico</label>
+            <input
+              id="nEmail"
+              type="email"
+              [(ngModel)]="nuevoEmail"
+              name="nuevoEmail"
+              placeholder="cliente@ejemplo.com"
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="nDir">Dirección / Datos de Entrega</label>
+            <input
+              id="nDir"
+              type="text"
+              [(ngModel)]="nuevaDireccion"
+              name="nuevaDireccion"
+              placeholder="Calle, número, colonia, referencias..."
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="nNotas">Notas / Observaciones</label>
+            <textarea
+              id="nNotas"
+              rows="3"
+              [(ngModel)]="nuevasNotas"
+              name="nuevasNotas"
+              placeholder="Preferencias de color, datos de facturación, especificaciones habituales..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModalNuevo()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="!nuevoNombre.trim()">
+            💾 Guardar Cliente
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ============================================================ -->
+<!-- MODAL: EDITAR CLIENTE -->
+<!-- ============================================================ -->
+@if (modalEditarAbierto()) {
+  <div class="modal-backdrop" (click)="cerrarModalEditar()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon-header">✏️</span>
+          <h3>Editar Cliente: {{ clienteEditando()?.id }}</h3>
+        </div>
+        <button type="button" class="btn-modal-close" (click)="cerrarModalEditar()">&times;</button>
+      </div>
+
+      <form (ngSubmit)="guardarEdicionCliente()">
+        <div class="modal-body form-grid-modal">
+          <div class="form-group full-width">
+            <label for="eNom">Nombre Completo del Cliente *</label>
+            <input
+              id="eNom"
+              type="text"
+              [(ngModel)]="editNombre"
+              name="editNombre"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="eTel">Teléfono / WhatsApp</label>
+            <input
+              id="eTel"
+              type="tel"
+              [(ngModel)]="editTelefono"
+              name="editTelefono"
+              placeholder="Ej: 55 1234 5678"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="eEmail">Correo Electrónico</label>
+            <input
+              id="eEmail"
+              type="email"
+              [(ngModel)]="editEmail"
+              name="editEmail"
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="eDir">Dirección / Datos de Entrega</label>
+            <input
+              id="eDir"
+              type="text"
+              [(ngModel)]="editDireccion"
+              name="editDireccion"
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="eNotas">Notas / Observaciones</label>
+            <textarea
+              id="eNotas"
+              rows="3"
+              [(ngModel)]="editNotas"
+              name="editNotas"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="cerrarModalEditar()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="!editNombre.trim()">
+            💾 Guardar Cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ============================================================ -->
+<!-- MODAL: HISTORIAL DE PEDIDOS DEL CLIENTE -->
+<!-- ============================================================ -->
+@if (modalPedidosAbierto()) {
+  <div class="modal-backdrop" (click)="cerrarModalPedidos()">
+    <div class="modal-container modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon-header">🎨</span>
+          <h3>Historial de Pedidos: {{ clienteSeleccionadoPedidos()?.nombre }}</h3>
+        </div>
+        <button type="button" class="btn-modal-close" (click)="cerrarModalPedidos()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        @if (pedidosDelClienteSeleccionado().length > 0) {
+          <div class="table-responsive">
+            <table class="table-pedidos-historial">
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Fecha Registro</th>
+                  <th>Entrega Estimada</th>
+                  <th>Especificaciones</th>
+                  <th>Estado</th>
+                  <th style="text-align: right;">Total</th>
+                  <th style="text-align: right;">Saldo Pendiente</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (ped of pedidosDelClienteSeleccionado(); track ped.id) {
+                  <tr>
+                    <td><strong>#{{ ped.id }}</strong></td>
+                    <td>{{ ped.fechaRegistro | fechaLocal }}</td>
+                    <td>{{ ped.fechaEntrega ? (ped.fechaEntrega | fechaLocal) : 'Por definir' }}</td>
+                    <td class="col-esp-snippet">{{ ped.especificaciones }}</td>
+                    <td>
+                      <span class="badge-status status-{{ ped.estado.toLowerCase() }}">
+                        {{ ped.estado }}
+                      </span>
+                    </td>
+                    <td style="text-align: right; font-weight: 600;">
+                      {{ ped.totalAcordado | currencyMxn }}
+                    </td>
+                    <td style="text-align: right;">
+                      @if (ped.saldoRestante > 0) {
+                        <span class="saldo-alerta">{{ ped.saldoRestante | currencyMxn }}</span>
+                      } @else {
+                        <span class="saldo-liquidado">Liquidado</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="text-muted" style="text-align: center; padding: 20px;">
+            No se encontraron pedidos registrados para este cliente.
+          </p>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cerrarModalPedidos()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+}

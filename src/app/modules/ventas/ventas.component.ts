@@ -9,12 +9,15 @@ import { SucursalesService } from '../../core/services/sucursales.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SociosService } from '../../core/services/socios.service';
+import { GastosService } from '../../core/services/gastos.service';
 import { Venta, Producto } from '../../core/models/models';
+import { ScannerCamaraModalComponent } from '../../shared/components/scanner-camara-modal/scanner-camara-modal.component';
+import { getFechaLocalString } from '../../shared/utils/date.util';
 
 @Component({
   selector: 'app-ventas',
   standalone: true,
-  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe, NgTemplateOutlet],
+  imports: [FormsModule, CurrencyMxnPipe, FechaLocalPipe, NgTemplateOutlet, ScannerCamaraModalComponent],
   templateUrl: './ventas.component.html',
   styleUrl: './ventas.component.scss'
 })
@@ -26,6 +29,9 @@ export class VentasComponent implements AfterViewInit {
   public mensajeAlerta = signal<string>('');
   public tipoAlerta = signal<'warning' | 'success'>('warning');
 
+  // Escáner de Códigos con Cámara
+  public scannerModalAbierto = signal<boolean>(false);
+
   public mostrarSugerencias = signal<boolean>(false);
   public indiceSeleccionado = signal<number>(-1);
 
@@ -33,7 +39,7 @@ export class VentasComponent implements AfterViewInit {
   public sonidoFinalizarVenta = new Audio('assets/hell_AJWSn3e.mp3');
 
   ngAfterViewInit(): void {
-    setTimeout(() => this.codigoInputRef?.nativeElement.focus(), 100);
+    this.enfocarInputEscaneo();
   }
 
   public modalPausarAbierto = signal<boolean>(false);
@@ -48,10 +54,15 @@ export class VentasComponent implements AfterViewInit {
   public motivoCancelacion = '';
   public reponerStockCancelacion = true;
   public cancelandoVenta = signal<boolean>(false);
+  public reembolsarEfectivoDeCajaTurno = signal<boolean>(true);
 
   // Socio que recibe transferencia o tarjeta
   public socioTransferenciaId = signal<string>('');
   public socioTarjetaId = signal<string>('');
+
+  // Filtros del Listado de Ventas / Historial
+  public filtroPeriodoVentas = signal<'HOY' | 'AYER' | 'SEMANA' | 'TODAS'>('HOY');
+  public busquedaFolioVentas = signal<string>('');
 
   public ventasService = inject(VentasService);
   public productosService = inject(ProductosService);
@@ -59,6 +70,81 @@ export class VentasComponent implements AfterViewInit {
   public configuracionService = inject(ConfiguracionService);
   public authService = inject(AuthService);
   public sociosService = inject(SociosService);
+  public gastosService = inject(GastosService);
+
+  public ventasVisualizadas = computed(() => {
+    const todas = this.ventasService.ventas();
+    const query = this.busquedaFolioVentas().trim().toLowerCase();
+
+    // 1. Si hay texto en el buscador, busca en todas las ventas por Folio, Artículo o Sucursal
+    if (query) {
+      return todas
+        .filter((v) => {
+          const id = (v.id || '').toLowerCase();
+          const tieneArticulo = (v.items || []).some(
+            (it) => (it.nombre || '').toLowerCase().includes(query) || (it.codigo || '').toLowerCase().includes(query)
+          );
+          const sucursal = (v.sucursalNombre || '').toLowerCase();
+          return id.includes(query) || tieneArticulo || sucursal.includes(query);
+        })
+        .slice(0, 100);
+    }
+
+    // 2. Si no hay búsqueda por texto, filtra por el periodo seleccionado
+    const periodo = this.filtroPeriodoVentas();
+    if (periodo === 'HOY') {
+      return this.ventasService.ventasDeHoy();
+    }
+
+    if (periodo === 'AYER') {
+      const ayer = new Date();
+      ayer.setDate(ayer.getDate() - 1);
+      const ayerStr = getFechaLocalString(ayer);
+      return todas
+        .filter((v) => {
+          if (!v.fecha) return false;
+          return getFechaLocalString(v.fecha) === ayerStr;
+        })
+        .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    }
+
+    if (periodo === 'SEMANA') {
+      const limite = new Date();
+      limite.setDate(limite.getDate() - 7);
+      limite.setHours(0, 0, 0, 0);
+      return todas
+        .filter((v) => {
+          if (!v.fecha) return false;
+          return new Date(v.fecha).getTime() >= limite.getTime();
+        })
+        .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    }
+
+    // 'TODAS'
+    return [...todas]
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+      .slice(0, 100);
+  });
+
+  public totalMontoVisualizado = computed(() => {
+    return this.ventasVisualizadas()
+      .filter((v) => v.estado !== 'CANCELADA')
+      .reduce((acc, v) => acc + (v.total || 0), 0);
+  });
+
+  public esVentaDeFechaAnterior = computed(() => {
+    const v = this.ventaACancelar();
+    if (!v || !v.fecha) return false;
+    return getFechaLocalString(v.fecha) !== getFechaLocalString();
+  });
+
+  public montoEfectivoDevolucion = computed(() => {
+    const v = this.ventaACancelar();
+    if (!v) return 0;
+    const pagadoEfec = Number(v.pagos?.efectivo) || 0;
+    const cambio = Number(v.cambio) || 0;
+    return Math.max(0, pagadoEfec - cambio);
+  });
 
   obtenerStockSucursal(prod: Producto): number {
     const sid = this.sucursalesService.activaId() || 'SUC-MAIN';
@@ -91,6 +177,111 @@ export class VentasComponent implements AfterViewInit {
     if (!target.closest('.search-autocomplete-container')) {
       this.mostrarSugerencias.set(false);
     }
+  }
+
+  // ── Lector Físico de Código de Barras (Hardware Wedge) y Atajos POS ──
+  private barcodeBuffer = '';
+  private barcodeLastTime = 0;
+  private barcodeKeyDelays: number[] = [];
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    // F2 / Fn+F2 / Ctrl+K: Atajo para enfocar el buscador/escáner desde cualquier lugar
+    const isF2 = event.key === 'F2' || event.code === 'F2' || event.key?.toLowerCase() === 'f2';
+    const isCtrlK = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'k';
+
+    if (isF2 || isCtrlK) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.enfocarInputEscaneo();
+      return;
+    }
+
+    // F9: Atajo rápido para cobrar
+    const isF9 = event.key === 'F9' || event.code === 'F9' || event.key?.toLowerCase() === 'f9';
+    if (isF9) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.ventasService.carrito().length > 0 && !this.ventasService.procesandoCobro()) {
+        this.realizarCobro();
+      }
+      return;
+    }
+
+    // Si hay un modal activo o abierto, no interceptar como pistola global
+    if (
+      this.modalPausarAbierto() ||
+      this.modalCancelarAbierto() ||
+      this.modalTicketAbierto() ||
+      this.scannerModalAbierto()
+    ) {
+      return;
+    }
+
+    const activeEl = document.activeElement as HTMLElement | null;
+    const isTargetInput = activeEl === this.codigoInputRef?.nativeElement || activeEl?.id === 'codigoInput';
+    const isOtherInput =
+      activeEl &&
+      (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable) &&
+      !isTargetInput;
+
+    const now = Date.now();
+    const timeDiff = now - this.barcodeLastTime;
+    this.barcodeLastTime = now;
+
+    // Si pasaron más de 110ms entre teclas, reiniciamos el búfer
+    if (timeDiff > 110) {
+      this.barcodeBuffer = '';
+      this.barcodeKeyDelays = [];
+    } else {
+      this.barcodeKeyDelays.push(timeDiff);
+    }
+
+    // Procesar envío con Enter
+    if (event.key === 'Enter') {
+      const avgDelay =
+        this.barcodeKeyDelays.length > 0
+          ? this.barcodeKeyDelays.reduce((a, b) => a + b, 0) / this.barcodeKeyDelays.length
+          : 999;
+
+      // Si no estábamos en el input principal y fue una ráfaga de escáner (o usuario enfocado en área neutral)
+      if (
+        !isTargetInput &&
+        this.barcodeBuffer.length >= 3 &&
+        (avgDelay < 55 || !isOtherInput)
+      ) {
+        event.preventDefault();
+        const escaneado = this.barcodeBuffer.trim();
+        this.barcodeBuffer = '';
+        this.barcodeKeyDelays = [];
+        this.procesarEscaneoDirecto(escaneado);
+        return;
+      }
+
+      this.barcodeBuffer = '';
+      this.barcodeKeyDelays = [];
+      return;
+    }
+
+    // Acumular caracteres simples (longitud 1 sin modificadores ctrl/alt)
+    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      this.barcodeBuffer += event.key;
+    }
+  }
+
+  enfocarInputEscaneo(): void {
+    const doFocus = () => {
+      const el =
+        this.codigoInputRef?.nativeElement ||
+        (document.getElementById('codigoInput') as HTMLInputElement | null);
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    };
+    doFocus();
+    setTimeout(doFocus, 30);
+    setTimeout(doFocus, 100);
   }
 
   onInputChange(event?: Event): void {
@@ -134,7 +325,8 @@ export class VentasComponent implements AfterViewInit {
     this.indiceSeleccionado.set(nuevoIdx);
   }
 
-  seleccionarProducto(prod: Producto): void {
+  seleccionarProducto(prod: Producto, cantidadCustom?: number): void {
+    const cant = cantidadCustom && cantidadCustom > 0 ? cantidadCustom : this.cantidadAgregar;
     let precioManual: number | undefined;
 
     if (prod.precioVariable) {
@@ -143,21 +335,26 @@ export class VentasComponent implements AfterViewInit {
       const parsed = parseFloat(resp);
       if (isNaN(parsed) || parsed <= 0) {
         alert('Precio inválido.');
+        this.reproducirBeepError();
         return;
       }
       precioManual = parsed;
     }
 
-    const agregado = this.ventasService.agregarAlCarrito(prod.codigo, this.cantidadAgregar, precioManual);
+    const agregado = this.ventasService.agregarAlCarrito(prod.codigo, cant, precioManual);
     if (agregado) {
       this.codigoBusqueda.set('');
       this.cantidadAgregar = 1;
       this.mensajeAlerta.set('');
       this.cerrarSugerencias();
-      this.reproducirSonidoAgregarCarrito();
+      this.reproducirBeepExito();
+    } else {
+      this.mensajeAlerta.set(`⚠️ No se pudo agregar "${prod.nombre}".`);
+      this.tipoAlerta.set('warning');
+      this.reproducirBeepError();
     }
 
-    setTimeout(() => this.codigoInputRef?.nativeElement.focus(), 50);
+    this.enfocarInputEscaneo();
   }
 
   reproducirSonidoAgregarCarrito(): void {
@@ -171,9 +368,78 @@ export class VentasComponent implements AfterViewInit {
     }
   }
 
+  reproducirBeepExito(): void {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1350, ctx.currentTime);
+        gain.gain.setValueAtTime(0.22, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+      } else {
+        this.reproducirSonidoAgregarCarrito();
+      }
+    } catch {
+      this.reproducirSonidoAgregarCarrito();
+    }
+
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(50);
+      } catch {}
+    }
+  }
+
+  reproducirBeepError(): void {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const playTone = (freq: number, start: number, dur: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+          gain.gain.setValueAtTime(0.18, ctx.currentTime + start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur);
+        };
+        playTone(220, 0, 0.08);
+        playTone(180, 0.1, 0.12);
+      }
+    } catch {}
+
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([120, 50, 120]);
+      } catch {}
+    }
+  }
+
   onEnterCodigo(event?: Event): void {
     if (event) {
       event.preventDefault();
+    }
+
+    let cod = this.codigoBusqueda().trim();
+    if (!cod) return;
+
+    let cantidad = 1;
+    // Soporte de multiplicador rápido: ej. "3*750100" o "3x750100"
+    const multiplicadorMatch = cod.match(/^(\d+)[*xX](.+)$/);
+    if (multiplicadorMatch) {
+      cantidad = Math.max(1, parseInt(multiplicadorMatch[1], 10));
+      cod = multiplicadorMatch[2].trim();
     }
 
     const sugerencias = this.sugerenciasProductos();
@@ -181,31 +447,82 @@ export class VentasComponent implements AfterViewInit {
 
     // Si hay una sugerencia seleccionada con el teclado o lista activa
     if (this.mostrarSugerencias() && idx >= 0 && sugerencias[idx]) {
-      this.seleccionarProducto(sugerencias[idx]);
+      this.seleccionarProducto(sugerencias[idx], cantidad);
       return;
     }
-
-    const cod = this.codigoBusqueda().trim();
-    if (!cod) return;
 
     // Buscar coincidencia exacta por código
     const exacto = this.productosService.obtenerPorCodigo(cod);
     if (exacto) {
-      this.seleccionarProducto(exacto);
+      this.seleccionarProducto(exacto, cantidad);
       return;
     }
 
     // Si hay sugerencias coincidentes, tomar la primera
     if (sugerencias.length > 0) {
-      this.seleccionarProducto(sugerencias[0]);
+      this.seleccionarProducto(sugerencias[0], cantidad);
       return;
     }
 
     // Si no se encontró nada
     this.mensajeAlerta.set(`⚠️ Producto "${cod}" no encontrado.`);
     this.tipoAlerta.set('warning');
+    this.reproducirBeepError();
     this.cerrarSugerencias();
-    setTimeout(() => this.codigoInputRef?.nativeElement.focus(), 50);
+    this.enfocarInputEscaneo();
+  }
+
+  procesarEscaneoDirecto(texto: string): void {
+    let cod = (texto || '').trim();
+    if (!cod) return;
+
+    let cantidad = 1;
+    const multiplicadorMatch = cod.match(/^(\d+)[*xX](.+)$/);
+    if (multiplicadorMatch) {
+      cantidad = Math.max(1, parseInt(multiplicadorMatch[1], 10));
+      cod = multiplicadorMatch[2].trim();
+    }
+
+    // 1. Buscar coincidencia exacta por código
+    let prod = this.productosService.obtenerPorCodigo(cod);
+
+    // 2. Si no es exacto, buscar coincidencia por nombre o código parcial
+    if (!prod) {
+      const match = this.productosService.productos().find(
+        (p) =>
+          (p.codigo || '').toLowerCase() === cod.toLowerCase() ||
+          (p.nombre || '').toLowerCase() === cod.toLowerCase()
+      );
+      if (match) {
+        prod = match;
+      }
+    }
+
+    if (prod) {
+      this.seleccionarProducto(prod, cantidad);
+      this.codigoBusqueda.set('');
+      this.cerrarSugerencias();
+    } else {
+      this.mensajeAlerta.set(`⚠️ Código "${cod}" no encontrado en catálogo.`);
+      this.tipoAlerta.set('warning');
+      this.reproducirBeepError();
+      this.cerrarSugerencias();
+    }
+
+    this.enfocarInputEscaneo();
+  }
+
+  abrirScanner(): void {
+    this.scannerModalAbierto.set(true);
+  }
+
+  cerrarScannerModal(): void {
+    this.scannerModalAbierto.set(false);
+    this.enfocarInputEscaneo();
+  }
+
+  onCodigoEscaneado(codigo: string): void {
+    this.procesarEscaneoDirecto(codigo);
   }
 
   modificarCantidad(index: number, delta: number): void {
@@ -245,6 +562,7 @@ export class VentasComponent implements AfterViewInit {
   async confirmarPausa(): Promise<void> {
     await this.ventasService.pausarVentaEnEspera(this.aliasPausa);
     this.modalPausarAbierto.set(false);
+    this.enfocarInputEscaneo();
   }
 
   toggleAutoImprimir(): void {
@@ -308,10 +626,10 @@ export class VentasComponent implements AfterViewInit {
       if (this.autoImprimirTicket()) {
         setTimeout(() => {
           window.print();
-        }, 50);
+        }, 100);
       }
 
-      setTimeout(() => this.codigoInputRef?.nativeElement.focus(), 150);
+      this.enfocarInputEscaneo();
     } catch (err: any) {
       alert(err.message || 'Error al procesar cobro');
     }
@@ -328,12 +646,16 @@ export class VentasComponent implements AfterViewInit {
 
   cerrarModalTicket(): void {
     this.modalTicketAbierto.set(false);
+    this.enfocarInputEscaneo();
   }
 
   abrirModalCancelar(venta: Venta): void {
     this.ventaACancelar.set(venta);
     this.motivoCancelacion = '';
     this.reponerStockCancelacion = true;
+    const esAnterior = getFechaLocalString(venta.fecha) !== getFechaLocalString();
+    const teniaEfectivo = (Number(venta.pagos?.efectivo) || 0) > 0;
+    this.reembolsarEfectivoDeCajaTurno.set(esAnterior && teniaEfectivo);
     this.modalCancelarAbierto.set(true);
   }
 
@@ -341,6 +663,8 @@ export class VentasComponent implements AfterViewInit {
     this.modalCancelarAbierto.set(false);
     this.ventaACancelar.set(null);
     this.motivoCancelacion = '';
+    this.reembolsarEfectivoDeCajaTurno.set(true);
+    this.enfocarInputEscaneo();
   }
 
   async confirmarCancelacionVenta(): Promise<void> {
@@ -352,7 +676,21 @@ export class VentasComponent implements AfterViewInit {
       return;
     }
 
-    if (!confirm(`¿Estás seguro de cancelar la venta #${venta.id} por un monto de $${venta.total.toFixed(2)}? Esta acción ajustará el corte de caja y el inventario.`)) {
+    const esAnterior = this.esVentaDeFechaAnterior();
+    const debeReembolsarEfectivo = esAnterior && this.reembolsarEfectivoDeCajaTurno();
+    const montoAReembolsar = this.montoEfectivoDevolucion();
+
+    let confirmMsg = `¿Estás seguro de cancelar la venta #${venta.id} por un monto de $${venta.total.toFixed(2)}? Esta acción reintegrará el inventario.`;
+    if (esAnterior) {
+      confirmMsg += `\n\n⚠️ Esta venta es de una fecha anterior (${new Date(venta.fecha).toLocaleDateString()}).`;
+      if (debeReembolsarEfectivo && montoAReembolsar > 0) {
+        confirmMsg += `\nSe registrará una salida de efectivo de $${montoAReembolsar.toFixed(2)} en la caja del turno actual para mantener el corte de caja cuadrado.`;
+      }
+    } else {
+      confirmMsg += ` Esta acción ajustará el corte de caja del turno actual.`;
+    }
+
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -365,8 +703,24 @@ export class VentasComponent implements AfterViewInit {
         usuario: this.authService.nombreUsuario()
       });
 
+      // Si es de un día anterior y se reembolsa dinero físico de la caja de hoy, registrar egreso en el corte activo
+      if (debeReembolsarEfectivo && montoAReembolsar > 0) {
+        try {
+          await this.gastosService.registrarGasto({
+            concepto: `Devolución Venta #${venta.id} (${this.motivoCancelacion.trim()})`,
+            monto: montoAReembolsar,
+            categoria: 'OTROS',
+            persona: 'Caja (Negocio)',
+            metodoPago: 'EFECTIVO',
+            observaciones: `Reembolso en efectivo del ticket #${venta.id} emitido originalmente el ${new Date(venta.fecha).toLocaleDateString()}`
+          });
+        } catch (errGasto) {
+          console.warn('Aviso al registrar gasto de devolución en turno actual:', errGasto);
+        }
+      }
+
       this.cerrarModalCancelar();
-      this.mensajeAlerta.set(`✅ Venta #${venta.id} cancelada exitosamente.`);
+      this.mensajeAlerta.set(`✅ Venta #${venta.id} cancelada / devuelta exitosamente.`);
       this.tipoAlerta.set('success');
       setTimeout(() => this.mensajeAlerta.set(''), 4000);
     } catch (err: any) {

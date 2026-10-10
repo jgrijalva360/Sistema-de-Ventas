@@ -584,6 +584,7 @@ export class PedidosService {
 
           const nuevaVenta: Venta = {
             id: nuevoFolioVenta,
+            pedidoId: ped.id,
             fecha: abo.fecha || ped.fechaRegistro || new Date().toISOString(),
             items: [
               {

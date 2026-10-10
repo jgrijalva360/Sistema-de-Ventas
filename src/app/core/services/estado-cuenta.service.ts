@@ -9,7 +9,8 @@ import {
   MovimientoFinanciero,
   FiltrosEstadoCuenta,
   ResumenEstadoCuenta,
-  TipoFlujoFinanciero
+  TipoFlujoFinanciero,
+  Venta
 } from '../models/models';
 
 @Injectable({
@@ -24,6 +25,36 @@ export class EstadoCuentaService {
   private sucursalesService = inject(SucursalesService);
 
   /**
+   * Determina si una venta corresponde al registro contable de un anticipo o liquidación de un pedido.
+   */
+  public esVentaDePedido(v: Venta): boolean {
+    if (v.pedidoId) return true;
+    if (v.id && (v.id.startsWith('V-PED-') || v.id.startsWith('PED-'))) return true;
+    return (v.items || []).some(
+      (it) =>
+        (it.codigo && (it.codigo.startsWith('PED-') || it.codigo.startsWith('PED'))) ||
+        (it.nombre && (it.nombre.includes('(PED-') || it.nombre.includes('(PED')))
+    );
+  }
+
+  /**
+   * Extrae el ID del pedido asociado a una venta si existe.
+   */
+  public obtenerPedidoIdDeVenta(v: Venta): string | null {
+    if (v.pedidoId) return v.pedidoId;
+    if (v.id && v.id.startsWith('V-PED-')) {
+      const match = v.id.match(/V-(PED-[A-Za-z0-9-]+)/);
+      if (match) return match[1];
+    }
+    for (const it of v.items || []) {
+      if (it.codigo && it.codigo.startsWith('PED-')) return it.codigo;
+      const match = (it.nombre || '').match(/\((PED-[A-Za-z0-9-]+)\)/);
+      if (match) return match[1];
+    }
+    return null;
+  }
+
+  /**
    * Computed reactivo que agrega y normaliza en tiempo real TODOS los movimientos
    * monetarios registrados en los diferentes módulos del sistema.
    */
@@ -33,11 +64,36 @@ export class EstadoCuentaService {
     const defTransf = this.sociosService.socioTransferenciasDefault();
     const defTarj = this.sociosService.socioTarjetasDefault();
 
+    const pedidos = this.pedidosService.pedidos();
+    const idsPedidosActivos = new Set(
+      pedidos.filter((p) => p.estado !== 'CANCELADO').map((p) => p.id)
+    );
+
+    // Mapeo rápido de Pedido ID a sus ventas registradas (para enlazar el folio del ticket #V-xxxx)
+    const ventasPorPedido = new Map<string, Venta[]>();
+    this.ventasService.ventas().forEach((v) => {
+      const pedId = this.obtenerPedidoIdDeVenta(v);
+      if (pedId) {
+        const list = ventasPorPedido.get(pedId) || [];
+        list.push(v);
+        ventasPorPedido.set(pedId, list);
+      }
+    });
+
     // ─────────────────────────────────────────────────────────────
     // 1. VENTAS DE MOSTRADOR
     // ─────────────────────────────────────────────────────────────
     this.ventasService.ventas().forEach((v) => {
       if (v.estado === 'CANCELADA') return;
+
+      // Evitar duplicar ingresos: si esta venta es el reflejo contable de un anticipo/abono
+      // de un pedido activo en el sistema, dicho dinero se procesa en la Sección 2 (PEDIDOS).
+      if (this.esVentaDePedido(v)) {
+        const pedId = this.obtenerPedidoIdDeVenta(v);
+        if (!pedId || idsPedidosActivos.has(pedId)) {
+          return;
+        }
+      }
 
       const cambio = Number(v.cambio) || 0;
       const efecBruto = Number(v.pagos?.efectivo) || 0;
@@ -118,6 +174,8 @@ export class EstadoCuentaService {
     this.pedidosService.pedidos().forEach((p) => {
       if (p.estado === 'CANCELADO') return;
 
+      const vts = ventasPorPedido.get(p.id) || [];
+
       const listaAbonos = (p.abonos && p.abonos.length > 0)
         ? p.abonos
         : ((p as any).pagos && (p as any).pagos.length > 0)
@@ -147,10 +205,14 @@ export class EstadoCuentaService {
             titularNombre = a.socioTarjetaNombre || p.socioTarjetaNombre || defTarj?.nombre || 'Terminal Tarjeta';
           }
 
+          // Vincular ticket emitido en punto de venta si existe
+          const vMatch = vts.find((v) => Math.abs((v.total || 0) - monto) < 0.01) || vts[idx];
+          const ticketStr = vMatch ? ` [Ticket #${vMatch.id}]` : '';
+
           movimientos.push({
             id: `MOV-PED-${p.id}-ABN-${idx}`,
             fecha: a.fecha || p.fechaRegistro,
-            concepto: `Abono Pedido #${p.id} - ${p.clienteNombre} (${a.concepto || met})`,
+            concepto: `Abono Pedido #${p.id} - ${p.clienteNombre} (${a.concepto || met})${ticketStr}`,
             tipo: 'INGRESO',
             importe: Math.round(monto * 100) / 100,
             cuenta,
@@ -188,10 +250,13 @@ export class EstadoCuentaService {
             titularNombre = p.socioTarjetaNombre || defTarj?.nombre || 'Terminal Tarjeta';
           }
 
+          const vMatch = vts.find((v) => Math.abs((v.total || 0) - pagado) < 0.01) || vts[0];
+          const ticketStr = vMatch ? ` [Ticket #${vMatch.id}]` : '';
+
           movimientos.push({
             id: `MOV-PED-${p.id}-INIT`,
             fecha: p.fechaRegistro,
-            concepto: `Anticipo Pedido #${p.id} - ${p.clienteNombre} (${met})`,
+            concepto: `Anticipo Pedido #${p.id} - ${p.clienteNombre} (${met})${ticketStr}`,
             tipo: 'INGRESO',
             importe: Math.round(pagado * 100) / 100,
             cuenta,

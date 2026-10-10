@@ -10,6 +10,7 @@ import { BitacoraService } from './bitacora.service';
 import { SociosService } from './socios.service';
 import { ConfiguracionService } from './configuracion.service';
 import { SyncService } from './sync.service';
+import { ClientesService } from './clientes.service';
 
 @Injectable({
   providedIn: 'root'
@@ -41,6 +42,9 @@ export class DataCleanupService {
     } catch (_) {}
     try {
       this.injector.get(PedidosService, null, { optional: true })?.limpiarEstado();
+    } catch (_) {}
+    try {
+      this.injector.get(ClientesService, null, { optional: true })?.limpiarEstado();
     } catch (_) {}
     try {
       this.injector.get(SucursalesService, null, { optional: true })?.limpiarEstado();

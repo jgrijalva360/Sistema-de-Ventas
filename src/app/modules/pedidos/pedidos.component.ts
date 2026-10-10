@@ -6,7 +6,8 @@ import { PedidosService, AnalisisConsolidacion } from '../../core/services/pedid
 import { ProductosService } from '../../core/services/productos.service';
 import { ConfiguracionService } from '../../core/services/configuracion.service';
 import { SociosService } from '../../core/services/socios.service';
-import { PedidoPersonalizado, MateriaPrimaItem, Producto } from '../../core/models/models';
+import { ClientesService } from '../../core/services/clientes.service';
+import { PedidoPersonalizado, MateriaPrimaItem, Producto, Cliente } from '../../core/models/models';
 
 export interface ItemPedidoForm {
   tipo: 'INVENTARIO' | 'EXTRA';
@@ -67,6 +68,12 @@ export class PedidosComponent implements AfterViewInit {
   public socioTarjetaAnticipoId = signal<string>('');
   public itemsPedido = signal<ItemPedidoForm[]>([]);
 
+  // Autocompletado de Clientes en Nuevo Pedido
+  public sugerenciasClientes = signal<Cliente[]>([]);
+  public mostrarSugerenciasClientes = signal<boolean>(false);
+  public clienteSeleccionadoId = signal<string | null>(null);
+  public guardarClienteNuevoEnCatalogo = signal<boolean>(true);
+
   // Formulario Editar
   public editandoId = '';
   public editCliente = '';
@@ -81,6 +88,11 @@ export class PedidosComponent implements AfterViewInit {
   public socioTransferenciaAbonoEditarId = signal<string>('');
   public socioTarjetaAbonoEditarId = signal<string>('');
   public conceptoAbonoEditar = 'Abono a cuenta';
+
+  // Autocompletado de Clientes en Editar Pedido
+  public sugerenciasEditClientes = signal<Cliente[]>([]);
+  public mostrarSugerenciasEditClientes = signal<boolean>(false);
+  public editClienteId = signal<string | null>(null);
 
   // Registro de Abono en Detalle
   public montoNuevoAbono = 0;
@@ -98,6 +110,7 @@ export class PedidosComponent implements AfterViewInit {
   public productosService = inject(ProductosService);
   public configService = inject(ConfiguracionService);
   public sociosService = inject(SociosService);
+  public clientesService = inject(ClientesService);
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
@@ -114,6 +127,11 @@ export class PedidosComponent implements AfterViewInit {
       if (changed) {
         this.itemsPedido.set([...current]);
       }
+    }
+
+    if (!target.closest('.cliente-autocomplete-container')) {
+      this.mostrarSugerenciasClientes.set(false);
+      this.mostrarSugerenciasEditClientes.set(false);
     }
   }
 
@@ -497,6 +515,9 @@ export class PedidosComponent implements AfterViewInit {
     this.editFechaEntrega = fechaEnt;
     this.editEspecificaciones = ped.especificaciones || '';
     this.editTotal = ped.totalAcordado;
+    this.editClienteId.set(ped.clienteId || null);
+    this.sugerenciasEditClientes.set([]);
+    this.mostrarSugerenciasEditClientes.set(false);
 
     const items: ItemPedidoForm[] = (ped.materiasPrimas || []).map((mp) => ({
       tipo: mp.tipo,
@@ -648,6 +669,7 @@ export class PedidosComponent implements AfterViewInit {
       }));
 
     const act = await this.pedidosService.actualizarPedidoCompleto(this.editandoId, {
+      clienteId: this.editClienteId() || undefined,
       clienteNombre: this.editCliente.trim(),
       clienteTelefono: this.editTelefono ? this.editTelefono.trim() : '',
       fechaEntrega: this.editFechaEntrega || '',
@@ -674,6 +696,10 @@ export class PedidosComponent implements AfterViewInit {
     this.nuevoTotal = 0;
     this.nuevoAnticipo = 0;
     this.metodoPagoAnticipo = 'EFECTIVO';
+    this.clienteSeleccionadoId.set(null);
+    this.sugerenciasClientes.set([]);
+    this.mostrarSugerenciasClientes.set(false);
+    this.guardarClienteNuevoEnCatalogo.set(true);
     this.itemsPedido.set([
       {
         tipo: 'INVENTARIO',
@@ -686,6 +712,75 @@ export class PedidosComponent implements AfterViewInit {
       }
     ]);
     this.modalNuevoAbierto.set(true);
+  }
+
+  // Métodos de Autocompletado de Clientes
+  onBuscarCliente(valor: string): void {
+    this.nuevoCliente = valor;
+    const q = (valor || '').trim().toLowerCase();
+    if (!q) {
+      this.sugerenciasClientes.set([]);
+      this.mostrarSugerenciasClientes.set(false);
+      this.clienteSeleccionadoId.set(null);
+      return;
+    }
+
+    const matches = this.clientesService.clientesActivos().filter((c) => {
+      const nom = (c.nombre || '').toLowerCase();
+      const tel = (c.telefono || '').toLowerCase();
+      return nom.includes(q) || tel.includes(q);
+    }).slice(0, 8);
+
+    this.sugerenciasClientes.set(matches);
+    this.mostrarSugerenciasClientes.set(true);
+
+    const exacto = matches.find((c) => (c.nombre || '').toLowerCase() === q);
+    if (exacto) {
+      this.clienteSeleccionadoId.set(exacto.id);
+    } else {
+      this.clienteSeleccionadoId.set(null);
+    }
+  }
+
+  seleccionarClienteSugerido(c: Cliente): void {
+    this.nuevoCliente = c.nombre;
+    this.nuevoTelefono = c.telefono || '';
+    this.clienteSeleccionadoId.set(c.id);
+    this.mostrarSugerenciasClientes.set(false);
+  }
+
+  onBuscarEditCliente(valor: string): void {
+    this.editCliente = valor;
+    const q = (valor || '').trim().toLowerCase();
+    if (!q) {
+      this.sugerenciasEditClientes.set([]);
+      this.mostrarSugerenciasEditClientes.set(false);
+      this.editClienteId.set(null);
+      return;
+    }
+
+    const matches = this.clientesService.clientesActivos().filter((c) => {
+      const nom = (c.nombre || '').toLowerCase();
+      const tel = (c.telefono || '').toLowerCase();
+      return nom.includes(q) || tel.includes(q);
+    }).slice(0, 8);
+
+    this.sugerenciasEditClientes.set(matches);
+    this.mostrarSugerenciasEditClientes.set(true);
+
+    const exacto = matches.find((c) => (c.nombre || '').toLowerCase() === q);
+    if (exacto) {
+      this.editClienteId.set(exacto.id);
+    } else {
+      this.editClienteId.set(null);
+    }
+  }
+
+  seleccionarEditClienteSugerido(c: Cliente): void {
+    this.editCliente = c.nombre;
+    this.editTelefono = c.telefono || '';
+    this.editClienteId.set(c.id);
+    this.mostrarSugerenciasEditClientes.set(false);
   }
 
   agregarInsumoInventario(): void {
@@ -806,9 +901,36 @@ export class PedidosComponent implements AfterViewInit {
       }
     }
 
+    const nombreLimpio = this.nuevoCliente.trim();
+    const telLimpio = this.nuevoTelefono ? this.nuevoTelefono.trim() : '';
+    let idClienteFinal = this.clienteSeleccionadoId();
+
+    // Comprobar si el cliente ya existe en el catálogo o si debe auto-registrarse
+    const clienteExistente = this.clientesService.clientesActivos().find(
+      (c) => c.nombre.trim().toLowerCase() === nombreLimpio.toLowerCase()
+    );
+
+    if (!clienteExistente && this.guardarClienteNuevoEnCatalogo()) {
+      try {
+        const nuevoRegistrado = await this.clientesService.crearCliente({
+          nombre: nombreLimpio,
+          telefono: telLimpio
+        });
+        idClienteFinal = nuevoRegistrado.id;
+      } catch (err) {
+        console.warn('Aviso al auto-registrar cliente en catálogo:', err);
+      }
+    } else if (clienteExistente) {
+      idClienteFinal = clienteExistente.id;
+      if (!clienteExistente.telefono && telLimpio) {
+        this.clientesService.actualizarCliente(clienteExistente.id, { telefono: telLimpio }).catch(() => {});
+      }
+    }
+
     const nuevo = await this.pedidosService.crearPedido({
-      clienteNombre: this.nuevoCliente.trim(),
-      clienteTelefono: this.nuevoTelefono ? this.nuevoTelefono.trim() : '',
+      clienteId: idClienteFinal || undefined,
+      clienteNombre: nombreLimpio,
+      clienteTelefono: telLimpio,
       fechaEntrega: this.nuevaFechaEntrega || '',
       especificaciones: this.nuevasEspecificaciones.trim(),
       estado: 'PENDIENTE',

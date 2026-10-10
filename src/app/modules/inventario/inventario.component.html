@@ -25,13 +25,13 @@
         </select>
       </div>
 
-      <button type="button" class="btn"
-        [class.btn-success]="!formularioRegistroVisible() && !limiteAlcanzado()"
+      <button type="button" class="btn" [class.btn-success]="!formularioRegistroVisible() && !limiteAlcanzado()"
         [class.btn-danger]="!formularioRegistroVisible() && limiteAlcanzado()"
         [class.btn-secondary]="formularioRegistroVisible()"
         style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700; padding: 9px 18px;"
         (click)="toggleFormularioRegistro()">
-        <span>{{ formularioRegistroVisible() ? '✕ Cerrar Registro' : (limiteAlcanzado() ? '🔒 Límite Alcanzado (' + totalProductosRegistrados() + '/' + maxProductosPermitidos() + ')' : '➕ Nuevo Producto') }}</span>
+        <span>{{ formularioRegistroVisible() ? '✕ Cerrar Registro' : (limiteAlcanzado() ? '🔒 Límite Alcanzado (' +
+          totalProductosRegistrados() + '/' + maxProductosPermitidos() + ')' : '➕ Nuevo Producto') }}</span>
       </button>
 
       <button type="button" class="btn btn-primary"
@@ -49,63 +49,70 @@
   </div>
 
   <!-- Barra de Capacidad de Registros según el Plan -->
-  <div class="card plan-capacity-card"
-    style="margin-bottom: 22px; border-radius: 12px; border: 1.5px solid #e2e8f0; background: white; padding: 14px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-    
-    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-      <div style="width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.35rem;"
-        [style.background]="limiteAlcanzado() ? '#fee2e2' : (porcentajeUsoProductos() >= 80 ? '#fef3c7' : '#e0f2fe')"
-        [style.color]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#d97706' : '#0284c7')">
-        {{ limiteAlcanzado() ? '🔒' : '📦' }}
-      </div>
+  <div class="card plan-capacity-card mb-4"
+    style="border-radius: 12px; border: 1.5px solid #e2e8f0; background: white; padding: 14px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+    <div class="row g-3 align-items-center">
+      <div class="col-12 col-lg-7 d-flex align-items-center gap-3">
+        <div
+          style="width: 44px; height: 44px; min-width: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.35rem;"
+          [style.background]="limiteAlcanzado() ? '#fee2e2' : (porcentajeUsoProductos() >= 80 ? '#fef3c7' : '#e0f2fe')"
+          [style.color]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#d97706' : '#0284c7')">
+          {{ limiteAlcanzado() ? '🔒' : '📦' }}
+        </div>
 
-      <div>
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <strong style="font-size: 1rem; color: #0f172a;">Capacidad de Registros en Catálogo</strong>
-          <span style="font-size: 0.74rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; text-transform: uppercase;"
-            [style.background]="planIdActual() === 'TRIAL' ? '#fef3c7' : (planIdActual() === 'BASICO' ? '#e0f2fe' : (planIdActual() === 'PRO' ? '#dbeafe' : '#fae8ff'))"
-            [style.color]="planIdActual() === 'TRIAL' ? '#b45309' : (planIdActual() === 'BASICO' ? '#0284c7' : (planIdActual() === 'PRO' ? '#1d4ed8' : '#86198f'))">
-            {{ nombrePlanActual() }}
-          </span>
-        </div>
-        <div style="font-size: 0.86rem; color: #64748b; margin-top: 3px;">
-          Actualmente tienes <strong style="color: #0f172a;">{{ totalProductosRegistrados() | number }}</strong> productos registrados de <strong style="color: #0f172a;">{{ maxProductosPermitidos() | number }}</strong> permitidos por tu plan.
-          @if (limiteAlcanzado()) {
-            <span style="color: #dc2626; font-weight: 800; margin-left: 4px;">(0 disponibles - ¡Límite alcanzado!)</span>
-          } @else {
-            <span style="color: #16a34a; font-weight: 800; margin-left: 4px;">({{ productosDisponibles() | number }} disponibles)</span>
-          }
-        </div>
-      </div>
-    </div>
-
-    <!-- Progreso y Botón de Ampliación -->
-    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-left: auto;">
-      <div style="min-width: 150px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; margin-bottom: 5px;">
-          <span style="color: #64748b;">Uso del límite</span>
-          <span [style.color]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#d97706' : '#0284c7')">
-            {{ porcentajeUsoProductos() }}%
-          </span>
-        </div>
-        <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
-          <div
-            [style.width.%]="porcentajeUsoProductos()"
-            [style.background]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#f59e0b' : '#0284c7')"
-            style="height: 100%; border-radius: 999px; transition: width 0.3s ease;">
+        <div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <strong style="font-size: 1rem; color: #0f172a;">Capacidad de Registros en Catálogo</strong>
+            <span
+              style="font-size: 0.74rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; text-transform: uppercase;"
+              [style.background]="planIdActual() === 'TRIAL' ? '#fef3c7' : (planIdActual() === 'BASICO' ? '#e0f2fe' : (planIdActual() === 'PRO' ? '#dbeafe' : '#fae8ff'))"
+              [style.color]="planIdActual() === 'TRIAL' ? '#b45309' : (planIdActual() === 'BASICO' ? '#0284c7' : (planIdActual() === 'PRO' ? '#1d4ed8' : '#86198f'))">
+              {{ nombrePlanActual() }}
+            </span>
+          </div>
+          <div style="font-size: 0.86rem; color: #64748b; margin-top: 3px;">
+            Actualmente tienes <strong style="color: #0f172a;">{{ totalProductosRegistrados() | number }}</strong>
+            productos registrados de <strong style="color: #0f172a;">{{ maxProductosPermitidos() | number }}</strong>
+            permitidos por tu plan.
+            @if (limiteAlcanzado()) {
+            <span style="color: #dc2626; font-weight: 800; margin-left: 4px;">(0 disponibles - ¡Límite
+              alcanzado!)</span>
+            } @else {
+            <span style="color: #16a34a; font-weight: 800; margin-left: 4px;">({{ productosDisponibles() | number }}
+              disponibles)</span>
+            }
           </div>
         </div>
       </div>
 
-      <a routerLink="/suscripcion/planes"
-        style="text-decoration: none; font-size: 0.82rem; font-weight: 700; padding: 7px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: all 0.2s;"
-        [style.background]="limiteAlcanzado() ? '#fee2e2' : '#f0f9ff'"
-        [style.color]="limiteAlcanzado() ? '#dc2626' : '#0284c7'"
-        [style.border]="limiteAlcanzado() ? '1.5px solid #fca5a5' : '1.5px solid #bae6fd'">
-        {{ limiteAlcanzado() ? '⚠️ Ampliar Límite de Productos' : '🚀 Mejorar Plan' }}
-      </a>
-    </div>
+      <!-- Progreso y Botón de Ampliación -->
+      <div class="col-12 col-lg-5 d-flex align-items-center justify-content-lg-end gap-3 flex-wrap">
+        <div style="min-width: 140px; flex: 1; max-width: 220px;">
+          <div class="d-flex justify-content-between align-items-center"
+            style="font-size: 0.78rem; font-weight: 700; margin-bottom: 5px;">
+            <span style="color: #64748b;">Uso del límite</span>
+            <span
+              [style.color]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#d97706' : '#0284c7')">
+              {{ porcentajeUsoProductos() }}%
+            </span>
+          </div>
+          <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+            <div [style.width.%]="porcentajeUsoProductos()"
+              [style.background]="limiteAlcanzado() ? '#dc2626' : (porcentajeUsoProductos() >= 80 ? '#f59e0b' : '#0284c7')"
+              style="height: 100%; border-radius: 999px; transition: width 0.3s ease;">
+            </div>
+          </div>
+        </div>
 
+        <a routerLink="/suscripcion/planes"
+          style="text-decoration: none; font-size: 0.82rem; font-weight: 700; padding: 7px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: all 0.2s;"
+          [style.background]="limiteAlcanzado() ? '#fee2e2' : '#f0f9ff'"
+          [style.color]="limiteAlcanzado() ? '#dc2626' : '#0284c7'"
+          [style.border]="limiteAlcanzado() ? '1.5px solid #fca5a5' : '1.5px solid #bae6fd'">
+          {{ limiteAlcanzado() ? '⚠️ Ampliar Límite de Productos' : '🚀 Mejorar Plan' }}
+        </a>
+      </div>
+    </div>
   </div>
 
   <!-- Formulario Desplegable: Registrar Nuevo Producto -->
@@ -119,107 +126,193 @@
         style="background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;">✕</button>
     </div>
 
-    <div class="card-body" style="padding: 20px;">
+    <div class="card-body" style="padding: 22px;">
       <form (ngSubmit)="onGuardarNuevo()">
-        <!-- Campo Código y Botones de Barras -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;">
-          <div class="form-group-full">
-            <label for="nuevoCodigo" class="field-label">Código del Producto *</label>
-            <input #nuevoCodigoInputRef id="nuevoCodigo" type="text" maxlength="50" [(ngModel)]="nuevoProducto.codigo"
-              name="codigo" required placeholder="Código único (ej. 8 dígitos o código de barras)" class="form-input custom-input"
-              (input)="onCodigoChange()" />
+        <!-- BLOQUE 1: DATOS GENERALES DEL PRODUCTO -->
+        <div class="form-section-card">
+          <div class="form-section-title">
+            <span>📋</span> Información General del Producto
           </div>
 
-          <div style="display: flex; gap: 8px; margin-top: 24px;">
-            <button type="button" class="btn-barcode btn-sugerir"
-              style="flex: 1; padding: 10px 12px; font-size: 0.82rem; font-weight: 600;" (click)="sugerirCodigo()">
-              ⚡ Sugerir Código
-            </button>
-            <button type="button" class="btn-barcode btn-guardar-img"
-              style="flex: 1; padding: 10px 12px; font-size: 0.82rem; font-weight: 600;"
-              (click)="guardarCodigoBarrasComoImagen()" [disabled]="!nuevoProducto.codigo">
-              🏷️ Descargar Barras PNG
-            </button>
+          <!-- Fila 1: Código (con Escanear y botones de acción) y Nombre -->
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-5">
+              <label for="nuevoCodigo" class="field-label">Código del Producto *</label>
+              <div class="input-with-scanner">
+                <input #nuevoCodigoInputRef id="nuevoCodigo" type="text" maxlength="50"
+                  [(ngModel)]="nuevoProducto.codigo" name="codigo" required placeholder="Ej. 75010001 o 8 dígitos"
+                  class="form-input custom-input" (input)="onCodigoChange()" />
+                <button type="button" class="btn-scanner-embedded" (click)="abrirScanner('NUEVO_PRODUCTO')"
+                  title="Escanear código de barras o QR con la cámara del celular"
+                  style="display: inline-flex; align-items: center; justify-content: center; padding: 0 12px;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                    <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                    <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                    <line x1="7" y1="7" x2="7" y2="17"></line>
+                    <line x1="10" y1="9" x2="10" y2="15"></line>
+                    <line x1="14" y1="7" x2="14" y2="17"></line>
+                    <line x1="17" y1="9" x2="17" y2="15"></line>
+                  </svg>
+                </button>
+              </div>
+              <div class="barcode-pills-row mt-2">
+                <button type="button" class="btn-barcode-pill primary-pill" (click)="sugerirCodigo()">
+                  ⚡ Sugerir Código
+                </button>
+                <button type="button" class="btn-barcode-pill" (click)="guardarCodigoBarrasComoImagen()"
+                  [disabled]="!nuevoProducto.codigo">
+                  🏷️ Descargar PNG
+                </button>
+              </div>
+            </div>
+
+            <div class="col-12 col-md-7">
+              <label for="nuevoNombre" class="field-label">Nombre del Producto *</label>
+              <input id="nuevoNombre" type="text" [(ngModel)]="nuevoProducto.nombre" name="nombre" required
+                placeholder="Ej. Cuaderno Profesional 100 Hojas" class="form-input custom-input" />
+            </div>
+          </div>
+
+          <!-- Fila 2: Grupo / Categoría y Modalidad Sin Stock -->
+          <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-5">
+              <label for="nuevoGrupo" class="field-label">Grupo / Categoría</label>
+              <input id="nuevoGrupo" type="text" [(ngModel)]="nuevoProducto.grupo" name="grupo"
+                placeholder="Ej. PAPELERIA, BEBIDAS, SERVICIOS..." class="form-input custom-input" />
+            </div>
+
+            <div class="col-12 col-md-7">
+              <label class="field-label">Modalidad de Control de Existencias</label>
+              <div class="tipo-producto-card" [class.active]="nuevoProducto.sinStock"
+                (click)="nuevoProducto.sinStock = !nuevoProducto.sinStock; onSinStockChangeNuevo()"
+                style="user-select: none;">
+                <input id="nuevoSinStock" type="checkbox" [checked]="nuevoProducto.sinStock" class="custom-checkbox"
+                  (click)="$event.stopPropagation()" (change)="onSinStockChangeNuevo()"
+                  [(ngModel)]="nuevoProducto.sinStock" name="sinStock" />
+                <div class="tipo-producto-text">
+                  <strong>🎲 Sin control de stock (Servicio / Concepto libre)</strong>
+                  <span>Para conceptos abiertos, recargas o servicios sin inventario físico.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Campo Nombre y Categoría -->
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 14px;">
-          <div class="form-group-full">
-            <label for="nuevoNombre" class="field-label">Nombre del Producto *</label>
-            <input id="nuevoNombre" type="text" [(ngModel)]="nuevoProducto.nombre" name="nombre" required
-              placeholder="Ej. Cuaderno Profesional 100 Hojas" class="form-input custom-input" />
+        <!-- BLOQUE 2: CONTROL DE INVENTARIO Y SUCURSAL -->
+        @if (!nuevoProducto.sinStock) {
+        <div class="form-section-card">
+          <div class="form-section-title">
+            <span>🏪</span> Control de Existencias & Alertas
           </div>
-
-          <div class="form-group-full">
-            <label for="nuevoGrupo" class="field-label">Grupo / Categoría</label>
-            <input id="nuevoGrupo" type="text" [(ngModel)]="nuevoProducto.grupo" name="grupo"
-              placeholder="Ej. PAPELERIA" class="form-input custom-input" />
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="nuevaSucursal" class="field-label">Sucursal de Asignación</label>
+              <select id="nuevaSucursal" [ngModel]="nuevaSucursalDestino()"
+                (ngModelChange)="nuevaSucursalDestino.set($event)" name="sucursalDestino"
+                class="form-input custom-input">
+                @for (suc of sucursalesService.sucursales(); track suc.id) {
+                <option [value]="suc.id">📍 {{ suc.nombre }}</option>
+                }
+              </select>
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="nuevoStockInicial" class="field-label">Stock Inicial (Piezas)</label>
+              <input id="nuevoStockInicial" type="number" min="0" step="1" [(ngModel)]="nuevoProducto.stockActual"
+                name="stockActual" class="form-input custom-input" />
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="nuevoStockMinimo" class="field-label">Stock Mínimo (Alerta de escasez)</label>
+              <input id="nuevoStockMinimo" type="number" min="0" step="1" [(ngModel)]="nuevoProducto.stockMinimo"
+                name="stockMinimo" class="form-input custom-input" />
+            </div>
           </div>
         </div>
-
-        <!-- Fila de Sucursal Destino, Stock, Costo, Precio y Precio Variable -->
-        <div class="form-row-grid" style="margin-top: 14px; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr 1.3fr;">
-          <div class="form-group-col">
-            <label for="nuevaSucursal" class="field-label">Sucursal de Asignación</label>
-            <select id="nuevaSucursal" [ngModel]="nuevaSucursalDestino()"
-              (ngModelChange)="nuevaSucursalDestino.set($event)" name="sucursalDestino" class="form-input custom-input">
-              @for (suc of sucursalesService.sucursales(); track suc.id) {
-              <option [value]="suc.id">{{ suc.nombre }}</option>
-              }
-            </select>
+        } @else {
+        <div class="form-section-card banner-servicio">
+          <div class="d-flex align-items-center gap-3">
+            <span class="banner-icono">🎲</span>
+            <div>
+              <strong class="banner-titulo">Producto registrado como Servicio / Sin Control de Stock</strong>
+              <p class="banner-desc">
+                No requiere existencias por sucursal ni generará alertas de stock agotado. Al cobrar en el Punto de
+                Venta no se descontará inventario físico.
+              </p>
+            </div>
           </div>
+        </div>
+        }
 
-          <div class="form-group-col">
-            <label for="nuevoStockInicial" class="field-label">Stock Inicial</label>
-            <input id="nuevoStockInicial" type="number" min="0" step="1" [(ngModel)]="nuevoProducto.stockActual"
-              name="stockActual" class="form-input custom-input" />
+        <!-- BLOQUE 3: PRECIOS, COSTOS Y MARGEN -->
+        <div class="form-section-card">
+          <div class="form-section-title">
+            <span>💰</span> Precios, Costos & Margen Comercial
           </div>
-
-          <div class="form-group-col">
-            <label for="nuevoStockMinimo" class="field-label">Stock Mínimo</label>
-            <input id="nuevoStockMinimo" type="number" min="0" step="1" [(ngModel)]="nuevoProducto.stockMinimo"
-              name="stockMinimo" class="form-input custom-input" />
-          </div>
-
-          <div class="form-group-col">
-            <label for="nuevoCosto" class="field-label">Costo Compra ($)</label>
-            <input id="nuevoCosto" type="number" min="0" step="0.01" [(ngModel)]="nuevoProducto.ultimoCosto"
-              name="ultimoCosto" placeholder="0.00" class="form-input custom-input" />
-          </div>
-
-          <div class="form-group-col">
-            <label for="nuevoPrecio" class="field-label">Precio Venta ($) *</label>
-            <input id="nuevoPrecio" type="number" min="0.01" step="0.01" [(ngModel)]="nuevoProducto.precioVenta"
-              name="precioVenta" required placeholder="0.00" class="form-input custom-input" />
-          </div>
-
-          <div class="form-group-col variable-col">
-            <div class="checkbox-container">
-              <input id="nuevoPrecioVar" type="checkbox" [(ngModel)]="nuevoProducto.precioVariable"
-                name="precioVariable" class="custom-checkbox" />
-              <label for="nuevoPrecioVar" class="checkbox-label">
-                Precio variable en venta
+          <div class="row g-3 align-items-end">
+            <!-- Costo de compra -->
+            <div class="col-12 col-sm-6 col-lg-3">
+              <label for="nuevoCosto" class="field-label">
+                Costo Compra ($)
+                @if (nuevoProducto.sinStock) { <span class="badge-tag">No aplica</span> }
               </label>
+              <input id="nuevoCosto" type="number" min="0" step="0.01" [(ngModel)]="nuevoProducto.ultimoCosto"
+                name="ultimoCosto" placeholder="0.00" class="form-input custom-input"
+                [disabled]="nuevoProducto.sinStock || false" [class.input-disabled]="nuevoProducto.sinStock" />
             </div>
-            <div class="helper-box">
-              Activa si el cajero debe ingresar el precio al cobrar.
+
+            <!-- Precio de venta -->
+            <div class="col-12 col-sm-6 col-lg-3">
+              <label for="nuevoPrecio" class="field-label">Precio Venta ($) *</label>
+              <input id="nuevoPrecio" type="number" min="0" step="0.01" [(ngModel)]="nuevoProducto.precioVenta"
+                name="precioVenta" required placeholder="0.00" class="form-input custom-input input-precio-destacado" />
+            </div>
+
+            <!-- Indicador de Margen en Vivo -->
+            <div class="col-12 col-sm-6 col-lg-3">
+              <label class="field-label">Margen Estimado</label>
+              <div class="margen-indicator-box" [class.margen-directo]="margenNuevoProducto().noAplica"
+                [class.margen-alto]="!margenNuevoProducto().noAplica && margenNuevoProducto().porcentaje >= 30"
+                [class.margen-medio]="!margenNuevoProducto().noAplica && margenNuevoProducto().porcentaje >= 10 && margenNuevoProducto().porcentaje < 30"
+                [class.margen-bajo]="!margenNuevoProducto().noAplica && margenNuevoProducto().porcentaje < 10">
+                @if (margenNuevoProducto().noAplica) {
+                <span class="margen-valor">Directo (Servicio)</span>
+                } @else if (nuevoProducto.precioVenta && nuevoProducto.precioVenta > 0 && nuevoProducto.ultimoCosto &&
+                nuevoProducto.ultimoCosto > 0) {
+                <span class="margen-valor">
+                  {{ margenNuevoProducto().porcentaje }}% (+{{ margenNuevoProducto().ganancia | currencyMxn }})
+                </span>
+                } @else {
+                <span class="margen-placeholder">Sin costo de compra</span>
+                }
+              </div>
+            </div>
+
+            <!-- Precio variable -->
+            <div class="col-12 col-sm-6 col-lg-3">
+              <label class="field-label">Precio en Caja</label>
+              <div class="precio-variable-box" (click)="nuevoProducto.precioVariable = !nuevoProducto.precioVariable">
+                <input id="nuevoPrecioVar" type="checkbox" [(ngModel)]="nuevoProducto.precioVariable"
+                  name="precioVariable" class="custom-checkbox" (click)="$event.stopPropagation()" />
+                <label for="nuevoPrecioVar" class="precio-variable-label" (click)="$event.stopPropagation()">
+                  Precio variable en caja
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Botones de Acción -->
-        <div class="form-submit-row"
-          style="display: flex; gap: 12px; margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          <button type="submit" class="btn btn-success" style="padding: 10px 24px; font-weight: 700;">
+        <!-- Barra de Acciones del Formulario -->
+        <div class="form-actions-toolbar">
+          <button type="submit" class="btn btn-save-producto">
             💾 Guardar Producto
           </button>
-          <button type="button" class="btn btn-secondary" (click)="limpiarFormulario()">
-            Limpiar Campos
+          <button type="button" class="btn btn-clean-fields" (click)="limpiarFormulario()">
+            🔄 Limpiar Campos
           </button>
-          <button type="button" class="btn btn-secondary" style="margin-left: auto;"
-            (click)="formularioRegistroVisible.set(false)">
-            Cancelar
+          <button type="button" class="btn btn-cancel-registro" (click)="formularioRegistroVisible.set(false)">
+            ✕ Cancelar
           </button>
         </div>
       </form>
@@ -232,9 +325,26 @@
     <div class="card-body search-filter-grid"
       style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
       <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 260px;">
-        <input #busquedaInputRef type="text" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)"
-          placeholder="🔍 Buscar por código, nombre o categoría..."
-          style="width: 100%; padding: 10px 14px; font-size: 0.9rem; border-radius: 8px; border: 1.5px solid #cbd5e1;" />
+        <div style="position: relative; display: flex; align-items: center;">
+          <input #busquedaInputRef type="text" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)"
+            placeholder="🔍 Buscar por código, nombre o categoría..."
+            style="width: 100%; padding: 10px 115px 10px 14px; font-size: 0.9rem; border-radius: 8px; border: 1.5px solid #cbd5e1;" />
+          <button type="button" (click)="abrirScanner('BUSQUEDA')"
+            title="Escanear código de barras o QR con la cámara del celular"
+            style="position: absolute; right: 5px; background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-size: 0.82rem; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+              <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+              <line x1="7" y1="7" x2="7" y2="17"></line>
+              <line x1="10" y1="9" x2="10" y2="15"></line>
+              <line x1="14" y1="7" x2="14" y2="17"></line>
+              <line x1="17" y1="9" x2="17" y2="15"></line>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="filter-toggles" style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -255,28 +365,44 @@
   </div>
 
   <!-- Resumen de Valuación Financiera de Inventario (FIFO) -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px;">
-    <div style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-      <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Valuación a Costo (FIFO)</div>
-      <div style="font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-top: 4px;">{{ valorInventarioCosto() | currencyMxn }}</div>
-      <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Costo de adquisición de existencias</div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div
+        style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); height: 100%;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Valuación a Costo
+          (FIFO)</div>
+        <div style="font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-top: 4px;">{{ valorInventarioCosto() |
+          currencyMxn }}</div>
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Costo de adquisición de existencias</div>
+      </div>
     </div>
-    <div style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-      <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Valuación a Precio Venta</div>
-      <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 4px;">{{ valorInventarioVenta() | currencyMxn }}</div>
-      <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Valor comercial total estimado</div>
+    <div class="col-12 col-md-4">
+      <div
+        style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); height: 100%;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Valuación a Precio
+          Venta</div>
+        <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 4px;">{{ valorInventarioVenta() |
+          currencyMxn }}</div>
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Valor comercial total estimado</div>
+      </div>
     </div>
-    <div style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-      <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Utilidad Potencial Bruta</div>
-      <div style="font-size: 1.35rem; font-weight: 800; color: #16a34a; margin-top: 4px;">+{{ gananciaPotencial() | currencyMxn }}</div>
-      <div style="font-size: 0.75rem; color: #16a34a; font-weight: 600; margin-top: 2px;">Margen promedio: {{ margenPotencialPromedio() }}%</div>
+    <div class="col-12 col-md-4">
+      <div
+        style="background: white; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); height: 100%;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Utilidad Potencial
+          Bruta</div>
+        <div style="font-size: 1.35rem; font-weight: 800; color: #16a34a; margin-top: 4px;">+{{ gananciaPotencial() |
+          currencyMxn }}</div>
+        <div style="font-size: 0.75rem; color: #16a34a; font-weight: 600; margin-top: 2px;">Margen promedio: {{
+          margenPotencialPromedio() }}%</div>
+      </div>
     </div>
   </div>
 
   <!-- Tabla de Inventario Multi-Sucursal Unificada -->
   <div class="card">
-    <div class="card-body table-container" style="padding: 0; overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse;">
+    <div class="card-body table-container table-responsive" style="padding: 0; overflow-x: auto;">
+      <table style="width: 100%; min-width: 960px; border-collapse: collapse;">
         <thead>
           <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
             <th style="padding: 12px 16px; text-align: left;">Código</th>
@@ -306,12 +432,20 @@
             </td>
             <td style="padding: 12px 16px;">
               <div style="font-weight: 600; color: #1e293b;">{{ prod.nombre }}</div>
-              @if (prod.precioVariable) {
-              <span
-                style="display: inline-block; font-size: 0.72rem; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; margin-top: 2px; font-weight: 600;">
-                Precio Variable
-              </span>
-              }
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px;">
+                @if (prod.sinStock) {
+                <span
+                  style="display: inline-block; font-size: 0.72rem; color: #475569; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 6px; border-radius: 4px; font-weight: 700;">
+                  🎲 Sin Stock / Servicio
+                </span>
+                }
+                @if (prod.precioVariable) {
+                <span
+                  style="display: inline-block; font-size: 0.72rem; color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; font-weight: 600;">
+                  Precio Variable
+                </span>
+                }
+              </div>
             </td>
             <td style="padding: 12px 16px;">
               <span class="badge badge-info" style="font-size: 0.78rem;">
@@ -322,42 +456,60 @@
               {{ prod.precioVenta | currencyMxn }}
             </td>
             <td style="padding: 12px 16px; text-align: right; font-weight: 600;">
-              @if (margen.costo > 0) {
-                <span style="color: #0369a1;">{{ margen.costo | currencyMxn }}</span>
+              @if (prod.sinStock) {
+              <span style="color: #94a3b8; font-size: 0.85rem;">No aplica</span>
+              } @else if (margen.costo > 0) {
+              <span style="color: #0369a1;">{{ margen.costo | currencyMxn }}</span>
               } @else {
-                <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
+              <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
               }
             </td>
             <td style="padding: 12px 16px; text-align: center;">
-              @if (prod.precioVenta > 0 && margen.costo > 0) {
-                <span
-                  style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;"
-                  [style.background]="margen.porcentaje >= 30 ? '#f0fdf4' : (margen.porcentaje >= 10 ? '#fefce8' : '#fef2f2')"
-                  [style.color]="margen.porcentaje >= 30 ? '#15803d' : (margen.porcentaje >= 10 ? '#b45309' : '#b91c1c')"
-                  [style.border]="margen.porcentaje >= 30 ? '1px solid #bbf7d0' : (margen.porcentaje >= 10 ? '1px solid #fef08a' : '1px solid #fecaca')">
-                  {{ margen.porcentaje }}% (+{{ margen.ganancia | currencyMxn }})
-                </span>
+              @if (prod.sinStock) {
+              <span
+                style="color: #64748b; font-size: 0.76rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
+                Directo (N/A)
+              </span>
+              } @else if (prod.precioVenta > 0 && margen.costo > 0) {
+              <span
+                style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;"
+                [style.background]="margen.porcentaje >= 30 ? '#f0fdf4' : (margen.porcentaje >= 10 ? '#fefce8' : '#fef2f2')"
+                [style.color]="margen.porcentaje >= 30 ? '#15803d' : (margen.porcentaje >= 10 ? '#b45309' : '#b91c1c')"
+                [style.border]="margen.porcentaje >= 30 ? '1px solid #bbf7d0' : (margen.porcentaje >= 10 ? '1px solid #fef08a' : '1px solid #fecaca')">
+                {{ margen.porcentaje }}% (+{{ margen.ganancia | currencyMxn }})
+              </span>
               } @else if (prod.precioVenta > 0 && margen.costo === 0) {
-                <span style="color: #64748b; font-size: 0.76rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
-                  Sin costo reg.
-                </span>
+              <span
+                style="color: #64748b; font-size: 0.76rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
+                Sin costo reg.
+              </span>
               } @else {
-                <span style="color: #94a3b8;">—</span>
+              <span style="color: #94a3b8;">—</span>
               }
             </td>
             <td style="padding: 12px 16px; text-align: center; color: #64748b;">
-              {{ stock.stockMinimo }}
+              {{ prod.sinStock ? '—' : stock.stockMinimo }}
             </td>
             <td style="padding: 12px 16px; text-align: center;">
+              @if (prod.sinStock) {
+              <span
+                style="display: inline-block; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; background: #f1f5f9; color: #475569;">
+                ∞ No aplica
+              </span>
+              } @else {
               <span
                 style="display: inline-block; min-width: 38px; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.95rem;"
                 [style.background]="stock.stockActual <= 0 ? '#fee2e2' : stock.stockActual <= stock.stockMinimo ? '#fef3c7' : '#f0fdf4'"
                 [style.color]="stock.stockActual <= 0 ? '#dc2626' : stock.stockActual <= stock.stockMinimo ? '#b45309' : '#15803d'">
                 {{ stock.stockActual }}
               </span>
+              }
             </td>
             <td style="padding: 12px 16px; text-align: center;">
-              @if (stock.stockActual <= 0) { <span class="badge badge-danger">Agotado</span>
+              @if (prod.sinStock) {
+              <span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">Activo
+                (Servicio)</span>
+              } @else if (stock.stockActual <= 0) { <span class="badge badge-danger">Agotado</span>
                 } @else if (stock.stockActual <= stock.stockMinimo) { <span class="badge badge-warning">Por
                   Agotarse</span>
                   } @else {
@@ -440,7 +592,8 @@
 
           <div class="form-group" style="margin-bottom: 0;">
             <label for="editCosto"
-              style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Costo Compra ($ Referencia)</label>
+              style="font-weight: 600; font-size: 0.82rem; color: #334155; margin-bottom: 4px;">Costo Compra ($
+              Referencia)</label>
             <input id="editCosto" type="number" min="0" step="0.01" [(ngModel)]="productoEnEdicion()!.ultimoCosto"
               name="editCosto" placeholder="0.00" />
           </div>
@@ -453,18 +606,40 @@
           </div>
         </div>
 
-        <div class="form-group"
-          style="display: flex; align-items: center; gap: 8px; margin-top: 10px; margin-bottom: 0;">
-          <input id="editPrecioVar" type="checkbox" [(ngModel)]="productoEnEdicion()!.precioVariable"
-            name="precioVariable" style="width: auto; height: auto;" />
-          <label for="editPrecioVar"
-            style="margin-bottom: 0; cursor: pointer; font-size: 0.84rem; font-weight: 600; color: #1e3a5f;">
-            Precio Variable en Venta
-          </label>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;">
+          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 0;">
+            <input id="editSinStock" type="checkbox" [(ngModel)]="productoEnEdicion()!.sinStock" name="sinStock"
+              (change)="onSinStockChangeEdicion()" style="width: 18px; height: 18px; cursor: pointer;" />
+            <label for="editSinStock"
+              style="margin-bottom: 0; cursor: pointer; font-size: 0.84rem; font-weight: 700; color: #0f172a;">
+              🎲 Sin Control de Stock (Servicio / Aleatorio)
+            </label>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 0;">
+            <input id="editPrecioVar" type="checkbox" [(ngModel)]="productoEnEdicion()!.precioVariable"
+              name="precioVariable" style="width: 18px; height: 18px; cursor: pointer;" />
+            <label for="editPrecioVar"
+              style="margin-bottom: 0; cursor: pointer; font-size: 0.84rem; font-weight: 600; color: #1e3a5f;">
+              Precio Variable en Venta
+            </label>
+          </div>
         </div>
       </div>
 
       <!-- Existencias por Sucursal -->
+      @if (productoEnEdicion()?.sinStock) {
+      <div
+        style="border: 1.5px dashed #94a3b8; background: #f8fafc; border-radius: 8px; padding: 22px 16px; text-align: center;">
+        <span style="font-size: 1.8rem; display: block; margin-bottom: 6px;">🎲 ∞</span>
+        <strong style="color: #334155; font-size: 0.95rem; display: block;">Control de existencias físicas no
+          requerido</strong>
+        <p style="margin: 4px 0 0; font-size: 0.82rem; color: #64748b; max-width: 440px; margin-inline: auto;">
+          Este producto está configurado como servicio o concepto libre. No mantiene existencias por sucursal ni
+          generará alertas de stock agotado.
+        </p>
+      </div>
+      } @else {
       <div style="border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 8px; padding: 14px;">
         <h4 style="margin: 0 0 10px; font-size: 0.9rem; font-weight: 700; color: #0284c7;">
           🏪 Existencias & Stock Mínimo por Sucursal
@@ -498,6 +673,7 @@
           }
         </div>
       </div>
+      }
 
       <div class="modal-actions"
         style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; margin-top: 14px; border-top: 1px solid #e2e8f0;">
@@ -705,4 +881,10 @@
     </div>
   </div>
 </div>
+}
+
+<!-- Modal de Escáner de Códigos con Cámara -->
+@if (scannerModalAbierto()) {
+<app-scanner-camara-modal (codigoEscaneado)="onCodigoEscaneado($event)" (cerrar)="scannerModalAbierto.set(false)">
+</app-scanner-camara-modal>
 }

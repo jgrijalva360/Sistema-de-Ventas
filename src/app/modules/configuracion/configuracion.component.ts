@@ -75,6 +75,7 @@ export class ConfiguracionComponent implements AfterViewInit {
   public optGastos = signal<boolean>(true);
   public optCortes = signal<boolean>(true);
   public optPedidos = signal<boolean>(true);
+  public optClientes = signal<boolean>(true);
   public optSucursales = signal<boolean>(true);
   public optConfiguracion = signal<boolean>(true);
   public optBitacora = signal<boolean>(true);
@@ -196,6 +197,7 @@ export class ConfiguracionComponent implements AfterViewInit {
         this.optGastos.set(resumen.gastosCount > 0);
         this.optCortes.set(resumen.cortesCount > 0);
         this.optPedidos.set(resumen.pedidosCount > 0);
+        this.optClientes.set((resumen.clientesCount || 0) > 0);
         this.optSucursales.set(resumen.sucursalesCount > 0);
         this.optConfiguracion.set(resumen.hasConfig);
         this.optBitacora.set((resumen.bitacoraCount || 0) > 0);
@@ -221,6 +223,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optGastos.set(res.gastosCount > 0);
     this.optCortes.set(res.cortesCount > 0);
     this.optPedidos.set(res.pedidosCount > 0);
+    this.optClientes.set((res.clientesCount || 0) > 0);
     this.optSucursales.set(res.sucursalesCount > 0);
     this.optConfiguracion.set(res.hasConfig);
     this.optBitacora.set((res.bitacoraCount || 0) > 0);
@@ -235,6 +238,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     this.optGastos.set(false);
     this.optCortes.set(false);
     this.optPedidos.set(false);
+    this.optClientes.set(false);
     this.optSucursales.set(false);
     this.optConfiguracion.set(false);
     this.optBitacora.set(false);
@@ -268,6 +272,7 @@ export class ConfiguracionComponent implements AfterViewInit {
       this.optGastos() ||
       this.optCortes() ||
       this.optPedidos() ||
+      this.optClientes() ||
       this.optSucursales() ||
       this.optConfiguracion() ||
       this.optBitacora() ||
@@ -289,6 +294,7 @@ export class ConfiguracionComponent implements AfterViewInit {
         restaurarGastos: this.optGastos(),
         restaurarCortes: this.optCortes(),
         restaurarPedidos: this.optPedidos(),
+        restaurarClientes: this.optClientes(),
         restaurarSucursales: this.optSucursales(),
         restaurarConfiguracion: this.optConfiguracion(),
         restaurarBitacora: this.optBitacora(),
@@ -300,6 +306,7 @@ export class ConfiguracionComponent implements AfterViewInit {
 
       let mensaje = '✅ Respaldo restaurado con éxito:\n\n';
       if (opciones.restaurarProductos) mensaje += `• Productos: ${resultado.productosCount}\n`;
+      if (opciones.restaurarClientes) mensaje += `• Clientes: ${resultado.clientesCount || 0}\n`;
       if (opciones.restaurarVentas) mensaje += `• Ventas: ${resultado.ventasCount}\n`;
       if (opciones.restaurarMovimientos) mensaje += `• Movimientos: ${resultado.movimientosCount}\n`;
       if (opciones.restaurarGastos) mensaje += `• Gastos: ${resultado.gastosCount}\n`;
@@ -335,7 +342,7 @@ export class ConfiguracionComponent implements AfterViewInit {
     if (tipo === 'reset_total') {
       msg = `⚠️ RESTABLECIMIENTO TOTAL DE FÁBRICA:\n\n` +
         `Empresa objetivo: "${negocio}" (ID: ${tenantId})\n\n` +
-        `Se descargará un respaldo de seguridad previo y se ELIMINARÁN PERMANENTEMENTE todos los datos de Firestore de ESTA EMPRESA (Productos, Ventas, Gastos, Movimientos, Cortes, Pedidos, Liquidaciones y Préstamos).\n\n` +
+        `Se descargará un respaldo de seguridad previo y se ELIMINARÁN PERMANENTEMENTE todos los datos de Firestore de ESTA EMPRESA (Productos, Clientes, Ventas, Gastos, Movimientos, Cortes, Pedidos, Liquidaciones y Préstamos).\n\n` +
         `• Esta acción afectará ÚNICAMENTE a la empresa "${negocio}". NO alterará datos de ninguna otra empresa ni de otros negocios registrados en la plataforma.\n\n` +
         `¿Estás seguro de realizar el Reset Total de Fábrica para "${negocio}"?`;
     } else if (tipo === 'reset_operativo') {
@@ -347,7 +354,7 @@ export class ConfiguracionComponent implements AfterViewInit {
         `• Se CONSERVARÁN únicamente los Pedidos que se encuentren PENDIENTES o con saldo restante.\n` +
         `• Se CONSERVARÁN los préstamos entre socios pendientes de saldar.\n` +
         `• Se limpiará el historial de movimientos de inventario sin afectar el stock actual.\n` +
-        `• El catálogo de productos, existencias, precios, sucursales y colaboradores de "${negocio}" se mantendrán intactos.\n\n` +
+        `• El directorio de clientes, catálogo de productos, existencias, precios, sucursales y colaboradores de "${negocio}" se mantendrán intactos.\n\n` +
         `Esta acción NO afecta a ninguna otra empresa registrada.\n\n` +
         `¿Estás seguro de continuar con el Reset Operativo para "${negocio}"?`;
     }

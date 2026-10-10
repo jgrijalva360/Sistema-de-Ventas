@@ -25,6 +25,7 @@ export interface Producto {
   costoPromedio?: number;
   lotesFifo?: LoteFifo[];
   precioVariable?: boolean;
+  sinStock?: boolean;
   grupo?: string;
   unidad?: string;
   categoria?: string;
@@ -69,6 +70,7 @@ export interface Venta {
   socioTransferenciaNombre?: string;
   socioTarjetaId?: string;
   socioTarjetaNombre?: string;
+  pedidoId?: string;
 }
 
 export interface CarritoPendiente {
@@ -175,8 +177,21 @@ export interface AbonoPedido {
   socioTarjetaNombre?: string;
 }
 
+export interface Cliente {
+  id: string;
+  nombre: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  notas?: string;
+  fechaRegistro: string;
+  sucursalId?: string;
+  activo?: boolean;
+}
+
 export interface PedidoPersonalizado {
   id: string;
+  clienteId?: string;
   clienteNombre: string;
   clienteTelefono?: string;
   fechaRegistro: string;
@@ -251,6 +266,7 @@ export type ModuloBitacora =
   | 'CORTES'
   | 'GASTOS'
   | 'PEDIDOS'
+  | 'CLIENTES'
   | 'SUCURSALES'
   | 'CONFIGURACION'
   | 'SEGURIDAD'
@@ -540,6 +556,7 @@ export interface ResumenArchivoBackup {
   gastosCount: number;
   cortesCount: number;
   pedidosCount: number;
+  clientesCount?: number;
   sucursalesCount: number;
   bitacoraCount: number;
   usuariosCount: number;
@@ -556,6 +573,7 @@ export interface ResultadoRestauracionBackup {
   movimientosCount: number;
   cortesCount: number;
   pedidosCount: number;
+  clientesCount?: number;
   sucursalesCount: number;
   bitacoraCount: number;
   usuariosCount: number;

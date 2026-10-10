@@ -22,6 +22,7 @@ import { LandingPageComponent } from './modules/landing/landing-page.component';
 import { SuperAdminComponent } from './modules/super-admin/super-admin.component';
 import { VerificarCorreoComponent } from './modules/auth/verificar-correo.component';
 import { SociosComponent } from './modules/socios/socios.component';
+import { ClientesComponent } from './modules/clientes/clientes.component';
 
 export const routes: Routes = [
   {
@@ -68,6 +69,7 @@ export const routes: Routes = [
       { path: 'movimientos', component: MovimientosComponent, canActivate: [roleGuard(['ADMIN', 'ENCARGADO'])] },
       { path: 'gastos', component: GastosComponent, canActivate: [roleGuard(['ADMIN', 'ENCARGADO'])] },
       { path: 'pedidos', component: PedidosComponent },
+      { path: 'clientes', component: ClientesComponent },
       { path: 'cortes', component: CortesComponent },
       { path: 'reportes', component: ReportesComponent, canActivate: [roleGuard(['ADMIN', 'ENCARGADO'])] },
       { path: 'socios', component: SociosComponent, canActivate: [roleGuard(['ADMIN'])] },

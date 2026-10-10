@@ -6,11 +6,12 @@ import { MovimientosService } from '../../core/services/movimientos.service';
 import { ProductosService } from '../../core/services/productos.service';
 import { SucursalesService } from '../../core/services/sucursales.service';
 import { MovimientoInventario, Producto, LoteFifo } from '../../core/models/models';
+import { ScannerCamaraModalComponent } from '../../shared/components/scanner-camara-modal/scanner-camara-modal.component';
 
 @Component({
   selector: 'app-movimientos',
   standalone: true,
-  imports: [FormsModule, FechaLocalPipe, CurrencyMxnPipe],
+  imports: [FormsModule, FechaLocalPipe, CurrencyMxnPipe, ScannerCamaraModalComponent],
   templateUrl: './movimientos.component.html',
   styleUrl: './movimientos.component.scss'
 })
@@ -25,6 +26,9 @@ export class MovimientosComponent implements AfterViewInit {
   public nuevoPrecioVentaSugerido = signal<number | null>(null);
   public motivo = signal<string>('');
   public modalLotesFifoAbierto = signal<boolean>(false);
+
+  // Escáner de Códigos con Cámara
+  public scannerModalAbierto = signal<boolean>(false);
 
   // Sucursales para el movimiento
   public sucursalOrigen = signal<string>('SUC-MAIN');
@@ -212,6 +216,25 @@ export class MovimientosComponent implements AfterViewInit {
     this.actualizarPrecioVenta.set(false);
     this.nuevoPrecioVentaSugerido.set(null);
     this.mostrarSugerencias.set(true);
+  }
+
+  abrirScanner(): void {
+    this.scannerModalAbierto.set(true);
+  }
+
+  onCodigoEscaneado(codigo: string): void {
+    this.scannerModalAbierto.set(false);
+    const codLimpio = codigo.trim();
+    if (!codLimpio) return;
+
+    const prod = this.productosService.obtenerPorCodigo(codLimpio);
+    if (prod) {
+      this.seleccionarProducto(prod);
+    } else {
+      this.busquedaProducto.set(codLimpio);
+      this.codigoSeleccionado.set('');
+      this.mostrarSugerencias.set(true);
+    }
   }
 
   onCostoChange(valor: any): void {

@@ -351,6 +351,7 @@ export class VentasService {
 
     const nuevaVenta: Venta = {
       id: ventaId,
+      pedidoId: params.pedidoId,
       fecha: params.fecha || new Date().toISOString(),
       items: [
         {

@@ -14,11 +14,11 @@ export class ProductosService {
   public productos = this.productosSignal.asReadonly();
 
   public productosConStockBajo = computed(() => {
-    return this.productosSignal().filter((p) => (p.stockActual || 0) <= (p.stockMinimo || 0));
+    return this.productosSignal().filter((p) => !p.sinStock && (p.stockActual || 0) <= (p.stockMinimo || 0));
   });
 
   public totalStockItems = computed(() => {
-    return this.productosSignal().reduce((acc, p) => acc + (p.stockActual || 0), 0);
+    return this.productosSignal().reduce((acc, p) => acc + (p.sinStock ? 0 : (p.stockActual || 0)), 0);
   });
 
   private subLiveDoc?: Subscription;
@@ -27,7 +27,7 @@ export class ProductosService {
     private firestoreService: FirestoreChunksService,
     private syncService: SyncService,
     private bitacoraService: BitacoraService
-  ) {}
+  ) { }
 
   public normalizarProducto(p: any): Producto {
     const stockMin = typeof p.stockMinimo === 'number'
@@ -56,8 +56,8 @@ export class ProductosService {
       });
     }
 
-    // Si aún no tiene mapa de sucursales, asignar las existencias a la matriz principal (SUC-MAIN)
-    if (Object.keys(stockPorSucursal).length === 0) {
+    // Si aún no tiene mapa de sucursales y maneja stock, asignar las existencias a la matriz principal (SUC-MAIN)
+    if (!p.sinStock && Object.keys(stockPorSucursal).length === 0) {
       stockPorSucursal['SUC-MAIN'] = {
         stockActual: Number(stockAct) || 0,
         stockMinimo: Number(stockMin) || 1
@@ -65,12 +65,12 @@ export class ProductosService {
     }
 
     // Calcular el stock total consolidado
-    const totalActual = Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
-    const totalMinimo = Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockMinimo || 0), 0);
+    const totalActual = p.sinStock ? 0 : Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
+    const totalMinimo = p.sinStock ? 0 : Object.values(stockPorSucursal).reduce((acc, s) => acc + (s.stockMinimo || 0), 0);
 
     // Normalizar Lotes FIFO
     const lotesFifo: LoteFifo[] = [];
-    if (Array.isArray(p.lotesFifo)) {
+    if (!p.sinStock && Array.isArray(p.lotesFifo)) {
       p.lotesFifo.forEach((lote: any) => {
         if (lote && typeof lote === 'object') {
           lotesFifo.push({
@@ -89,18 +89,19 @@ export class ProductosService {
     const prod: Producto = {
       codigo: (p.codigo || '').trim(),
       nombre: p.nombre || 'Producto',
-      stockMinimo: Number(totalMinimo) || Number(stockMin) || 1,
+      stockMinimo: Number(totalMinimo) || 0,
       stockActual: Number(totalActual) || 0,
       precioVenta: typeof p.precioVenta === 'number' ? p.precioVenta : parseFloat(p.precioVenta) || 0,
-      ultimoCosto: p.ultimoCosto !== undefined ? Number(p.ultimoCosto) : undefined,
-      fechaUltimoCosto: p.fechaUltimoCosto || undefined,
-      costoPromedio: p.costoPromedio !== undefined ? Number(p.costoPromedio) : undefined,
-      lotesFifo,
+      ultimoCosto: p.sinStock ? 0 : (p.ultimoCosto !== undefined ? Number(p.ultimoCosto) : undefined),
+      fechaUltimoCosto: p.sinStock ? undefined : (p.fechaUltimoCosto || undefined),
+      costoPromedio: p.sinStock ? 0 : (p.costoPromedio !== undefined ? Number(p.costoPromedio) : undefined),
+      lotesFifo: p.sinStock ? [] : lotesFifo,
       precioVariable: Boolean(p.precioVariable),
+      sinStock: Boolean(p.sinStock),
       grupo: p.grupo || 'General',
       unidad: p.unidad || 'Unidades',
       categoria: p.categoria || p.grupo || 'General',
-      stockPorSucursal
+      stockPorSucursal: p.sinStock ? {} : stockPorSucursal
     };
 
     if (p.id) {
@@ -136,7 +137,7 @@ export class ProductosService {
         await this.persistirCatalogo(list);
         return list;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     this.productosSignal.set([]);
     return [];
@@ -201,50 +202,62 @@ export class ProductosService {
     const norm = this.normalizarProducto(producto);
     const sid = sucursalId || 'SUC-MAIN';
 
-    // Si se pasa una sucursal específica y el producto ya tenía stocks
-    if (producto.stockPorSucursal) {
-      norm.stockPorSucursal = { ...producto.stockPorSucursal };
+    if (producto.sinStock) {
+      norm.sinStock = true;
+      norm.stockActual = 0;
+      norm.stockMinimo = 0;
+      norm.stockPorSucursal = {};
+      norm.lotesFifo = [];
+      norm.ultimoCosto = 0;
+      norm.costoPromedio = 0;
     } else {
-      norm.stockPorSucursal = {
-        [sid]: {
-          stockActual: Number(producto.stockActual) || 0,
-          stockMinimo: Number(producto.stockMinimo) || 1
-        }
-      };
-    }
+      // Si se pasa una sucursal específica y el producto ya tenía stocks
+      if (producto.stockPorSucursal) {
+        norm.stockPorSucursal = { ...producto.stockPorSucursal };
+      } else {
+        norm.stockPorSucursal = {
+          [sid]: {
+            stockActual: Number(producto.stockActual) || 0,
+            stockMinimo: Number(producto.stockMinimo) || 1
+          }
+        };
+      }
 
-    // Recalcular consolidado
-    const totalAct = Object.values(norm.stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
-    norm.stockActual = totalAct;
+      // Recalcular consolidado
+      const totalAct = Object.values(norm.stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
+      norm.stockActual = totalAct;
+    }
 
     const current = [...this.productosSignal()];
     const idx = current.findIndex((p) => (p.codigo || '').toLowerCase() === (norm.codigo || '').toLowerCase());
 
     if (idx >= 0) {
-      // Conservar stocks de otras sucursales si ya existían
-      const previo = current[idx];
-      norm.stockPorSucursal = {
-        ...(previo.stockPorSucursal || {}),
-        ...(norm.stockPorSucursal || {})
-      };
-      norm.stockActual = Object.values(norm.stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
+      if (!norm.sinStock) {
+        // Conservar stocks de otras sucursales si ya existían
+        const previo = current[idx];
+        norm.stockPorSucursal = {
+          ...(previo.stockPorSucursal || {}),
+          ...(norm.stockPorSucursal || {})
+        };
+        norm.stockActual = Object.values(norm.stockPorSucursal).reduce((acc, s) => acc + (s.stockActual || 0), 0);
 
-      // Conservar costos previos y lotes si no se sobreescribieron
-      if (norm.ultimoCosto === undefined && previo.ultimoCosto !== undefined) {
-        norm.ultimoCosto = previo.ultimoCosto;
-        norm.fechaUltimoCosto = previo.fechaUltimoCosto;
-      }
-      if (!norm.lotesFifo || norm.lotesFifo.length === 0) {
-        norm.lotesFifo = previo.lotesFifo || [];
-      }
-      if (norm.costoPromedio === undefined && previo.costoPromedio !== undefined) {
-        norm.costoPromedio = previo.costoPromedio;
+        // Conservar costos previos y lotes si no se sobreescribieron
+        if (norm.ultimoCosto === undefined && previo.ultimoCosto !== undefined) {
+          norm.ultimoCosto = previo.ultimoCosto;
+          norm.fechaUltimoCosto = previo.fechaUltimoCosto;
+        }
+        if (!norm.lotesFifo || norm.lotesFifo.length === 0) {
+          norm.lotesFifo = previo.lotesFifo || [];
+        }
+        if (norm.costoPromedio === undefined && previo.costoPromedio !== undefined) {
+          norm.costoPromedio = previo.costoPromedio;
+        }
       }
 
       current[idx] = { ...norm };
     } else {
       // Si es un producto nuevo con stock inicial y costo, inicializar su primer lote FIFO
-      if (norm.stockActual > 0 && norm.ultimoCosto && norm.ultimoCosto > 0) {
+      if (!norm.sinStock && norm.stockActual > 0 && norm.ultimoCosto && norm.ultimoCosto > 0) {
         norm.lotesFifo = [
           {
             id: `LOTE-INI-${Date.now()}`,
@@ -522,6 +535,16 @@ export class ProductosService {
         const prod = current[idx];
         const cant = Number(item.cantidad) || 0;
 
+        if (prod.sinStock) {
+          desgloseFifo.push({
+            codigo: prod.codigo,
+            cantidad: cant,
+            costoUnitarioFifo: 0,
+            costoTotalFifo: 0
+          });
+          return;
+        }
+
         // 1. Consumir de capas FIFO
         const resultadoFifo = this.consumirStockFifo(prod, cant, sucursalId);
         desgloseFifo.push({
@@ -584,6 +607,9 @@ export class ProductosService {
       );
       if (idx >= 0) {
         const prod = current[idx];
+        if (prod.sinStock) {
+          return; // Servicios y productos aleatorios no manejan reposición de existencias
+        }
         const cant = Number(item.cantidad) || 0;
         const stocks = { ...(prod.stockPorSucursal || {}) };
         const sucData = stocks[sucursalId] || { stockActual: 0, stockMinimo: 1 };
@@ -640,6 +666,9 @@ export class ProductosService {
 
     for (let i = 0; i < catalogo.length; i++) {
       const prod = catalogo[i];
+      if (prod.sinStock) {
+        continue;
+      }
       const cod = (prod.codigo || '').trim().toLowerCase();
 
       // Si se especificó sucursal, filtramos por esa sucursal

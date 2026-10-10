@@ -113,356 +113,384 @@
     </div>
   </div>
 
-  <!-- Grid de Tarjetas KPI Simples -->
-  <div class="kpi-grid">
+  <!-- Grid de Tarjetas KPI Simples con Bootstrap Grid -->
+  <div class="row g-3 mb-4">
     <!-- Ingresos -->
-    <div class="kpi-card kpi-income">
-      <div class="kpi-icon">💵</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Ingresos</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().totalIngresos | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">Total Ventas ({{ resumenVentasCaja().cantidadVentas }})</span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-income h-100">
+        <div class="kpi-icon">💵</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Ingresos</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().totalIngresos | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">Total Ventas ({{ resumenVentasCaja().cantidadVentas }})</span>
+        </div>
       </div>
     </div>
 
     <!-- Egresos -->
-    <div class="kpi-card kpi-expenses">
-      <div class="kpi-icon">🧾</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Egresos</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().totalGastos | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">
-          Gastos del Negocio
-          @if (resumenVentasCaja().totalGastosSocios > 0) {
-            <span style="display: block; font-size: 0.73rem; color: #64748b; font-weight: normal; margin-top: 2px;">
-              Excluye {{ mostrarValores() ? (resumenVentasCaja().totalGastosSocios | currencyMxn) : '••••••' }} pagados por socios
-            </span>
-          }
-        </span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-expenses h-100">
+        <div class="kpi-icon">🧾</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Egresos</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().totalGastos | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">
+            Gastos del Negocio
+            @if (resumenVentasCaja().totalGastosSocios > 0) {
+              <span style="display: block; font-size: 0.73rem; color: #64748b; font-weight: normal; margin-top: 2px;">
+                Excluye {{ mostrarValores() ? (resumenVentasCaja().totalGastosSocios | currencyMxn) : '••••••' }} pagados por socios
+              </span>
+            }
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- Salida a Socios -->
-    <div class="kpi-card kpi-partners">
-      <div class="kpi-icon">👥</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Salida a Socios</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().totalPagosSocios | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">
-          @if (resumenVentasCaja().totalPagosSocios > 0) {
-            @if (resumenVentasCaja().totalPagosSociosBancos > 0 && resumenVentasCaja().totalPagosSociosEfectivo > 0) {
-              Efec. ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }}) + Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
-            } @else if (resumenVentasCaja().totalPagosSociosBancos > 0) {
-              Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-partners h-100">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Salida a Socios</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().totalPagosSocios | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">
+            @if (resumenVentasCaja().totalPagosSocios > 0) {
+              @if (resumenVentasCaja().totalPagosSociosBancos > 0 && resumenVentasCaja().totalPagosSociosEfectivo > 0) {
+                Efec. ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }}) + Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
+              } @else if (resumenVentasCaja().totalPagosSociosBancos > 0) {
+                Bancos ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosBancos | currencyMxn) : '••' }})
+              } @else {
+                Efectivo de caja ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }})
+              }
             } @else {
-              Efectivo de caja ({{ mostrarValores() ? (resumenVentasCaja().totalPagosSociosEfectivo | currencyMxn) : '••' }})
+              Pago de Utilidades
             }
-          } @else {
-            Pago de Utilidades
-          }
-        </span>
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- Retiros -->
-    <div class="kpi-card kpi-withdrawals">
-      <div class="kpi-icon">📤</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Retiros de Caja</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().totalRetiros | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">
-          Resguardo de Caja
-          @if (resumenVentasCaja().totalIngresosCaja > 0) {
-            <span style="display: block; font-size: 0.73rem; color: #047857; font-weight: 600; margin-top: 2px;">
-              Neto retirado: {{ mostrarValores() ? ((resumenVentasCaja().totalRetiros - resumenVentasCaja().totalIngresosCaja) | currencyMxn) : '••' }}
-            </span>
-          }
-        </span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-withdrawals h-100">
+        <div class="kpi-icon">📤</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Retiros de Caja</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().totalRetiros | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">
+            Resguardo de Caja
+            @if (resumenVentasCaja().totalIngresosCaja > 0) {
+              <span style="display: block; font-size: 0.73rem; color: #047857; font-weight: 600; margin-top: 2px;">
+                Neto retirado: {{ mostrarValores() ? ((resumenVentasCaja().totalRetiros - resumenVentasCaja().totalIngresosCaja) | currencyMxn) : '••' }}
+              </span>
+            }
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- Ingresos a Caja (Devoluciones / Reintegros de Efectivo) -->
     @if (resumenVentasCaja().totalIngresosCaja > 0) {
-    <div class="kpi-card kpi-inflow">
-      <div class="kpi-icon">📥</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Ingresos a Caja</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().totalIngresosCaja | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">Devoluciones / Reintegros</span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-inflow h-100">
+        <div class="kpi-icon">📥</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Ingresos a Caja</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().totalIngresosCaja | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">Devoluciones / Reintegros</span>
+        </div>
       </div>
     </div>
     }
 
     <!-- Efectivo Recibido -->
-    <div class="kpi-card kpi-cash">
-      <div class="kpi-icon">💰</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Efectivo Recibido</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().pagosEfectivo | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">Cobros en Efectivo</span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-cash h-100">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Efectivo Recibido</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().pagosEfectivo | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">Cobros en Efectivo</span>
+        </div>
       </div>
     </div>
 
     <!-- Pagos Bancarios (Tarjeta + Transferencia) -->
-    <div class="kpi-card kpi-bank">
-      <div class="kpi-icon">💳</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Pagos Bancarios</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().pagosBancarios | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">
-          Tarjeta ({{ mostrarValores() ? (resumenVentasCaja().pagosTarjeta | currencyMxn) : '••' }}) + Transf. ({{ mostrarValores() ? (resumenVentasCaja().pagosTransferencia | currencyMxn) : '••' }})
-        </span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-bank h-100">
+        <div class="kpi-icon">💳</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Pagos Bancarios</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().pagosBancarios | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">
+            Tarjeta ({{ mostrarValores() ? (resumenVentasCaja().pagosTarjeta | currencyMxn) : '••' }}) + Transf. ({{ mostrarValores() ? (resumenVentasCaja().pagosTransferencia | currencyMxn) : '••' }})
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- Caja Actual -->
-    <div class="kpi-card kpi-cash">
-      <div class="kpi-icon">🟢</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Caja Actual</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().dineroEnCaja | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">{{ resumenVentasCaja().cajaEstadoLabel }}</span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-cash h-100">
+        <div class="kpi-icon">🟢</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Caja Actual</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().dineroEnCaja | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">{{ resumenVentasCaja().cajaEstadoLabel }}</span>
+        </div>
       </div>
     </div>
 
     <!-- Caja Esperada -->
-    <div class="kpi-card kpi-neutral">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-details">
-        <span class="kpi-title">Caja Esperada</span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().cajaEsperada | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">
-          @if (resumenVentasCaja().totalPagosSociosEfectivo > 0 && resumenVentasCaja().totalIngresosCaja > 0) {
-            Efectivo – Gastos – Retiros – Socios + Ingresos
-          } @else if (resumenVentasCaja().totalPagosSociosEfectivo > 0) {
-            Efectivo – Gastos – Retiros – Socios
-          } @else if (resumenVentasCaja().totalIngresosCaja > 0) {
-            Efectivo – Gastos – Retiros + Ingresos
-          } @else {
-            Efectivo – Gastos – Retiros
-          }
-        </span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div class="kpi-card kpi-neutral h-100">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-details">
+          <span class="kpi-title">Caja Esperada</span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().cajaEsperada | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">
+            @if (resumenVentasCaja().totalPagosSociosEfectivo > 0 && resumenVentasCaja().totalIngresosCaja > 0) {
+              Efectivo – Gastos – Retiros – Socios + Ingresos
+            } @else if (resumenVentasCaja().totalPagosSociosEfectivo > 0) {
+              Efectivo – Gastos – Retiros – Socios
+            } @else if (resumenVentasCaja().totalIngresosCaja > 0) {
+              Efectivo – Gastos – Retiros + Ingresos
+            } @else {
+              Efectivo – Gastos – Retiros
+            }
+          </span>
+        </div>
       </div>
     </div>
 
     <!-- Diferencia en Caja (Faltante / Sobrante) -->
-    <div
-      class="kpi-card"
-      [class.kpi-alert]="resumenVentasCaja().diferenciaCaja < 0"
-      [class.kpi-success]="resumenVentasCaja().diferenciaCaja >= 0"
-    >
-      <div class="kpi-icon">
-        {{ resumenVentasCaja().diferenciaCaja >= 0 ? '✅' : '⚠️' }}
-      </div>
-      <div class="kpi-details">
-        <span class="kpi-title">
-          {{ resumenVentasCaja().diferenciaCaja >= 0 ? 'Sobrante' : 'Faltante' }}
-        </span>
-        <strong class="kpi-val">
-          {{ mostrarValores() ? (resumenVentasCaja().diferenciaAbsoluta | currencyMxn) : '••••••' }}
-        </strong>
-        <span class="kpi-sub">Diferencia en Caja</span>
+    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+      <div
+        class="kpi-card h-100"
+        [class.kpi-alert]="resumenVentasCaja().diferenciaCaja < 0"
+        [class.kpi-success]="resumenVentasCaja().diferenciaCaja >= 0"
+      >
+        <div class="kpi-icon">
+          {{ resumenVentasCaja().diferenciaCaja >= 0 ? '✅' : '⚠️' }}
+        </div>
+        <div class="kpi-details">
+          <span class="kpi-title">
+            {{ resumenVentasCaja().diferenciaCaja >= 0 ? 'Sobrante' : 'Faltante' }}
+          </span>
+          <strong class="kpi-val">
+            {{ mostrarValores() ? (resumenVentasCaja().diferenciaAbsoluta | currencyMxn) : '••••••' }}
+          </strong>
+          <span class="kpi-sub">Diferencia en Caja</span>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Sección de Información Relevante Adicional (Distribución de Cobros & Inventario) -->
-  <div class="dashboard-extra-grid">
+  <div class="row g-3 mb-3">
     <!-- Panel 1: Desglose por Método de Pago & Ticket Promedio -->
-    <div class="info-card">
-      <div class="info-card-header">
-        <div class="header-left">
-          <span class="info-icon">💳</span>
-          <div>
-            <h4>Distribución de Cobros</h4>
-            <p>Participación por método de pago</p>
+    <div class="col-12 col-lg-6">
+      <div class="info-card h-100">
+        <div class="info-card-header">
+          <div class="header-left">
+            <span class="info-icon">💳</span>
+            <div>
+              <h4>Distribución de Cobros</h4>
+              <p>Participación por método de pago</p>
+            </div>
+          </div>
+          <div class="ticket-avg-badge">
+            <small>Ticket Promedio</small>
+            <strong>{{ mostrarValores() ? (desgloseMetodos().ticketPromedio | currencyMxn) : '••••••' }}</strong>
           </div>
         </div>
-        <div class="ticket-avg-badge">
-          <small>Ticket Promedio</small>
-          <strong>{{ mostrarValores() ? (desgloseMetodos().ticketPromedio | currencyMxn) : '••••••' }}</strong>
-        </div>
-      </div>
 
-      <!-- Barra de Distribución Multi-Color -->
-      <div class="progress-bar-container">
-        <div
-          class="progress-seg seg-cash"
-          [style.width.%]="desgloseMetodos().pctEfectivo"
-          [title]="'Efectivo: ' + desgloseMetodos().pctEfectivo + '%'"
-        ></div>
-        <div
-          class="progress-seg seg-card"
-          [style.width.%]="desgloseMetodos().pctTarjeta"
-          [title]="'Tarjeta: ' + desgloseMetodos().pctTarjeta + '%'"
-        ></div>
-        <div
-          class="progress-seg seg-transfer"
-          [style.width.%]="desgloseMetodos().pctTransferencia"
-          [title]="'Transferencia: ' + desgloseMetodos().pctTransferencia + '%'"
-        ></div>
-      </div>
-
-      <!-- Detalle por Método -->
-      <div class="method-chips-grid">
-        <div class="method-chip chip-cash">
-          <div class="chip-top">
-            <span class="dot"></span>
-            <span class="name">Efectivo</span>
-            <span class="pct">{{ desgloseMetodos().pctEfectivo }}%</span>
-          </div>
-          <strong class="chip-val">
-            {{ mostrarValores() ? (desgloseMetodos().efectivo | currencyMxn) : '••••••' }}
-          </strong>
+        <!-- Barra de Distribución Multi-Color -->
+        <div class="progress-bar-container">
+          <div
+            class="progress-seg seg-cash"
+            [style.width.%]="desgloseMetodos().pctEfectivo"
+            [title]="'Efectivo: ' + desgloseMetodos().pctEfectivo + '%'"
+          ></div>
+          <div
+            class="progress-seg seg-card"
+            [style.width.%]="desgloseMetodos().pctTarjeta"
+            [title]="'Tarjeta: ' + desgloseMetodos().pctTarjeta + '%'"
+          ></div>
+          <div
+            class="progress-seg seg-transfer"
+            [style.width.%]="desgloseMetodos().pctTransferencia"
+            [title]="'Transferencia: ' + desgloseMetodos().pctTransferencia + '%'"
+          ></div>
         </div>
 
-        <div class="method-chip chip-card">
-          <div class="chip-top">
-            <span class="dot"></span>
-            <span class="name">Tarjeta</span>
-            <span class="pct">{{ desgloseMetodos().pctTarjeta }}%</span>
+        <!-- Detalle por Método -->
+        <div class="method-chips-grid">
+          <div class="method-chip chip-cash">
+            <div class="chip-top">
+              <span class="dot"></span>
+              <span class="name">Efectivo</span>
+              <span class="pct">{{ desgloseMetodos().pctEfectivo }}%</span>
+            </div>
+            <strong class="chip-val">
+              {{ mostrarValores() ? (desgloseMetodos().efectivo | currencyMxn) : '••••••' }}
+            </strong>
           </div>
-          <strong class="chip-val">
-            {{ mostrarValores() ? (desgloseMetodos().tarjeta | currencyMxn) : '••••••' }}
-          </strong>
-        </div>
 
-        <div class="method-chip chip-transfer">
-          <div class="chip-top">
-            <span class="dot"></span>
-            <span class="name">Transferencia</span>
-            <span class="pct">{{ desgloseMetodos().pctTransferencia }}%</span>
+          <div class="method-chip chip-card">
+            <div class="chip-top">
+              <span class="dot"></span>
+              <span class="name">Tarjeta</span>
+              <span class="pct">{{ desgloseMetodos().pctTarjeta }}%</span>
+            </div>
+            <strong class="chip-val">
+              {{ mostrarValores() ? (desgloseMetodos().tarjeta | currencyMxn) : '••••••' }}
+            </strong>
           </div>
-          <strong class="chip-val">
-            {{ mostrarValores() ? (desgloseMetodos().transferencia | currencyMxn) : '••••••' }}
-          </strong>
+
+          <div class="method-chip chip-transfer">
+            <div class="chip-top">
+              <span class="dot"></span>
+              <span class="name">Transferencia</span>
+              <span class="pct">{{ desgloseMetodos().pctTransferencia }}%</span>
+            </div>
+            <strong class="chip-val">
+              {{ mostrarValores() ? (desgloseMetodos().transferencia | currencyMxn) : '••••••' }}
+            </strong>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Panel 2: Resumen de Inventario y Alertas de Stock -->
-    <div class="info-card">
-      <div class="info-card-header">
-        <div class="header-left">
-          <span class="info-icon">📦</span>
-          <div>
-            <h4>Inventario & Stock</h4>
-            <p>Existencias y productos críticos</p>
+    <div class="col-12 col-lg-6">
+      <div class="info-card h-100">
+        <div class="info-card-header">
+          <div class="header-left">
+            <span class="info-icon">📦</span>
+            <div>
+              <h4>Inventario & Stock</h4>
+              <p>Existencias y productos críticos</p>
+            </div>
+          </div>
+          <div class="quick-stats-pills">
+            <span class="stat-pill">
+              🏷️ <strong>{{ productosService.productos().length }}</strong> prods.
+            </span>
+            <span class="stat-pill">
+              🔢 <strong>{{ productosService.totalStockItems() }}</strong> uds.
+            </span>
           </div>
         </div>
-        <div class="quick-stats-pills">
-          <span class="stat-pill">
-            🏷️ <strong>{{ productosService.productos().length }}</strong> prods.
-          </span>
-          <span class="stat-pill">
-            🔢 <strong>{{ productosService.totalStockItems() }}</strong> uds.
-          </span>
-        </div>
-      </div>
 
-      <!-- Alertas de Stock Bajo -->
-      <div class="stock-alerts-list">
-        @if (productosService.productosConStockBajo().length > 0) {
-          <div class="alert-banner-header">
-            <span>⚠️ Stock Bajo / Agotado ({{ productosService.productosConStockBajo().length }})</span>
-            <a routerLink="/inventario" class="view-all-link">Ver catálogo ➔</a>
-          </div>
-          <div class="stock-chips">
-            @for (p of productosService.productosConStockBajo().slice(0, 4); track p.codigo) {
-              <div class="stock-chip" [class.chip-danger]="p.stockActual <= 0">
-                <span class="p-name">{{ p.nombre }}</span>
-                <span class="p-qty">
-                  Stock: <strong>{{ p.stockActual }}</strong> / Mín: {{ p.stockMinimo }}
-                </span>
-              </div>
-            }
-          </div>
-        } @else {
-          <div class="stock-ok-box">
-            <span>✅ Todos los productos tienen inventario suficiente.</span>
-          </div>
-        }
+        <!-- Alertas de Stock Bajo -->
+        <div class="stock-alerts-list">
+          @if (productosService.productosConStockBajo().length > 0) {
+            <div class="alert-banner-header">
+              <span>⚠️ Stock Bajo / Agotado ({{ productosService.productosConStockBajo().length }})</span>
+              <a routerLink="/inventario" class="view-all-link">Ver catálogo ➔</a>
+            </div>
+            <div class="stock-chips">
+              @for (p of productosService.productosConStockBajo().slice(0, 4); track p.codigo) {
+                <div class="stock-chip" [class.chip-danger]="p.stockActual <= 0">
+                  <span class="p-name">{{ p.nombre }}</span>
+                  <span class="p-qty">
+                    Stock: <strong>{{ p.stockActual }}</strong> / Mín: {{ p.stockMinimo }}
+                  </span>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="stock-ok-box">
+              <span>✅ Todos los productos tienen inventario suficiente.</span>
+            </div>
+          }
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Panel de Ancho Completo: Control y Monitoreo de Pedidos Personalizados -->
-  <div class="info-card info-card--full">
-    <div class="info-card-header">
-      <div class="header-left">
-        <span class="info-icon">📋</span>
-        <div>
-          <h4>Control de Pedidos Personalizados</h4>
-          <p>Monitoreo por estado de entrega y saldo por cobrar</p>
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="info-card info-card--full">
+        <div class="info-card-header">
+          <div class="header-left">
+            <span class="info-icon">📋</span>
+            <div>
+              <h4>Control de Pedidos Personalizados</h4>
+              <p>Monitoreo por estado de entrega y saldo por cobrar</p>
+            </div>
+          </div>
+          <a routerLink="/pedidos" class="btn-link-action">Gestionar Pedidos ➔</a>
         </div>
-      </div>
-      <a routerLink="/pedidos" class="btn-link-action">Gestionar Pedidos ➔</a>
-    </div>
 
-    <!-- Grid de los 4 Estados -->
-    <div class="pedidos-status-grid">
-      <div class="status-box box-vencidos" [class.has-alert]="resumenPedidosDashboard().vencidos > 0">
-        <div class="box-icon">⚠️</div>
-        <div class="box-info">
-          <span class="box-label">Vencidos</span>
-          <strong class="box-count">{{ resumenPedidosDashboard().vencidos }}</strong>
+        <!-- Grid de los 4 Estados -->
+        <div class="pedidos-status-grid">
+          <div class="status-box box-vencidos" [class.has-alert]="resumenPedidosDashboard().vencidos > 0">
+            <div class="box-icon">⚠️</div>
+            <div class="box-info">
+              <span class="box-label">Vencidos</span>
+              <strong class="box-count">{{ resumenPedidosDashboard().vencidos }}</strong>
+            </div>
+          </div>
+
+          <div class="status-box box-pendientes">
+            <div class="box-icon">⏳</div>
+            <div class="box-info">
+              <span class="box-label">Pendientes</span>
+              <strong class="box-count">{{ resumenPedidosDashboard().pendientes }}</strong>
+            </div>
+          </div>
+
+          <div class="status-box box-proceso">
+            <div class="box-icon">⚙️</div>
+            <div class="box-info">
+              <span class="box-label">En Proceso</span>
+              <strong class="box-count">{{ resumenPedidosDashboard().enProceso }}</strong>
+            </div>
+          </div>
+
+          <div class="status-box box-entregados">
+            <div class="box-icon">✅</div>
+            <div class="box-info">
+              <span class="box-label">Entregados</span>
+              <strong class="box-count">{{ resumenPedidosDashboard().entregados }}</strong>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="status-box box-pendientes">
-        <div class="box-icon">⏳</div>
-        <div class="box-info">
-          <span class="box-label">Pendientes</span>
-          <strong class="box-count">{{ resumenPedidosDashboard().pendientes }}</strong>
+        <!-- Saldo por Cobrar en Pedidos -->
+        <div class="pedidos-summary-bar">
+          <div class="pedidos-summary-item">
+            <span>Pedidos Activos en Curso:</span>
+            <strong>{{ resumenPedidosDashboard().totalActivos }} pedido(s)</strong>
+          </div>
+          <div class="pedidos-summary-item">
+            <span>Total Saldo por Cobrar:</span>
+            <strong style="color: #ea580c; font-size: 1.05rem;">
+              {{ mostrarValores() ? (resumenPedidosDashboard().saldoPorCobrar | currencyMxn) : '••••••' }}
+            </strong>
+          </div>
         </div>
-      </div>
-
-      <div class="status-box box-proceso">
-        <div class="box-icon">⚙️</div>
-        <div class="box-info">
-          <span class="box-label">En Proceso</span>
-          <strong class="box-count">{{ resumenPedidosDashboard().enProceso }}</strong>
-        </div>
-      </div>
-
-      <div class="status-box box-entregados">
-        <div class="box-icon">✅</div>
-        <div class="box-info">
-          <span class="box-label">Entregados</span>
-          <strong class="box-count">{{ resumenPedidosDashboard().entregados }}</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- Saldo por Cobrar en Pedidos -->
-    <div class="pedidos-summary-bar">
-      <div class="pedidos-summary-item">
-        <span>Pedidos Activos en Curso:</span>
-        <strong>{{ resumenPedidosDashboard().totalActivos }} pedido(s)</strong>
-      </div>
-      <div class="pedidos-summary-item">
-        <span>Total Saldo por Cobrar:</span>
-        <strong style="color: #ea580c; font-size: 1.05rem;">
-          {{ mostrarValores() ? (resumenPedidosDashboard().saldoPorCobrar | currencyMxn) : '••••••' }}
-        </strong>
       </div>
     </div>
   </div>

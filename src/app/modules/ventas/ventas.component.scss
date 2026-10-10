@@ -1,8 +1,5 @@
-.pos-layout {
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 20px;
-  align-items: start;
+.pos-layout, .pos-layout-row {
+  align-items: flex-start;
 }
 
 .search-bar-grid {
@@ -32,9 +29,10 @@
     border: 1.5px solid #cbd5e1;
     border-radius: 8px;
     &:focus {
-      border-color: var(--primary);
+      border-color: #0284c7;
       outline: none;
-      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25);
+      background-color: #f8fafc;
     }
   }
 }
@@ -528,14 +526,29 @@
     margin: 0mm !important;
   }
 
-  .ticket-no-print {
+  :host {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm !important;
+  }
+
+  .ticket-no-print,
+  .pos-screen-content,
+  .pos-layout-row,
+  .pos-main,
+  .pos-checkout,
+  .checkout-card,
+  .card,
+  .row {
     display: none !important;
   }
 
   .ticket-print-only {
     display: block !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    width: 80mm !important;
     height: auto !important;
   }
 
@@ -612,3 +625,132 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Filtros y Búsqueda en Historial de Ventas ───────────────── */
+.filtro-periodo-pills {
+  display: inline-flex;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+  border: 1px solid #e2e8f0;
+
+  .pill-btn {
+    border: none;
+    background: transparent;
+    padding: 4px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #64748b;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: #0f172a;
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    &.active {
+      background: #ffffff;
+      color: var(--primary, #0284c7);
+      font-weight: 700;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+  }
+}
+
+.search-folio-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  .input-search-folio {
+    padding: 6px 28px 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    width: 220px;
+    background: #ffffff;
+    color: #0f172a;
+    transition: all 0.2s;
+
+    &:focus {
+      outline: none;
+      border-color: var(--primary, #0284c7);
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+      width: 260px;
+    }
+  }
+
+  .btn-clear-folio {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px;
+    line-height: 1;
+
+    &:hover {
+      color: #475569;
+    }
+  }
+}
+
+/* ── Botones de Acción en Tabla de Ventas ─────────────────────── */
+.acciones-tabla-ventas {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+
+  .btn-icon-tabla {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.92rem;
+    line-height: 1;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+
+    &.btn-ticket {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #334155;
+
+      &:hover {
+        background: #e2e8f0;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+      }
+    }
+
+    &.btn-devolucion {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+
+      &:hover {
+        background: #fecaca;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(220, 38, 38, 0.15);
+      }
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+
