@@ -122,32 +122,50 @@
 
   &.kpi-total {
     border-left: 4.5px solid #38bdf8;
-    .box-total { background: #e0f2fe; }
+
+    .box-total {
+      background: #e0f2fe;
+    }
   }
 
   &.kpi-pendientes {
     border-left: 4.5px solid #facc15;
-    .box-pendientes { background: #fef9c3; }
+
+    .box-pendientes {
+      background: #fef9c3;
+    }
   }
 
   &.kpi-proceso {
     border-left: 4.5px solid #818cf8;
-    .box-proceso { background: #e0e7ff; }
+
+    .box-proceso {
+      background: #e0e7ff;
+    }
   }
 
   &.kpi-terminados {
     border-left: 4.5px solid #c084fc;
-    .box-terminados { background: #fae8ff; }
+
+    .box-terminados {
+      background: #fae8ff;
+    }
   }
 
   &.kpi-entregados {
     border-left: 4.5px solid #4ade80;
-    .box-entregados { background: #dcfce7; }
+
+    .box-entregados {
+      background: #dcfce7;
+    }
   }
 
   &.kpi-vencidos {
     border-left: 4.5px solid #38bdf8;
-    .box-vencidos { background: #ffedd5; }
+
+    .box-vencidos {
+      background: #ffedd5;
+    }
   }
 
   .kpi-icon-box {
@@ -270,19 +288,29 @@
       margin: 0;
     }
 
-    .btn-reporte {
-      background: #475569;
+    .btn-reporte-excel {
+      background: #16a34a;
       color: white;
-      border: none;
+      border: 1px solid #15803d;
       border-radius: 6px;
       padding: 6px 14px;
       font-size: 0.82rem;
       font-weight: 700;
       cursor: pointer;
-      transition: background 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 
       &:hover {
-        background: #334155;
+        background: #15803d;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
       }
     }
   }
@@ -319,9 +347,10 @@
     }
 
     td {
-      padding: 13px 14px;
+      padding: 12px 14px;
       color: #1e293b;
       vertical-align: middle;
+      white-space: nowrap;
     }
   }
 
@@ -329,6 +358,7 @@
     font-weight: 800;
     color: #0f172a;
     font-size: 0.88rem;
+    white-space: nowrap;
   }
 
   .col-fecha {
@@ -340,10 +370,11 @@
   .col-cliente {
     font-weight: 700;
     color: #1e293b;
+    white-space: nowrap;
   }
 
   .col-esp {
-    max-width: 220px;
+    max-width: 200px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -351,23 +382,31 @@
     font-size: 0.84rem;
   }
 
-  .col-monto strong {
-    font-weight: 800;
-    color: #0f172a;
+  .col-monto {
+    white-space: nowrap;
+
+    strong {
+      font-weight: 800;
+      color: #0f172a;
+      white-space: nowrap;
+    }
   }
 
   .col-anticipo {
     font-weight: 700;
     color: #10b981;
+    white-space: nowrap;
   }
 
   .col-saldo {
     font-weight: 800;
     font-size: 0.9rem;
+    white-space: nowrap;
 
     &.text-green {
       color: #15803d;
     }
+
     &.text-red {
       color: #b91c1c;
     }
@@ -443,61 +482,90 @@
     white-space: nowrap;
     text-align: center;
     width: 1%;
-    padding: 8px 12px;
+    padding: 6px 10px;
   }
 
   .actions-row {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
     white-space: nowrap;
 
     .btn-action {
+      width: 32px;
       height: 32px;
+      min-width: 32px;
       min-height: 32px;
-      padding: 0 10px;
-      border: none;
-      border-radius: 6px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 7px;
       cursor: pointer;
-      font-size: 0.78rem;
-      font-weight: 700;
+      font-size: 0.95rem;
       white-space: nowrap;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
       line-height: 1;
       transition: all 0.15s ease;
       box-sizing: border-box;
       vertical-align: middle;
-      min-width: 82px;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
     }
 
     .btn-edit {
-      background: #4f46e5;
-      color: white;
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: #4338ca;
 
       &:hover {
-        background: #4338ca;
+        background: #4f46e5;
+        border-color: #4338ca;
+        color: #ffffff;
       }
     }
 
     .btn-ticket {
-      background: #0284c7;
-      color: white;
+      background: #e0f2fe;
+      border-color: #bae6fd;
+      color: #0369a1;
 
       &:hover {
-        background: #0369a1;
+        background: #0284c7;
+        border-color: #0369a1;
+        color: #ffffff;
       }
     }
 
     .btn-factura {
-      background: #4f46e5;
-      color: white;
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: #4338ca;
 
       &:hover {
-        background: #4338ca;
+        background: #4f46e5;
+        border-color: #4338ca;
+        color: #ffffff;
+      }
+    }
+
+    .btn-wa {
+      background: #dcfce7;
+      border-color: #86efac;
+      color: #15803d;
+
+      &:hover {
+        background: #16a34a;
+        border-color: #15803d;
+        color: #ffffff;
       }
     }
 
@@ -506,7 +574,10 @@
       color: white;
       min-width: auto;
       padding: 0 8px;
-      &:hover { background: #6366f1; }
+
+      &:hover {
+        background: #6366f1;
+      }
     }
 
     .btn-status-terminar {
@@ -514,7 +585,10 @@
       color: white;
       min-width: auto;
       padding: 0 8px;
-      &:hover { background: #a855f7; }
+
+      &:hover {
+        background: #a855f7;
+      }
     }
 
     .btn-status-liquidar {
@@ -522,15 +596,21 @@
       color: white;
       min-width: auto;
       padding: 0 8px;
-      &:hover { background: #059669; }
+
+      &:hover {
+        background: #059669;
+      }
     }
 
     .btn-delete {
-      background: #ef4444;
-      color: white;
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #b91c1c;
 
       &:hover {
-        background: #dc2626;
+        background: #ef4444;
+        border-color: #dc2626;
+        color: #ffffff;
       }
     }
   }
@@ -872,6 +952,7 @@
     &.text-green {
       color: #10b981;
     }
+
     &.text-red {
       color: #ef4444;
     }
@@ -1030,6 +1111,25 @@
         background: #4338ca;
       }
     }
+
+    .btn-whatsapp {
+      background: #16a34a;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: #15803d;
+      }
+    }
   }
 }
 
@@ -1100,6 +1200,7 @@
         background: #e0f2fe;
         box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.25);
       }
+
       .step-label {
         color: #0284c7;
         font-weight: 800;
@@ -1111,6 +1212,7 @@
         border-color: #10b981;
         background: #dcfce7;
       }
+
       .step-label {
         color: #15803d;
         font-weight: 700;
@@ -1336,22 +1438,40 @@
     &.fin-total {
       background: #f0f9ff;
       border: 1px solid #bae6fd;
-      .fin-label { color: #0369a1; }
-      .fin-val { color: #0f172a; }
+
+      .fin-label {
+        color: #0369a1;
+      }
+
+      .fin-val {
+        color: #0f172a;
+      }
     }
 
     &.fin-pagado {
       background: #dcfce7;
       border: 1px solid #86efac;
-      .fin-label { color: #15803d; }
-      .fin-val { color: #15803d; }
+
+      .fin-label {
+        color: #15803d;
+      }
+
+      .fin-val {
+        color: #15803d;
+      }
     }
 
     &.fin-saldo {
       background: #fee2e2;
       border: 1px solid #fca5a5;
-      .fin-label { color: #b91c1c; }
-      .fin-val { color: #b91c1c; }
+
+      .fin-label {
+        color: #b91c1c;
+      }
+
+      .fin-val {
+        color: #b91c1c;
+      }
     }
   }
 }
@@ -1602,13 +1722,14 @@
 
 /* ── Reglas de Impresión Térmica (80mm) y Hoja Carta ─────────────────── */
 @media print {
+
   .ticket-no-print,
   .factura-no-print {
     display: none !important;
   }
 
   /* Modo Ticket 80mm */
-  body:not(.imprimiendo-carta),
+  body:not(.imprimiendo-carta):not(.imprimiendo-reporte),
   body.imprimiendo-ticket {
     .ticket-print-only {
       display: block !important;
@@ -1711,6 +1832,7 @@
 
   /* Modo Factura Hoja Carta */
   body.imprimiendo-carta {
+
     .ticket-thermal-80mm,
     .ticket-print-only,
     .ticket-modal-overlay {
@@ -1771,6 +1893,137 @@
       }
     }
   }
+
+  /* Modo Reporte Completo de Pedidos */
+  body.imprimiendo-reporte {
+
+    .ticket-thermal-80mm,
+    .ticket-print-only,
+    .ticket-modal-overlay,
+    .factura-modal-overlay,
+    .factura-print-only,
+    .factura-carta-wrapper,
+    .pedidos-topbar,
+    .kpi-cards-grid,
+    .filtros-card,
+    .table-header-bar,
+    .col-acciones,
+    .pedidos-toast-notif,
+    .modal-overlay {
+      display: none !important;
+    }
+
+    .pedidos-container {
+      display: block !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      width: 100% !important;
+    }
+
+    .table-card {
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      width: 100% !important;
+      overflow: visible !important;
+    }
+
+    .table-responsive {
+      overflow: visible !important;
+    }
+
+    .reporte-print-header {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      margin-bottom: 16px !important;
+      padding-bottom: 12px !important;
+      border-bottom: 2px solid #0f172a !important;
+
+      .reporte-biz-name {
+        font-size: 1.35rem !important;
+        font-weight: 900 !important;
+        color: #0f172a !important;
+        margin: 0 0 3px 0 !important;
+      }
+
+      .reporte-doc-title {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        color: #0284c7 !important;
+        letter-spacing: 0.5px !important;
+      }
+
+      .reporte-print-info {
+        font-size: 0.78rem !important;
+        color: #334155 !important;
+        text-align: right !important;
+        line-height: 1.4 !important;
+      }
+    }
+
+    .pedidos-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 8.5pt !important;
+
+      th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        border-bottom: 2px solid #64748b !important;
+        padding: 6px 8px !important;
+      }
+
+      td {
+        padding: 6px 8px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        color: #0f172a !important;
+      }
+    }
+
+    .reporte-print-footer {
+      display: flex !important;
+      justify-content: flex-end !important;
+      margin-top: 14px !important;
+      padding-top: 12px !important;
+      border-top: 2px solid #0f172a !important;
+
+      .reporte-totales-box {
+        display: flex !important;
+        gap: 24px !important;
+
+        .tot-item {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: flex-end !important;
+
+          .tot-lbl {
+            font-size: 0.72rem !important;
+            font-weight: 800 !important;
+            color: #64748b !important;
+          }
+
+          .tot-val {
+            font-size: 1.05rem !important;
+            font-weight: 900 !important;
+            color: #0f172a !important;
+
+            &.text-red {
+              color: #b91c1c !important;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/* Ocultar elementos de impresión de reporte en pantalla normal */
+.reporte-print-header,
+.reporte-print-footer {
+  display: none;
 }
 
 /* ── Estilos de Vista Previa Modal Simulación de Factura (Hoja Carta) ── */
@@ -2013,6 +2266,7 @@
             .lbl {
               color: #1d4ed8;
             }
+
             .val {
               color: #1e40af;
             }
@@ -2136,12 +2390,34 @@
         letter-spacing: 0.4px;
         border: none;
 
-        &.th-num { width: 28px; text-align: center; }
-        &.th-cant { width: 42px; text-align: center; }
-        &.th-code { width: 85px; text-align: left; }
-        &.th-desc { text-align: left; }
-        &.th-precio { width: 90px; text-align: right; }
-        &.th-total { width: 90px; text-align: right; }
+        &.th-num {
+          width: 28px;
+          text-align: center;
+        }
+
+        &.th-cant {
+          width: 42px;
+          text-align: center;
+        }
+
+        &.th-code {
+          width: 85px;
+          text-align: left;
+        }
+
+        &.th-desc {
+          text-align: left;
+        }
+
+        &.th-precio {
+          width: 90px;
+          text-align: right;
+        }
+
+        &.th-total {
+          width: 90px;
+          text-align: right;
+        }
       }
     }
 
@@ -2156,21 +2432,61 @@
         padding: 5px 7px;
         vertical-align: middle;
 
-        &.td-num { text-align: center; color: #64748b; font-weight: 600; }
-        &.td-cant { text-align: center; font-weight: 700; }
-        &.td-code { font-family: monospace; font-size: 7.8pt; color: #475569; }
-        &.td-desc {
-          strong { color: #0f172a; display: block; font-size: 8.8pt; }
-          .sub-item-tipo { font-size: 7.2pt; color: #64748b; font-weight: 500; }
-          .desc-extra { font-size: 7.8pt; color: #475569; margin-top: 1px; }
+        &.td-num {
+          text-align: center;
+          color: #64748b;
+          font-weight: 600;
         }
-        &.td-precio { text-align: right; font-weight: 600; }
-        &.td-total { text-align: right; font-weight: 800; color: #0f172a; }
+
+        &.td-cant {
+          text-align: center;
+          font-weight: 700;
+        }
+
+        &.td-code {
+          font-family: monospace;
+          font-size: 7.8pt;
+          color: #475569;
+        }
+
+        &.td-desc {
+          strong {
+            color: #0f172a;
+            display: block;
+            font-size: 8.8pt;
+          }
+
+          .sub-item-tipo {
+            font-size: 7.2pt;
+            color: #64748b;
+            font-weight: 500;
+          }
+
+          .desc-extra {
+            font-size: 7.8pt;
+            color: #475569;
+            margin-top: 1px;
+          }
+        }
+
+        &.td-precio {
+          text-align: right;
+          font-weight: 600;
+        }
+
+        &.td-total {
+          text-align: right;
+          font-weight: 800;
+          color: #0f172a;
+        }
       }
 
       &.row-mano-obra {
         background: #faf5ff;
-        td.td-desc strong { color: #6b21a8; }
+
+        td.td-desc strong {
+          color: #6b21a8;
+        }
       }
     }
   }
@@ -2318,8 +2634,14 @@
           font-size: 8.2pt;
           border-bottom: 1px solid #f1f5f9;
 
-          span { color: #64748b; font-weight: 600; }
-          strong { color: #1e293b; }
+          span {
+            color: #64748b;
+            font-weight: 600;
+          }
+
+          strong {
+            color: #1e293b;
+          }
 
           &.grand-total {
             background: #0f172a;
@@ -2328,13 +2650,21 @@
             font-weight: 900;
             padding: 7px 9px;
 
-            span { color: #cbd5e1; }
-            .total-monto { color: #ffffff; }
+            span {
+              color: #cbd5e1;
+            }
+
+            .total-monto {
+              color: #ffffff;
+            }
           }
 
           &.pagos-sum {
             background: #f0fdf4;
-            .text-green { color: #15803d; }
+
+            .text-green {
+              color: #15803d;
+            }
           }
         }
 
@@ -2371,8 +2701,13 @@
             background: #ecfdf5;
             border-top-color: #10b981;
 
-            .saldo-title { color: #065f46; }
-            .saldo-amount { color: #047857; }
+            .saldo-title {
+              color: #065f46;
+            }
+
+            .saldo-amount {
+              color: #047857;
+            }
           }
         }
       }
@@ -2582,8 +2917,8 @@
   }
 }
 
-.auto-save-cliente-hint {
-  margin-top: -6px;
+.auto-send-whatsapp-hint {
+  margin-top: -4px;
   margin-bottom: 10px;
   padding: 8px 12px;
   background: #f0fdf4;
@@ -2595,7 +2930,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     color: #166534;
     cursor: pointer;
     margin: 0;
@@ -2609,4 +2944,330 @@
   }
 }
 
+.btn-whatsapp {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
 
+  &:hover:not(:disabled) {
+    background: #15803d !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
+  }
+
+  &:disabled {
+    opacity: 0.55 !important;
+    cursor: not-allowed !important;
+  }
+}
+
+.btn-wa-mini {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #bbf7d0;
+    color: #166534;
+  }
+}
+
+/* ── Modal de Éxito / Confirmación Post-Creación ────────────────── */
+.modal-exito-pedido {
+  max-width: 540px !important;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+
+  .exito-header {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+    border-bottom: 1.5px solid #bbf7d0;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .exito-header-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .exito-badge-icon {
+        font-size: 2.2rem;
+        line-height: 1;
+      }
+
+      .modal-title-custom {
+        color: #166534;
+        font-size: 1.22rem;
+        font-weight: 800;
+        margin: 0;
+      }
+
+      .modal-subtitle {
+        color: #15803d;
+        font-size: 0.85rem;
+        margin: 2px 0 0;
+      }
+    }
+  }
+
+  .exito-body {
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .exito-summary-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .exito-summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.88rem;
+
+      .lbl {
+        color: #64748b;
+        font-weight: 500;
+      }
+
+      .val {
+        color: #0f172a;
+        font-weight: 700;
+      }
+    }
+  }
+
+  .exito-whatsapp-box {
+    background: #f0fdf4;
+    border: 1.5px solid #86efac;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .wa-box-header {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+
+      .wa-icon {
+        font-size: 1.7rem;
+        line-height: 1;
+      }
+
+      .wa-title {
+        display: block;
+        color: #166534;
+        font-size: 0.96rem;
+        font-weight: 800;
+      }
+
+      .wa-desc {
+        color: #15803d;
+        font-size: 0.8rem;
+        margin: 2px 0 0;
+        line-height: 1.3;
+      }
+    }
+
+    .wa-actions-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+
+      .btn-wa-big {
+        flex: 1;
+        min-width: 200px;
+        background: #16a34a;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+        transition: all 0.2s ease;
+
+        &:hover {
+          background: #15803d;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35);
+        }
+
+        .btn-wa-icon {
+          font-size: 1.6rem;
+          line-height: 1;
+        }
+
+        .btn-wa-text {
+          display: flex;
+          flex-direction: column;
+          text-align: left;
+
+          strong {
+            font-size: 0.95rem;
+            font-weight: 800;
+          }
+
+          small {
+            font-size: 0.76rem;
+            opacity: 0.92;
+            font-weight: 500;
+          }
+        }
+      }
+
+      .btn-copiar-link {
+        background: #ffffff;
+        color: #334155;
+        border: 1.5px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.86rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          background: #f8fafc;
+          border-color: #94a3b8;
+        }
+
+        &.btn-copiado {
+          background: #dcfce7;
+          color: #166534;
+          border-color: #86efac;
+        }
+      }
+    }
+  }
+
+  .exito-print-options {
+    border-top: 1px dashed #e2e8f0;
+    padding-top: 12px;
+
+    .print-options-title {
+      display: block;
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .print-btns-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+
+      .btn-opt-ticket {
+        flex: 1;
+        min-width: 150px;
+        background: #0284c7;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #0369a1;
+        }
+      }
+
+      .btn-opt-carta {
+        flex: 1;
+        min-width: 150px;
+        background: #4f46e5;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: #4338ca;
+        }
+      }
+    }
+  }
+}
+
+/* ── Toast de Notificación Flotante ────────────────────────── */
+.pedidos-toast-notif {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  z-index: 999999;
+  animation: toastFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #334155;
+  pointer-events: none;
+
+  .toast-icon {
+    font-size: 1.15rem;
+  }
+
+  .toast-text {
+    letter-spacing: 0.2px;
+  }
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

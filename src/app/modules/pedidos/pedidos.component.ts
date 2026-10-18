@@ -60,6 +60,20 @@ export class PedidosComponent implements AfterViewInit {
   public cancelandoPedido = signal<boolean>(false);
   public autoImprimirTicket = signal<boolean>(localStorage.getItem('pos_auto_imprimir_ticket') !== 'false');
   public mostrarQrSeguimiento = signal<boolean>(localStorage.getItem('pos_mostrar_qr_pedidos') !== 'false');
+  public modalExitoNuevoAbierto = signal<boolean>(false);
+  public pedidoRecienCreado = signal<PedidoPersonalizado | null>(null);
+  public enviarWhatsappAlCrear = signal<boolean>(localStorage.getItem('pos_enviar_wa_pedido') !== 'false');
+  public copiadoExito = signal<boolean>(false);
+  public mensajeToast = signal<string | null>(null);
+
+  mostrarToast(mensaje: string): void {
+    this.mensajeToast.set(mensaje);
+    setTimeout(() => {
+      if (this.mensajeToast() === mensaje) {
+        this.mensajeToast.set(null);
+      }
+    }, 3200);
+  }
 
   // Formulario nuevo
   public nuevoCliente = '';
@@ -257,6 +271,29 @@ export class PedidosComponent implements AfterViewInit {
       const fechaB = b.fechaRegistro || '';
       return fechaB.localeCompare(fechaA);
     });
+  });
+
+  public fechaActualReporte = computed(() => {
+    const ahora = new Date();
+    return ahora.toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  });
+
+  public montoTotalReporte = computed(() => {
+    return this.pedidosFiltrados().reduce((acc, p) => acc + (p.totalAcordado || 0), 0);
+  });
+
+  public anticipoTotalReporte = computed(() => {
+    return this.pedidosFiltrados().reduce((acc, p) => acc + (p.anticipo || 0), 0);
+  });
+
+  public saldoTotalReporte = computed(() => {
+    return this.pedidosFiltrados().reduce((acc, p) => acc + (p.saldoRestante || 0), 0);
   });
 
   // Helpers de formato
@@ -973,7 +1010,7 @@ export class PedidosComponent implements AfterViewInit {
     } else if (clienteExistente) {
       idClienteFinal = clienteExistente.id;
       if (!clienteExistente.telefono && telLimpio) {
-        this.clientesService.actualizarCliente(clienteExistente.id, { telefono: telLimpio }).catch(() => {});
+        this.clientesService.actualizarCliente(clienteExistente.id, { telefono: telLimpio }).catch(() => { });
       }
     }
 
@@ -1000,11 +1037,131 @@ export class PedidosComponent implements AfterViewInit {
 
     this.modalNuevoAbierto.set(false);
     this.pedidoSeleccionado.set(nuevo);
+    this.pedidoRecienCreado.set(nuevo);
+    this.modalExitoNuevoAbierto.set(true);
 
     if (this.autoImprimirTicket()) {
       this.imprimirTicket(nuevo);
     } else {
       this.modalTicketAbierto.set(false);
+    }
+
+    if (this.enviarWhatsappAlCrear() && nuevo.clienteTelefono && nuevo.clienteTelefono.trim().length >= 7) {
+      this.enviarWhatsAppSeguimiento(nuevo);
+    }
+  }
+
+  toggleEnviarWhatsapp(): void {
+    const nuevo = !this.enviarWhatsappAlCrear();
+    this.enviarWhatsappAlCrear.set(nuevo);
+    localStorage.setItem('pos_enviar_wa_pedido', nuevo ? 'true' : 'false');
+  }
+
+  cerrarModalExito(): void {
+    this.modalExitoNuevoAbierto.set(false);
+    this.pedidoRecienCreado.set(null);
+    this.copiadoExito.set(false);
+  }
+
+  getTrackingUrl(pedido: PedidoPersonalizado | null): string {
+    if (!pedido) return '';
+    try {
+      const origin = window.location.origin;
+      if (!pedido.trackingToken) {
+        pedido.trackingToken = generarTrackingToken();
+        this.pedidosService.sincronizarPedidoPublico(pedido).catch(() => { });
+      }
+      return `${origin}/rastreo-pedido/${encodeURIComponent(pedido.trackingToken)}`;
+    } catch {
+      return '';
+    }
+  }
+
+  generarMensajeWhatsApp(pedido: PedidoPersonalizado): string {
+    const config = this.configService.config();
+    const negocio = config?.businessName || 'nuestro negocio';
+    const link = this.getTrackingUrl(pedido);
+
+    let saldoText = '';
+    if ((pedido.saldoRestante || 0) > 0) {
+      saldoText = `*Saldo pendiente:* $${(pedido.saldoRestante || 0).toFixed(2)}\n`;
+    } else {
+      saldoText = `*Saldo:* Totalmente liquidado\n`;
+    }
+
+    let entregaText = '';
+    if (pedido.fechaEntrega) {
+      entregaText = `*Fecha estimada de entrega:* ${this.formatearFechaEntregaConHora(pedido.fechaEntrega)}\n`;
+    }
+
+    let espText = '';
+    if (pedido.especificaciones && pedido.especificaciones.trim()) {
+      const espLimpia = pedido.especificaciones.trim();
+      const corta = espLimpia.length > 90 ? `${espLimpia.slice(0, 87)}...` : espLimpia;
+      espText = `*Detalle:* ${corta}\n`;
+    }
+
+    return (
+      `Hola *${pedido.clienteNombre}*, gracias por tu preferencia en *${negocio}*.\n\n` +
+      `Tu pedido con folio *#${pedido.id}* ha sido registrado con exito.\n\n` +
+      espText +
+      `*Total:* $${(pedido.totalAcordado || 0).toFixed(2)}\n` +
+      `*Anticipo:* $${(pedido.anticipo || 0).toFixed(2)}\n` +
+      saldoText +
+      entregaText +
+      `\nPuedes consultar el avance y estado de tu pedido en vivo en el siguiente enlace:\n` +
+      `${link}\n\n` +
+      `Estamos a tu servicio.`
+    );
+  }
+
+  async enviarWhatsAppSeguimiento(pedido: PedidoPersonalizado): Promise<void> {
+    if (!pedido) return;
+    const mensaje = this.generarMensajeWhatsApp(pedido);
+
+    // Siempre copiar el mensaje completo al portapapeles
+    try {
+      await navigator.clipboard.writeText(mensaje);
+      this.copiadoExito.set(true);
+      setTimeout(() => this.copiadoExito.set(false), 3000);
+    } catch {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = mensaje;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        this.copiadoExito.set(true);
+        setTimeout(() => this.copiadoExito.set(false), 3000);
+      } catch { }
+    }
+
+    const tel = (pedido.clienteTelefono || '').trim();
+    const limpio = tel.replace(/\D/g, '');
+
+    if (limpio && limpio.length >= 7) {
+      const conCodigo = limpio.length === 10 ? `52${limpio}` : limpio;
+      const waUrl = `https://wa.me/${conCodigo}?text=${encodeURIComponent(mensaje)}`;
+      window.open(waUrl, '_blank');
+      this.mostrarToast('Mensaje copiado y abriendo WhatsApp...');
+    } else {
+      this.mostrarToast('Mensaje de seguimiento copiado al portapapeles');
+    }
+  }
+
+  async copiarEnlaceSeguimiento(pedido: PedidoPersonalizado): Promise<void> {
+    const url = this.getTrackingUrl(pedido);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      this.copiadoExito.set(true);
+      this.mostrarToast('Enlace de seguimiento copiado al portapapeles');
+      setTimeout(() => this.copiadoExito.set(false), 3000);
+    } catch {
+      prompt('Copia este enlace de seguimiento:', url);
     }
   }
 
@@ -1023,14 +1180,8 @@ export class PedidosComponent implements AfterViewInit {
   getQrDataUrl(pedido: PedidoPersonalizado | null): string {
     if (!pedido) return '';
     try {
-      const origin = window.location.origin;
-      if (!pedido.trackingToken) {
-        pedido.trackingToken = generarTrackingToken();
-        // Sincronizar en segundo plano con su nuevo token único
-        this.pedidosService.sincronizarPedidoPublico(pedido).catch(() => {});
-      }
-      // URL ultra compacta y segura: no expone folios consecutivos ni identificadores de base de datos
-      const url = `${origin}/rastreo-pedido/${encodeURIComponent(pedido.trackingToken)}`;
+      const url = this.getTrackingUrl(pedido);
+      if (!url) return '';
       return generateQRCodeDataUrl(url, { size: 180, margin: 2, errorCorrectionLevel: 'L' });
     } catch (e) {
       console.warn('No se pudo generar QR de rastreo:', e);
@@ -1385,8 +1536,124 @@ export class PedidosComponent implements AfterViewInit {
     }
   }
 
+  exportarReporteExcel(): void {
+    const lista = this.pedidosFiltrados();
+    if (lista.length === 0) {
+      alert('No hay pedidos en la lista actual para exportar a Excel.');
+      return;
+    }
+
+    const config = this.configService.config();
+    const negocio = config?.businessName || 'Sistema de Ventas';
+    const ahora = new Date();
+    const fechaHoraStr = ahora.toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const escaparCSV = (valor: any): string => {
+      if (valor === null || valor === undefined) return '""';
+      const str = String(valor).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    let csv = '\uFEFF'; // BOM UTF-8 para apertura directa en Microsoft Excel
+
+    // Metadatos superiores
+    csv += `${escaparCSV('REPORTE GENERAL DE PEDIDOS')},${escaparCSV(negocio)}\n`;
+    csv += `${escaparCSV('Fecha de emisión:')},${escaparCSV(fechaHoraStr)}\n`;
+    csv += `${escaparCSV('Cantidad de pedidos:')},${escaparCSV(lista.length + ' pedido(s)')}\n`;
+    if (this.filtroEstado() !== 'TODOS') {
+      csv += `${escaparCSV('Filtro de estado:')},${escaparCSV(this.filtroEstado())}\n`;
+    }
+    if (this.filtroDesde() || this.filtroHasta()) {
+      csv += `${escaparCSV('Rango de fechas:')},${escaparCSV((this.filtroDesde() || 'Inicio') + ' al ' + (this.filtroHasta() || 'Hoy'))}\n`;
+    }
+    csv += '\n';
+
+    // Encabezados de columnas
+    const headers = [
+      'Folio',
+      'Fecha Registro',
+      'Fecha Entrega',
+      'Cliente',
+      'Teléfono',
+      'Especificaciones / Detalle',
+      'Monto Total ($)',
+      'Anticipo / Abonos ($)',
+      'Saldo Pendiente ($)',
+      'Estado'
+    ];
+    csv += headers.map(escaparCSV).join(',') + '\n';
+
+    // Filas de pedidos
+    let sumaTotal = 0;
+    let sumaAnticipos = 0;
+    let sumaSaldo = 0;
+
+    for (const p of lista) {
+      const tot = p.totalAcordado || 0;
+      const ant = p.anticipo || 0;
+      const sal = p.saldoRestante || 0;
+      sumaTotal += tot;
+      sumaAnticipos += ant;
+      sumaSaldo += sal;
+
+      const fRegistro = this.formatearFecha(p.fechaRegistro);
+      const fEntrega = p.fechaEntrega ? this.formatearFechaEntregaConHora(p.fechaEntrega) : 'Sin fecha';
+      const detalle = (p.materiasPrimas || []).map((m) => `${m.cantidad}x ${m.nombre}`).join(' | ') || p.especificaciones || 'Sin detalle';
+
+      const row = [
+        p.id,
+        fRegistro,
+        fEntrega,
+        p.clienteNombre,
+        p.clienteTelefono || 'Sin teléfono',
+        detalle,
+        tot.toFixed(2),
+        ant.toFixed(2),
+        sal.toFixed(2),
+        this.getEstadoLabel(p)
+      ];
+
+      csv += row.map(escaparCSV).join(',') + '\n';
+    }
+
+    // Fila resumen de totales
+    csv += '\n';
+    csv += [
+      escaparCSV(`TOTALES (${lista.length} PEDIDOS)`),
+      '""',
+      '""',
+      '""',
+      '""',
+      '""',
+      escaparCSV(sumaTotal.toFixed(2)),
+      escaparCSV(sumaAnticipos.toFixed(2)),
+      escaparCSV(sumaSaldo.toFixed(2)),
+      '""'
+    ].join(',') + '\n';
+
+    // Descargar archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const fechaISO = ahora.toISOString().split('T')[0];
+    link.download = `Reporte_Pedidos_${fechaISO}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.mostrarToast('Reporte de pedidos exportado a Excel');
+  }
+
   generarReporteCompleto(): void {
-    window.print();
+    this.exportarReporteExcel();
   }
 
   // Modal de Previsualización y Consolidación de Abonos en Ventas

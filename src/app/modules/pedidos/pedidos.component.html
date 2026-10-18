@@ -12,8 +12,7 @@
         [title]="autoImprimirTicket() ? 'Impresión automática ACTIVADA (clic para desactivar)' : 'Impresión automática DESACTIVADA (clic para activar)'">
         <span>{{ autoImprimirTicket() ? '🖨️ Ticket: SÍ' : '🚫 Ticket: NO' }}</span>
       </button>
-      <button type="button" class="btn-toggle-print" [class.active]="mostrarQrSeguimiento()"
-        (click)="toggleMostrarQr()"
+      <button type="button" class="btn-toggle-print" [class.active]="mostrarQrSeguimiento()" (click)="toggleMostrarQr()"
         [title]="mostrarQrSeguimiento() ? 'Código QR de seguimiento en comprobante ACTIVADO (clic para desactivar)' : 'Código QR de seguimiento DESACTIVADO (clic para activar)'">
         <span>{{ mostrarQrSeguimiento() ? '📱 QR Rastreo: SÍ' : '🚫 QR Rastreo: NO' }}</span>
       </button>
@@ -124,12 +123,13 @@
   <div class="table-card">
     <div class="table-header-bar">
       <h3 class="table-title">Listado de Pedidos Personalizados</h3>
-      <button type="button" class="btn-reporte" (click)="generarReporteCompleto()">
-        Generar Reporte Completo
+      <button type="button" class="btn-reporte-excel" (click)="generarReporteCompleto()" title="Descargar lista de pedidos en archivo de Excel (.csv)">
+        <span>📊 Descargar Reporte Excel</span>
       </button>
     </div>
 
     <div class="table-responsive">
+
       <table class="pedidos-table">
         <thead>
           <tr>
@@ -169,16 +169,21 @@
               <div class="actions-row">
                 <button type="button" class="btn-action btn-factura"
                   (click)="abrirModalFacturaCarta(ped); $event.stopPropagation()"
-                  title="Ver / Imprimir Nota de Venta en Hoja Carta">
-                  📄 Nota
+                  title="Ver / Imprimir Nota de Venta (Carta)">
+                  📄
                 </button>
                 <button type="button" class="btn-action btn-ticket" (click)="verTicket(ped); $event.stopPropagation()"
                   title="Ver / Imprimir Ticket (80mm)">
-                  🧾 Ticket
+                  🧾
+                </button>
+                <button type="button" class="btn-action btn-wa"
+                  (click)="enviarWhatsAppSeguimiento(ped); $event.stopPropagation()"
+                  title="Enviar enlace de seguimiento por WhatsApp">
+                  💬
                 </button>
                 <button type="button" class="btn-action btn-delete" (click)="eliminar(ped.id); $event.stopPropagation()"
                   title="Eliminar Registro de Pedido">
-                  🗑️ Eliminar
+                  🗑️
                 </button>
               </div>
             </td>
@@ -274,6 +279,15 @@
         </label>
       </div>
       }
+
+      <!-- Opción para enviar link de seguimiento por WhatsApp al guardar -->
+      <div class="auto-send-whatsapp-hint" style="margin-top: 6px;">
+        <label class="checkbox-auto-save"
+          style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #15803d; font-weight: 600; font-size: 0.85rem;">
+          <input type="checkbox" [ngModel]="enviarWhatsappAlCrear()" (ngModelChange)="toggleEnviarWhatsapp()" />
+          <span>💬 Enviar enlace de seguimiento por WhatsApp al registrar el pedido</span>
+        </label>
+      </div>
 
       <!-- Fila 2: Especificaciones -->
       <div class="form-group" style="margin-top: 10px;">
@@ -464,6 +478,101 @@
 </div>
 }
 
+<!-- Modal Confirmación y Envío de WhatsApp Post-Creación -->
+@if (modalExitoNuevoAbierto() && pedidoRecienCreado(); as p) {
+<div class="modal-overlay">
+  <div class="modal-card modal-exito-pedido">
+    <div class="modal-header exito-header">
+      <div class="exito-header-title-group">
+        <span class="exito-badge-icon">🎉</span>
+        <div>
+          <h3 class="modal-title-custom">¡Pedido Registrado con Éxito!</h3>
+          <p class="modal-subtitle">Folio <strong>#{{ p.id }}</strong> • Cliente: <strong>{{ p.clienteNombre }}</strong>
+          </p>
+        </div>
+      </div>
+      <button type="button" class="modal-close" (click)="cerrarModalExito()">&times;</button>
+    </div>
+
+    <div class="modal-body exito-body">
+      <!-- Tarjeta resumen rápido -->
+      <div class="exito-summary-card">
+        <div class="exito-summary-row">
+          <span class="lbl">Cliente:</span>
+          <strong class="val">{{ p.clienteNombre }}</strong>
+        </div>
+        <div class="exito-summary-row">
+          <span class="lbl">Teléfono / WhatsApp:</span>
+          <strong class="val">{{ p.clienteTelefono || 'No registrado' }}</strong>
+        </div>
+        <div class="exito-summary-row">
+          <span class="lbl">Total Acordado:</span>
+          <strong class="val">{{ p.totalAcordado | currencyMxn }}</strong>
+        </div>
+        <div class="exito-summary-row">
+          <span class="lbl">Anticipo Abonado:</span>
+          <strong class="val text-green">{{ p.anticipo | currencyMxn }}</strong>
+        </div>
+        <div class="exito-summary-row">
+          <span class="lbl">Saldo Pendiente:</span>
+          <strong class="val" [class.text-red]="(p.saldoRestante || 0) > 0"
+            [class.text-green]="(p.saldoRestante || 0) <= 0">
+            {{ (p.saldoRestante || 0) | currencyMxn }}
+          </strong>
+        </div>
+      </div>
+
+      <!-- Sección Principal: Enviar Seguimiento por WhatsApp -->
+      <div class="exito-whatsapp-box">
+        <div class="wa-box-header">
+          <span class="wa-icon">📱</span>
+          <div>
+            <strong class="wa-title">Seguimiento en Vivo para el Cliente</strong>
+            <p class="wa-desc">Envía el enlace al cliente para que consulte desde su celular el estado, fotos,
+              materiales y saldo de su pedido en tiempo real.</p>
+          </div>
+        </div>
+
+        <div class="wa-actions-group">
+          <button type="button" class="btn-wa-big" (click)="enviarWhatsAppSeguimiento(p)">
+            <span class="btn-wa-icon">💬</span>
+            <div class="btn-wa-text">
+              <strong>{{ p.clienteTelefono ? 'Enviar por WhatsApp' : 'Copiar Mensaje de WhatsApp' }}</strong>
+              <small>{{ p.clienteTelefono ? 'Abre WhatsApp directo a ' + p.clienteTelefono + ' y copia el texto' :
+                'Copia el mensaje al portapapeles para pegarlo o enviarlo' }}</small>
+            </div>
+          </button>
+
+          <button type="button" class="btn-copiar-link" (click)="copiarEnlaceSeguimiento(p)"
+            [class.btn-copiado]="copiadoExito()">
+            {{ copiadoExito() ? '✓ ¡Copiado!' : '📋 Copiar Solo Link' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Opciones de Impresión del Pedido -->
+      <div class="exito-print-options">
+        <span class="print-options-title">COMPROBANTES DE VENTA:</span>
+        <div class="print-btns-row">
+          <button type="button" class="btn-opt-ticket" (click)="imprimirTicket(p)">
+            🧾 Imprimir Ticket (80mm)
+          </button>
+          <button type="button" class="btn-opt-carta" (click)="abrirModalFacturaCarta(p); cerrarModalExito()">
+            📄 Ver Nota de Venta (Carta)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" (click)="cerrarModalExito()">
+        ✕ Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+}
+
 <!-- Ticket / Comprobante de Pedido (Optimizado para 80mm) -->
 @if (pedidoSeleccionado()) {
 @if (modalTicketAbierto()) {
@@ -482,6 +591,10 @@
       <button type="button" class="btn btn-secondary" (click)="cerrarModalTicket()">✕ Cerrar</button>
       <button type="button" class="btn btn-outline" (click)="cambiarAFacturaCarta()">📄 Ver Nota de Venta
         (Carta)</button>
+      <button type="button" class="btn btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoSeleccionado()!)"
+        title="Enviar enlace de seguimiento por WhatsApp al cliente">
+        💬 Enviar WhatsApp
+      </button>
       <button type="button" class="btn btn-primary" (click)="imprimirTicket()">🖨️ Imprimir Ticket (80mm)</button>
     </div>
   </div>
@@ -647,6 +760,10 @@
     <div class="modal-actions factura-no-print">
       <button type="button" class="btn btn-secondary" (click)="cerrarModalFacturaCarta()">✕ Cerrar</button>
       <button type="button" class="btn btn-outline" (click)="cambiarATicket()">🧾 Cambiar a Ticket 80mm</button>
+      <button type="button" class="btn btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoSeleccionado()!)"
+        title="Enviar enlace de seguimiento por WhatsApp al cliente">
+        💬 Enviar WhatsApp
+      </button>
       <button type="button" class="btn btn-primary btn-print-sheet-action" (click)="imprimirFacturaCarta()">
         🖨️ Imprimir Nota de Venta
       </button>
@@ -883,7 +1000,8 @@
           </div>
           <div class="factura-qr-info">
             <strong class="factura-qr-title">📱 Seguimiento en Línea en Tiempo Real</strong>
-            <p class="factura-qr-desc">Escanea este código QR con tu celular para consultar el avance del trabajo, especificaciones y saldo de tu pedido en vivo.</p>
+            <p class="factura-qr-desc">Escanea este código QR con tu celular para consultar el avance del trabajo,
+              especificaciones y saldo de tu pedido en vivo.</p>
           </div>
         </div>
         }
@@ -1101,6 +1219,10 @@
           <button type="button" class="btn-editar-pedido" (click)="abrirModalEditar()">
             ✏️ Editar / Corregir Pedido
           </button>
+          <button type="button" class="btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoDetalle()!)"
+            title="Enviar enlace de seguimiento en vivo por WhatsApp al cliente">
+            💬 WhatsApp Rastreo
+          </button>
           <button type="button" class="btn-imprimir-nota" (click)="imprimirTicketDesdeDetalle()">
             🧾 Ticket (80mm)
           </button>
@@ -1200,7 +1322,15 @@
           </div>
           <div class="info-block">
             <span class="info-label">TELÉFONO</span>
-            <span class="info-val">{{ pedidoDetalle()?.clienteTelefono || 'No registrado' }}</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="info-val">{{ pedidoDetalle()?.clienteTelefono || 'No registrado' }}</span>
+              @if (pedidoDetalle()?.clienteTelefono) {
+              <button type="button" class="btn-wa-mini" (click)="enviarWhatsAppSeguimiento(pedidoDetalle()!)"
+                title="Enviar link de seguimiento en vivo por WhatsApp">
+                💬 Enviar Link
+              </button>
+              }
+            </div>
           </div>
           <div class="info-block">
             <span class="info-label">ENTREGA ESTIMADA</span>
@@ -1721,5 +1851,13 @@
       }
     </div>
   </div>
+</div>
+}
+
+<!-- Notificación Flotante Toast para Copiado / Envíos -->
+@if (mensajeToast()) {
+<div class="pedidos-toast-notif">
+  <span class="toast-icon">📋</span>
+  <span class="toast-text">{{ mensajeToast() }}</span>
 </div>
 }
