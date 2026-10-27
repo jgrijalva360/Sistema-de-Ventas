@@ -99,22 +99,29 @@ export class VentasService {
     if (!prod) return false;
 
     const current = [...this.carrito()];
-    const idx = current.findIndex((item) => item.codigo === prod.codigo);
     const precioUnitario = typeof precioManual === 'number' ? precioManual : prod.precioVenta;
 
-    if (idx >= 0) {
-      current[idx].cantidad += cantidad;
-      current[idx].subtotal = current[idx].cantidad * current[idx].precioUnitario;
-    } else {
-      current.push({
-        codigo: prod.codigo,
-        nombre: prod.nombre,
-        cantidad,
-        precioUnitario,
-        subtotal: cantidad * precioUnitario,
-        precioVariable: prod.precioVariable
-      });
+    // Si NO es precio variable, se agrupa con el ítem existente si ya está en el carrito
+    if (!prod.precioVariable) {
+      const idx = current.findIndex((item) => item.codigo === prod.codigo && !item.precioVariable);
+      if (idx >= 0) {
+        current[idx].cantidad += cantidad;
+        current[idx].subtotal = current[idx].cantidad * current[idx].precioUnitario;
+        this.carrito.set(current);
+        this.ajustarPagoEfectivoPorDefecto();
+        return true;
+      }
     }
+
+    // Para productos con precio variable (o nuevos productos), se agrega como un renglón independiente
+    current.push({
+      codigo: prod.codigo,
+      nombre: prod.nombre,
+      cantidad,
+      precioUnitario,
+      subtotal: cantidad * precioUnitario,
+      precioVariable: prod.precioVariable
+    });
 
     this.carrito.set(current);
     this.ajustarPagoEfectivoPorDefecto();
@@ -132,6 +139,16 @@ export class VentasService {
     if (current[index] && nuevaCantidad > 0) {
       current[index].cantidad = nuevaCantidad;
       current[index].subtotal = nuevaCantidad * current[index].precioUnitario;
+      this.carrito.set(current);
+      this.ajustarPagoEfectivoPorDefecto();
+    }
+  }
+
+  actualizarPrecioUnitarioItem(index: number, nuevoPrecio: number): void {
+    const current = [...this.carrito()];
+    if (current[index] && nuevoPrecio > 0) {
+      current[index].precioUnitario = nuevoPrecio;
+      current[index].subtotal = current[index].cantidad * nuevoPrecio;
       this.carrito.set(current);
       this.ajustarPagoEfectivoPorDefecto();
     }
@@ -175,12 +192,12 @@ export class VentasService {
       const desgloseFifo = await this.productosService.descontarStockVenta(items, sucursal.id);
 
       // Asignar los costos FIFO a cada ítem del ticket
-      const itemsConFifo = items.map((it) => {
-        const infoFifo = desgloseFifo.find((d) => d.codigo.toLowerCase() === it.codigo.toLowerCase());
+      const itemsConFifo = items.map((it, idx) => {
+        const infoFifo = desgloseFifo[idx] || desgloseFifo.find((d) => d.codigo.toLowerCase() === it.codigo.toLowerCase());
         return {
           ...it,
           costoUnitarioFifo: infoFifo ? infoFifo.costoUnitarioFifo : 0,
-          costoTotalFifo: infoFifo ? infoFifo.costoTotalFifo : 0
+          costoTotalFifo: infoFifo ? (infoFifo.costoUnitarioFifo * it.cantidad) : 0
         };
       });
 
@@ -398,11 +415,84 @@ export class VentasService {
         sucursalId,
         sucursalNombre
       });
+      return nuevaVenta;
     } catch (e) {
       console.warn('Error al persistir ingreso en ventas:', e);
+      return nuevaVenta;
+    }
+  }
+
+  // ── Anular o Eliminar Ventas Asociadas a un Pedido ─────────
+  async anularVentasDePedido(
+    pedidoId: string,
+    motivo: string = 'Pedido eliminado',
+    eliminarDefinitivamente = false
+  ): Promise<number> {
+    const current = [...this.ventasSignal()];
+    const cleanId = (pedidoId || '').trim().toUpperCase();
+    if (!cleanId) return 0;
+
+    let afectadas = 0;
+    let nuevasVentas: Venta[] = [];
+
+    const perteneceAlPedido = (v: Venta): boolean => {
+      if (v.pedidoId && v.pedidoId.trim().toUpperCase() === cleanId) return true;
+      if (v.id && (v.id.toUpperCase().includes(`V-PED-${cleanId}-`) || v.id.toUpperCase() === `V-PED-${cleanId}`)) return true;
+      if (Array.isArray(v.items)) {
+        return v.items.some(
+          (it) =>
+            (it.codigo && it.codigo.trim().toUpperCase() === cleanId) ||
+            (it.nombre && it.nombre.toUpperCase().includes(`(${cleanId})`))
+        );
+      }
+      return false;
+    };
+
+    if (eliminarDefinitivamente) {
+      nuevasVentas = current.filter((v) => {
+        const esMatch = perteneceAlPedido(v);
+        if (esMatch) {
+          afectadas++;
+          return false;
+        }
+        return true;
+      });
+    } else {
+      nuevasVentas = current.map((v) => {
+        if (perteneceAlPedido(v) && v.estado !== 'CANCELADA') {
+          afectadas++;
+          return {
+            ...v,
+            estado: 'CANCELADA',
+            fechaCancelacion: new Date().toISOString(),
+            motivoCancelacion: motivo,
+            usuarioCancelacion: this.authService.nombreOperadorActual() || 'Sistema'
+          };
+        }
+        return v;
+      });
     }
 
-    return nuevaVenta;
+    if (afectadas > 0) {
+      this.ventasSignal.set(nuevasVentas);
+      try {
+        this.syncService.setStatus('saving', 'Actualizando ventas...');
+        await this.firestoreService.guardarColeccionChunked('ventas', nuevasVentas);
+        await this.syncService.incrementarRevision();
+        this.syncService.setStatus('online', 'En Línea');
+
+        await this.bitacoraService.registrarEvento({
+          modulo: 'VENTAS',
+          accion: 'ELIMINAR',
+          descripcion: `${eliminarDefinitivamente ? 'Eliminadas' : 'Canceladas'} ${afectadas} venta(s) vinculada(s) al Pedido #${pedidoId}. Motivo: ${motivo}`,
+          detalles: { pedidoId, afectadas, motivo, eliminarDefinitivamente }
+        });
+      } catch (err) {
+        console.error('Error al persistir actualización de ventas por pedido:', err);
+      }
+    }
+
+    return afectadas;
   }
 
   // ── Carritos en Espera / Pendientes ────────────────────────

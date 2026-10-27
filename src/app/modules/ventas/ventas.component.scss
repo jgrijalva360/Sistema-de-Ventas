@@ -181,6 +181,38 @@
   }
 }
 
+.badge-variable-cart {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  margin-left: 6px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.btn-link-price {
+  background: #f0f9ff;
+  border: 1px dashed #7dd3fc;
+  border-radius: 6px;
+  padding: 2px 7px;
+  color: #0369a1;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    background: #e0f2fe;
+    border-color: #0284c7;
+    color: #0284c7;
+  }
+}
+
 .empty-cart-msg {
   text-align: center;
   color: var(--muted);

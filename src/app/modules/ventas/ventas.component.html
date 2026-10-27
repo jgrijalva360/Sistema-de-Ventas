@@ -133,10 +133,17 @@
                 </tr>
               </thead>
               <tbody>
-                @for (item of ventasService.carrito(); track item.codigo; let i = $index) {
+                @for (item of ventasService.carrito(); track $index; let i = $index) {
                 <tr>
                   <td><strong>{{ item.codigo }}</strong></td>
-                  <td>{{ item.nombre }}</td>
+                  <td>
+                    <span>{{ item.nombre }}</span>
+                    @if (item.precioVariable) {
+                    <span class="badge badge-info badge-variable-cart" title="Producto con precio manual variable">
+                      Variable
+                    </span>
+                    }
+                  </td>
                   <td style="text-align: center;">
                     <div class="qty-control">
                       <button type="button" class="btn-qty" (click)="modificarCantidad(i, -1)">-</button>
@@ -145,7 +152,16 @@
                       <button type="button" class="btn-qty" (click)="modificarCantidad(i, 1)">+</button>
                     </div>
                   </td>
-                  <td style="text-align: right;">{{ item.precioUnitario | currencyMxn }}</td>
+                  <td style="text-align: right;">
+                    @if (item.precioVariable) {
+                    <button type="button" class="btn-link-price" (click)="editarPrecioItem(i)"
+                      title="Clic para cambiar el precio de venta de este producto">
+                      {{ item.precioUnitario | currencyMxn }} ✏️
+                    </button>
+                    } @else {
+                    <span>{{ item.precioUnitario | currencyMxn }}</span>
+                    }
+                  </td>
                   <td style="text-align: right;"><strong>{{ item.subtotal | currencyMxn }}</strong></td>
                   <td style="text-align: center;">
                     <button type="button" class="btn-del" (click)="ventasService.eliminarDelCarrito(i)"

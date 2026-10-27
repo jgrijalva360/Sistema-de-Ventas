@@ -62,7 +62,6 @@ export class PedidosComponent implements AfterViewInit {
   public mostrarQrSeguimiento = signal<boolean>(localStorage.getItem('pos_mostrar_qr_pedidos') !== 'false');
   public modalExitoNuevoAbierto = signal<boolean>(false);
   public pedidoRecienCreado = signal<PedidoPersonalizado | null>(null);
-  public enviarWhatsappAlCrear = signal<boolean>(localStorage.getItem('pos_enviar_wa_pedido') !== 'false');
   public copiadoExito = signal<boolean>(false);
   public mensajeToast = signal<string | null>(null);
 
@@ -771,6 +770,9 @@ export class PedidosComponent implements AfterViewInit {
         this.pedidoDetalle.set(act);
       }
       this.modalEditarAbierto.set(false);
+      this.mostrarToast(`✅ Pedido #${act.id} actualizado con éxito.`);
+    } else {
+      alert('⚠️ No se encontró el pedido a modificar en el sistema. Verifica que no haya sido eliminado.');
     }
   }
 
@@ -1045,16 +1047,6 @@ export class PedidosComponent implements AfterViewInit {
     } else {
       this.modalTicketAbierto.set(false);
     }
-
-    if (this.enviarWhatsappAlCrear() && nuevo.clienteTelefono && nuevo.clienteTelefono.trim().length >= 7) {
-      this.enviarWhatsAppSeguimiento(nuevo);
-    }
-  }
-
-  toggleEnviarWhatsapp(): void {
-    const nuevo = !this.enviarWhatsappAlCrear();
-    this.enviarWhatsappAlCrear.set(nuevo);
-    localStorage.setItem('pos_enviar_wa_pedido', nuevo ? 'true' : 'false');
   }
 
   cerrarModalExito(): void {
@@ -1241,7 +1233,14 @@ export class PedidosComponent implements AfterViewInit {
         .factura-carta-wrapper,
         .factura-modal-overlay,
         .factura-modal-card,
-        .factura-hoja-carta {
+        .factura-hoja-carta,
+        .modal-overlay:not(.ticket-modal-overlay),
+        .modal-card:not(.ticket-modal-card),
+        .modal-exito-overlay,
+        .modal-exito-pedido,
+        .modal-no-print,
+        .pedidos-toast-notif,
+        .ticket-no-print {
           display: none !important;
         }
         /* Activar contenedor del ticket 80mm */
@@ -1398,7 +1397,14 @@ export class PedidosComponent implements AfterViewInit {
         }
         body.imprimiendo-carta .ticket-thermal-80mm,
         body.imprimiendo-carta .ticket-print-only,
-        body.imprimiendo-carta .ticket-modal-overlay {
+        body.imprimiendo-carta .ticket-modal-overlay,
+        body.imprimiendo-carta .modal-overlay:not(.factura-modal-overlay),
+        body.imprimiendo-carta .modal-card:not(.factura-modal-card),
+        body.imprimiendo-carta .modal-exito-overlay,
+        body.imprimiendo-carta .modal-exito-pedido,
+        body.imprimiendo-carta .modal-no-print,
+        .pedidos-toast-notif,
+        .factura-no-print {
           display: none !important;
         }
         body.imprimiendo-carta .factura-modal-overlay {
@@ -1531,8 +1537,17 @@ export class PedidosComponent implements AfterViewInit {
   }
 
   async eliminar(id: string): Promise<void> {
-    if (confirm('¿Estás seguro de eliminar este pedido?')) {
+    const ped = this.pedidosService.pedidos().find((p) => p.id === id);
+    const totalCobrado = ped ? ((ped.abonos || []).reduce((acc, a) => acc + (a.monto || 0), 0) || (ped.anticipo || 0)) : 0;
+
+    let mensaje = `¿Estás seguro de eliminar el Pedido #${id}?`;
+    if (totalCobrado > 0) {
+      mensaje = `¿Estás seguro de eliminar el Pedido #${id}?\n\n💰 Este pedido tiene $${totalCobrado.toFixed(2)} registrados en anticipos/abonos.\nAl eliminarlo, también se anulará la entrada de dinero en el módulo de Ventas y en el Corte de Caja.`;
+    }
+
+    if (confirm(mensaje)) {
       await this.pedidosService.eliminarPedido(id);
+      this.mostrarToast(`✅ Pedido #${id} y sus entradas de dinero asociadas fueron eliminados.`);
     }
   }
 

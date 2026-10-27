@@ -369,6 +369,12 @@ table {
   .pos-checkout,
   .checkout-card,
   body:not(.imprimiendo-reporte) .pedidos-container,
+  body.imprimiendo-ticket .modal-overlay:not(.ticket-modal-overlay),
+  body.imprimiendo-carta .modal-overlay:not(.factura-modal-overlay),
+  .modal-no-print,
+  .modal-exito-overlay,
+  .modal-exito-pedido,
+  .pedidos-toast-notif,
   .ticket-no-print,
   .factura-no-print {
     display: none !important;

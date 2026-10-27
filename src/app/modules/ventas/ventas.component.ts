@@ -538,6 +538,19 @@ export class VentasComponent implements AfterViewInit {
     this.ventasService.actualizarCantidadItem(index, cant);
   }
 
+  editarPrecioItem(index: number): void {
+    const item = this.ventasService.carrito()[index];
+    if (!item) return;
+    const resp = prompt(`Modificar precio para "${item.nombre}":`, item.precioUnitario.toString());
+    if (resp === null) return;
+    const parsed = parseFloat(resp);
+    if (isNaN(parsed) || parsed <= 0) {
+      alert('Precio inválido.');
+      return;
+    }
+    this.ventasService.actualizarPrecioUnitarioItem(index, parsed);
+  }
+
   onPagoChange(metodo: 'efectivo' | 'tarjeta' | 'transferencia', valor: number): void {
     const current = { ...this.ventasService.pagos() };
     current[metodo] = Math.max(0, valor || 0);

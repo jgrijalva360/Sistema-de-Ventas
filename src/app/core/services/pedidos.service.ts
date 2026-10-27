@@ -296,6 +296,13 @@ export class PedidosService {
           pedido.insumosDescontados = false;
         }
       }
+
+      // Anular/cancelar las ventas asociadas en el módulo de Ventas para que no sumen en cortes ni reportes
+      await this.ventasService.anularVentasDePedido(
+        pedido.id,
+        `Cancelación de pedido #${pedido.id}: ${pedido.motivoCancelacion}`,
+        false
+      );
     } else {
       // Descontar inventario si avanza a EN_PROCESO, TERMINADO o ENTREGADO y aún no se había descontado
       const estadosAvanzados = ['EN_PROCESO', 'TERMINADO', 'LISTO', 'ENTREGADO'];
@@ -400,17 +407,27 @@ export class PedidosService {
     cambios: Partial<PedidoPersonalizado>
   ): Promise<PedidoPersonalizado | null> {
     const current = [...this.pedidosSignal()];
-    const index = current.findIndex((p) => p.id === id);
+    const cleanId = (id || '').trim().toUpperCase();
+    const index = current.findIndex((p) => (p.id || '').trim().toUpperCase() === cleanId);
     if (index === -1) return null;
 
     const actualizado: PedidoPersonalizado = {
       ...current[index],
       ...cambios
     };
+
+    // Calcular correctamente el total pagado (anticipo + abonos registrados)
+    const totalAbonos = (actualizado.abonos || []).reduce((acc, a) => acc + (a.monto || 0), 0);
+    const totalPagado = totalAbonos > 0 ? totalAbonos : (actualizado.anticipo || 0);
+    actualizado.anticipo = Math.round(totalPagado * 100) / 100;
     actualizado.saldoRestante = Math.max(
       0,
-      Math.round(((actualizado.totalAcordado || 0) - (actualizado.anticipo || 0)) * 100) / 100
+      Math.round(((actualizado.totalAcordado || 0) - totalPagado) * 100) / 100
     );
+
+    if (actualizado.saldoRestante <= 0 && actualizado.estado !== 'CANCELADO' && !actualizado.fechaLiquidacion) {
+      actualizado.fechaLiquidacion = new Date().toISOString();
+    }
 
     current[index] = actualizado;
     this.pedidosSignal.set(current);
@@ -505,17 +522,37 @@ export class PedidosService {
 
   async eliminarPedido(id: string): Promise<void> {
     const pedidoEliminado = this.pedidosSignal().find((p) => p.id === id);
+
+    // Si se habían descontado insumos del inventario, restaurarlos
+    if (pedidoEliminado?.insumosDescontados) {
+      const insumosInventario = (pedidoEliminado.materiasPrimas || [])
+        .filter((mp) => mp.tipo === 'INVENTARIO' && mp.codigo)
+        .map((mp) => ({ codigo: mp.codigo!, cantidad: mp.cantidad }));
+
+      if (insumosInventario.length > 0) {
+        await this.productosService.reponerStockDevolucion(insumosInventario, pedidoEliminado.sucursalId || 'SUC-MAIN');
+        pedidoEliminado.insumosDescontados = false;
+      }
+    }
+
     const current = this.pedidosSignal().filter((p) => p.id !== id);
     this.pedidosSignal.set(current);
     await this.guardarEnFirestore(current);
     await this.eliminarPedidoPublico(id, pedidoEliminado?.trackingToken);
 
+    // Eliminar automáticamente las ventas de anticipos/abonos asociadas a este pedido en el módulo de Ventas
+    const ventasEliminadas = await this.ventasService.anularVentasDePedido(
+      id,
+      `Pedido #${id} eliminado del sistema`,
+      true
+    );
+
     if (pedidoEliminado) {
       await this.bitacoraService.registrarEvento({
         modulo: 'PEDIDOS',
         accion: 'ELIMINAR',
-        descripcion: `Pedido #${id} de "${pedidoEliminado.clienteNombre}" eliminado`,
-        detalles: pedidoEliminado,
+        descripcion: `Pedido #${id} de "${pedidoEliminado.clienteNombre}" eliminado. Se retiraron ${ventasEliminadas} entrada(s) de dinero en Ventas.`,
+        detalles: { pedidoEliminado, ventasEliminadas },
         sucursalId: pedidoEliminado.sucursalId,
         sucursalNombre: pedidoEliminado.sucursalNombre
       });
@@ -624,6 +661,8 @@ export class PedidosService {
     const ventasNuevas: ItemVentaConsolidacion[] = [];
 
     for (const ped of pedidos) {
+      if (ped.estado === 'CANCELADO') continue;
+
       const abonosList: { id: string; fecha: string; concepto: string; monto: number; metodoPago: string }[] = [];
 
       if (Array.isArray(ped.abonos) && ped.abonos.length > 0) {

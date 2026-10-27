@@ -1053,81 +1053,95 @@
 
   .detalle-top-actions {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .btn-top-action {
+      height: 32px;
+      padding: 0 10px;
+      font-size: 0.80rem;
+      font-weight: 600;
+      white-space: nowrap;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      line-height: 1;
+
+      .btn-icon {
+        font-size: 0.90rem;
+      }
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    .btn-cancelar-pedido {
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+
+      &:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+        color: #991b1b;
+      }
+    }
 
     .btn-editar-pedido {
-      background: #eab308;
-      color: #0f172a;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 800;
-      font-size: 0.82rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: background 0.2s;
+      background: #fefce8;
+      color: #854d0e;
+      border: 1px solid #fde047;
 
       &:hover {
-        background: #ca8a04;
-      }
-    }
-
-    .btn-imprimir-nota {
-      background: #0284c7;
-      color: #ffffff;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 700;
-      font-size: 0.82rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: background 0.2s;
-
-      &:hover {
-        background: #0369a1;
-      }
-    }
-
-    .btn-imprimir-factura {
-      background: #4f46e5;
-      color: #ffffff;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 700;
-      font-size: 0.82rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: background 0.2s;
-
-      &:hover {
-        background: #4338ca;
+        background: #fef08a;
+        border-color: #eab308;
+        color: #713f12;
       }
     }
 
     .btn-whatsapp {
-      background: #16a34a;
-      color: #ffffff;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 700;
-      font-size: 0.82rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.2s;
+      background: #f0fdf4 !important;
+      color: #15803d !important;
+      border: 1px solid #86efac !important;
 
       &:hover {
-        background: #15803d;
+        background: #dcfce7 !important;
+        border-color: #22c55e !important;
+        color: #166534 !important;
+      }
+    }
+
+    .btn-imprimir-nota {
+      background: #f0f9ff;
+      color: #0369a1;
+      border: 1px solid #7dd3fc;
+
+      &:hover {
+        background: #e0f2fe;
+        border-color: #0284c7;
+        color: #075985;
+      }
+    }
+
+    .btn-imprimir-factura {
+      background: #f5f3ff;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+
+      &:hover {
+        background: #ede9fe;
+        border-color: #6366f1;
+        color: #3730a3;
       }
     }
   }
@@ -1558,9 +1572,13 @@
 
 /* ── Estilos de Ticket Térmico de Pedido (80mm) ─────────── */
 .ticket-modal-card {
-  max-width: 390px;
-  background: #f1f5f9;
-  border-radius: 12px;
+  max-width: 430px;
+  background: #f8fafc;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .ticket-wrapper {
@@ -1568,6 +1586,124 @@
   display: flex;
   justify-content: center;
   background: #e2e8f0;
+  max-height: calc(88vh - 170px);
+  overflow-y: auto;
+}
+
+.ticket-modal-actions {
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .ticket-actions-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+  }
+
+  .btn-ticket-secondary {
+    flex: 1;
+    height: 34px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+
+    .btn-icon {
+      font-size: 0.92rem;
+    }
+
+    &:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+      transform: translateY(-1px);
+    }
+  }
+
+  .btn-ticket-wa {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #047857;
+    font-weight: 700;
+
+    &:hover {
+      background: #10b981;
+      border-color: #10b981;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+  }
+
+  .btn-ticket-close {
+    flex: 1;
+    height: 38px;
+    padding: 0 12px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border-radius: 8px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+  }
+
+  .btn-ticket-print {
+    flex: 2;
+    height: 38px;
+    padding: 0 16px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    white-space: nowrap;
+    border-radius: 8px;
+    background: #0284c7;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+    transition: all 0.15s ease;
+
+    .btn-icon {
+      font-size: 1rem;
+    }
+
+    &:hover {
+      background: #0369a1;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
 }
 
 .ticket-thermal-80mm {
@@ -1724,13 +1860,30 @@
 @media print {
 
   .ticket-no-print,
-  .factura-no-print {
+  .factura-no-print,
+  .modal-no-print,
+  .pedidos-toast-notif,
+  .modal-exito-overlay,
+  .modal-exito-pedido,
+  .modal-overlay:not(.ticket-modal-overlay):not(.factura-modal-overlay) {
     display: none !important;
   }
 
   /* Modo Ticket 80mm */
   body:not(.imprimiendo-carta):not(.imprimiendo-reporte),
   body.imprimiendo-ticket {
+    .modal-overlay:not(.ticket-modal-overlay),
+    .modal-card:not(.ticket-modal-card),
+    .modal-no-print,
+    .modal-exito-overlay,
+    .modal-exito-pedido,
+    .pedidos-toast-notif,
+    .factura-modal-overlay,
+    .factura-print-only,
+    .factura-carta-wrapper {
+      display: none !important;
+    }
+
     .ticket-print-only {
       display: block !important;
       position: static !important;
@@ -1822,17 +1975,16 @@
         display: block !important;
       }
     }
-
-    .factura-modal-overlay,
-    .factura-print-only,
-    .factura-carta-wrapper {
-      display: none !important;
-    }
   }
 
   /* Modo Factura Hoja Carta */
   body.imprimiendo-carta {
-
+    .modal-overlay:not(.factura-modal-overlay),
+    .modal-card:not(.factura-modal-card),
+    .modal-no-print,
+    .modal-exito-overlay,
+    .modal-exito-pedido,
+    .pedidos-toast-notif,
     .ticket-thermal-80mm,
     .ticket-print-only,
     .ticket-modal-overlay {
@@ -2093,7 +2245,16 @@
     padding: 12px 20px;
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
+
+    .btn {
+      white-space: nowrap;
+      font-size: 0.84rem;
+      padding: 7px 14px;
+      height: 38px;
+    }
 
     .btn-outline {
       background: transparent;
@@ -2101,7 +2262,7 @@
       color: #334155;
       font-weight: 600;
       border-radius: 8px;
-      padding: 8px 16px;
+      padding: 7px 14px;
       cursor: pointer;
       transition: all 0.15s;
 
@@ -2917,33 +3078,6 @@
   }
 }
 
-.auto-send-whatsapp-hint {
-  margin-top: -4px;
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  animation: fadeIn 0.15s ease-out;
-
-  .checkbox-auto-save {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.84rem;
-    color: #166534;
-    cursor: pointer;
-    margin: 0;
-
-    input[type="checkbox"] {
-      cursor: pointer;
-      accent-color: #16a34a;
-      width: 16px;
-      height: 16px;
-    }
-  }
-}
-
 .btn-whatsapp {
   background: #16a34a !important;
   color: #ffffff !important;
@@ -3250,6 +3384,10 @@
   animation: toastFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid #334155;
   pointer-events: none;
+
+  @media print {
+    display: none !important;
+  }
 
   .toast-icon {
     font-size: 1.15rem;

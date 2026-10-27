@@ -167,6 +167,11 @@
             </td>
             <td class="col-acciones" style="text-align: center;">
               <div class="actions-row">
+                <button type="button" class="btn-action btn-edit"
+                  (click)="abrirModalEditar(ped); $event.stopPropagation()"
+                  title="Editar o Modificar este Pedido">
+                  ✏️
+                </button>
                 <button type="button" class="btn-action btn-factura"
                   (click)="abrirModalFacturaCarta(ped); $event.stopPropagation()"
                   title="Ver / Imprimir Nota de Venta (Carta)">
@@ -280,14 +285,6 @@
       </div>
       }
 
-      <!-- Opción para enviar link de seguimiento por WhatsApp al guardar -->
-      <div class="auto-send-whatsapp-hint" style="margin-top: 6px;">
-        <label class="checkbox-auto-save"
-          style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #15803d; font-weight: 600; font-size: 0.85rem;">
-          <input type="checkbox" [ngModel]="enviarWhatsappAlCrear()" (ngModelChange)="toggleEnviarWhatsapp()" />
-          <span>💬 Enviar enlace de seguimiento por WhatsApp al registrar el pedido</span>
-        </label>
-      </div>
 
       <!-- Fila 2: Especificaciones -->
       <div class="form-group" style="margin-top: 10px;">
@@ -480,8 +477,8 @@
 
 <!-- Modal Confirmación y Envío de WhatsApp Post-Creación -->
 @if (modalExitoNuevoAbierto() && pedidoRecienCreado(); as p) {
-<div class="modal-overlay">
-  <div class="modal-card modal-exito-pedido">
+<div class="modal-overlay modal-exito-overlay modal-no-print">
+  <div class="modal-card modal-exito-pedido modal-no-print">
     <div class="modal-header exito-header">
       <div class="exito-header-title-group">
         <span class="exito-badge-icon">🎉</span>
@@ -587,15 +584,30 @@
       <ng-container *ngTemplateOutlet="ticketPedidoTemplate"></ng-container>
     </div>
 
-    <div class="modal-actions ticket-no-print">
-      <button type="button" class="btn btn-secondary" (click)="cerrarModalTicket()">✕ Cerrar</button>
-      <button type="button" class="btn btn-outline" (click)="cambiarAFacturaCarta()">📄 Ver Nota de Venta
-        (Carta)</button>
-      <button type="button" class="btn btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoSeleccionado()!)"
-        title="Enviar enlace de seguimiento por WhatsApp al cliente">
-        💬 Enviar WhatsApp
-      </button>
-      <button type="button" class="btn btn-primary" (click)="imprimirTicket()">🖨️ Imprimir Ticket (80mm)</button>
+    <div class="modal-actions ticket-modal-actions ticket-no-print">
+      <div class="ticket-actions-row secondary-row">
+        <button type="button" class="btn-ticket-secondary" (click)="cambiarAFacturaCarta()"
+          title="Ver formato completo en hoja carta">
+          <span class="btn-icon">📄</span>
+          <span>Ver Nota (Carta)</span>
+        </button>
+        <button type="button" class="btn-ticket-secondary btn-ticket-wa"
+          (click)="enviarWhatsAppSeguimiento(pedidoSeleccionado()!)"
+          title="Enviar enlace de seguimiento por WhatsApp al cliente">
+          <span class="btn-icon">💬</span>
+          <span>Enviar WhatsApp</span>
+        </button>
+      </div>
+
+      <div class="ticket-actions-row main-row">
+        <button type="button" class="btn-ticket-close" (click)="cerrarModalTicket()">
+          ✕ Cerrar
+        </button>
+        <button type="button" class="btn-ticket-print" (click)="imprimirTicket()">
+          <span class="btn-icon">🖨️</span>
+          <span>Imprimir Ticket</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -1211,23 +1223,31 @@
         </div>
         <div class="detalle-top-actions">
           @if (pedidoDetalle()?.estado !== 'CANCELADO') {
-          <button type="button" class="btn-cancelar-pedido" (click)="abrirModalCancelar(pedidoDetalle()!)"
-            style="background: #fee2e2; color: #b91c1c; border: 1.5px solid #fca5a5; font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer;">
-            🚫 Cancelar Pedido
+          <button type="button" class="btn-top-action btn-cancelar-pedido" (click)="abrirModalCancelar(pedidoDetalle()!)"
+            title="Cancelar este pedido">
+            <span class="btn-icon">🚫</span>
+            <span>Cancelar</span>
           </button>
           }
-          <button type="button" class="btn-editar-pedido" (click)="abrirModalEditar()">
-            ✏️ Editar / Corregir Pedido
+          <button type="button" class="btn-top-action btn-editar-pedido" (click)="abrirModalEditar()"
+            title="Editar o corregir información del pedido">
+            <span class="btn-icon">✏️</span>
+            <span>Editar</span>
           </button>
-          <button type="button" class="btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoDetalle()!)"
+          <button type="button" class="btn-top-action btn-whatsapp" (click)="enviarWhatsAppSeguimiento(pedidoDetalle()!)"
             title="Enviar enlace de seguimiento en vivo por WhatsApp al cliente">
-            💬 WhatsApp Rastreo
+            <span class="btn-icon">💬</span>
+            <span>WhatsApp</span>
           </button>
-          <button type="button" class="btn-imprimir-nota" (click)="imprimirTicketDesdeDetalle()">
-            🧾 Ticket (80mm)
+          <button type="button" class="btn-top-action btn-imprimir-nota" (click)="imprimirTicketDesdeDetalle()"
+            title="Ver / Imprimir Ticket térmico (80mm)">
+            <span class="btn-icon">🧾</span>
+            <span>Ticket</span>
           </button>
-          <button type="button" class="btn-imprimir-factura" (click)="imprimirFacturaDesdeDetalle()">
-            📄 Nota de Venta (Carta)
+          <button type="button" class="btn-top-action btn-imprimir-factura" (click)="imprimirFacturaDesdeDetalle()"
+            title="Ver / Imprimir Nota de Venta (Carta)">
+            <span class="btn-icon">📄</span>
+            <span>Nota Carta</span>
           </button>
         </div>
       </div>
@@ -1505,7 +1525,12 @@
 <div class="modal-overlay">
   <div class="modal-card modal-nuevo-pedido">
     <div class="modal-header">
-      <h3 class="modal-title-custom">✏️ Editar Pedido {{ editandoId }}</h3>
+      <div>
+        <h3 class="modal-title-custom">✏️ Editar Pedido {{ editandoId }}</h3>
+        <p style="margin: 3px 0 0; font-size: 0.84rem; color: #64748b; font-weight: 500;">
+          Modificando pedido existente <strong>#{{ editandoId }}</strong>. Los cambios actualizarán este registro.
+        </p>
+      </div>
       <button type="button" class="modal-close" (click)="modalEditarAbierto.set(false)">&times;</button>
     </div>
     <div class="modal-body">
@@ -1737,7 +1762,7 @@
     </div>
     <div class="modal-actions">
       <button type="button" class="btn btn-cancelar" (click)="modalEditarAbierto.set(false)">Cancelar</button>
-      <button type="button" class="btn btn-guardar" (click)="guardarEdicionPedido()">Guardar Cambios</button>
+      <button type="button" class="btn btn-guardar" (click)="guardarEdicionPedido()">💾 Guardar Cambios en #{{ editandoId }}</button>
     </div>
   </div>
 </div>
@@ -1856,7 +1881,7 @@
 
 <!-- Notificación Flotante Toast para Copiado / Envíos -->
 @if (mensajeToast()) {
-<div class="pedidos-toast-notif">
+<div class="pedidos-toast-notif ticket-no-print factura-no-print modal-no-print">
   <span class="toast-icon">📋</span>
   <span class="toast-text">{{ mensajeToast() }}</span>
 </div>
